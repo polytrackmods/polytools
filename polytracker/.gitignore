@@ -1,0 +1,5 @@
+/target
+.env
+userIDs.json
+blacklist.txt
+alt_accounts.txt

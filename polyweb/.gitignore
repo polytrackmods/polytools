@@ -1,0 +1,4 @@
+/target
+.env
+alt_accounts.txt
+blacklist.txt
