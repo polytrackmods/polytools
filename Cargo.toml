@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "polytracker",
+    "polyweb",
+]
+resolver = "2"
