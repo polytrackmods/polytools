@@ -4,3 +4,4 @@ blacklist.txt
 alt_accounts.txt
 poly_rankings.txt
 .env
+/.cargo
