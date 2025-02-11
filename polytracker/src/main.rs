@@ -664,12 +664,28 @@ async fn update_rankings(
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     rankings_update(entry_requirement).await?;
-    write(
+    let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
+    let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
+    for line in tokio::fs::read_to_string(RANKINGS_FILE)
+        .await?
+        .lines()
+        .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
+    {
+        for i in 0..contents.len() {
+            contents
+                .get_mut(i)
+                .unwrap()
+                .push_str(format!("{}\n", line.get(i).unwrap()).as_str());
+        }
+    }
+    let inlines: Vec<bool> = vec![true, true, true];
+    write_embed(
         &ctx,
-        format!(
-            "```\nGlobal Leaderboard\n{}```",
-            tokio::fs::read_to_string(RANKINGS_FILE).await?
-        ),
+        format!("Global Leaderboard"),
+        format!(""),
+        headers,
+        contents,
+        inlines,
     )
     .await?;
     Ok(())
