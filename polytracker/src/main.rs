@@ -1,6 +1,9 @@
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::futures::future::join_all;
+use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateAttachment;
+use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateInteractionResponseMessage;
 use poise::CreateReply;
 use serde::{Deserialize, Serialize};
 use serde_json::{Result as JsonResult, Value};
@@ -70,6 +73,117 @@ async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
         ctx.send(CreateReply::default().attachment(file)).await?;
     } else {
         ctx.say(text).await?;
+    }
+    Ok(())
+}
+
+async fn write_embed(
+    ctx: &Context<'_>,
+    title: String,
+    description: String,
+    headers: Vec<&str>,
+    contents: Vec<String>,
+    inlines: Vec<bool>,
+) -> Result<(), Error> {
+    if headers.len() == contents.len() && contents.len() == inlines.len() {
+        dotenv::dotenv()?;
+        if contents[0].len() > 30 {
+            let ctx_id = ctx.id();
+            let prev_id = format!("{}prev", ctx_id);
+            let next_id = format!("{}next", ctx_id);
+            let start_id = format!("{}start", ctx_id);
+            let del_id = format!("{}del", ctx_id);
+            let mut pages: Vec<Vec<String>> = Vec::new();
+            for i in 0..contents.len() {
+                pages.push(
+                    contents[i]
+                        .lines()
+                        .collect::<Vec<&str>>()
+                        .chunks(20)
+                        .map(|chunk| chunk.join("\n"))
+                        .collect(),
+                );
+            }
+            let fields = headers
+                .clone()
+                .into_iter()
+                .enumerate()
+                .map(|(i, h)| (h, pages.get(i).unwrap().get(0).unwrap().clone(), inlines[i]));
+            let embed = serenity::CreateEmbed::default()
+                .title(title.clone())
+                .description(description.clone())
+                .fields(fields.clone())
+                .color(serenity::Color::BLITZ_BLUE);
+            let reply = {
+                let components = CreateActionRow::Buttons(vec![
+                    CreateButton::new(&prev_id).emoji('◀'),
+                    CreateButton::new(&next_id).emoji('▶'),
+                    CreateButton::new(&start_id).emoji('🔝'),
+                    CreateButton::new(&del_id).emoji('❌'),
+                ]);
+
+                CreateReply::default()
+                    .embed(embed)
+                    .components(vec![components])
+            };
+            ctx.send(reply).await?;
+            let mut current_page = 0;
+            while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
+                .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+                .timeout(Duration::from_secs(3600))
+                .await
+            {
+                if press.data.custom_id == next_id {
+                    current_page += 1;
+                    if current_page >= pages[0].len() {
+                        current_page = 0;
+                    }
+                } else if press.data.custom_id == prev_id {
+                    current_page = current_page.checked_sub(1).unwrap_or(pages[0].len() - 1);
+                } else if press.data.custom_id == start_id {
+                    current_page = 0;
+                } else if press.data.custom_id == del_id {
+                    press.message.delete(ctx.http()).await?;
+                    return Ok(());
+                } else {
+                    continue;
+                }
+                let fields = headers.clone().into_iter().enumerate().map(|(i, h)| {
+                    (
+                        h,
+                        pages.get(i).unwrap().get(current_page).unwrap().clone(),
+                        inlines[i],
+                    )
+                });
+                let embed = serenity::CreateEmbed::default()
+                    .title(&title)
+                    .description(&description)
+                    .fields(fields)
+                    .color(serenity::Color::BLITZ_BLUE);
+
+                press
+                    .create_response(
+                        ctx.serenity_context(),
+                        serenity::CreateInteractionResponse::UpdateMessage(
+                            CreateInteractionResponseMessage::new().embed(embed),
+                        ),
+                    )
+                    .await?;
+            }
+        } else {
+            let fields = headers
+                .into_iter()
+                .enumerate()
+                .map(|(i, h)| (h, contents.get(i).unwrap().clone(), inlines[i]));
+            let embed = serenity::CreateEmbed::default()
+                .title(title)
+                .description(description)
+                .fields(fields)
+                .color(serenity::Color::BLITZ_BLUE);
+            ctx.send(CreateReply::default().embed(embed)).await?;
+        }
+    } else {
+        panic!("Different amounts of columns for write_embed!");
     }
     Ok(())
 }
@@ -170,6 +284,7 @@ async fn request(
             track,
             id);
         }
+        let contents: Vec<String>;
         if let Ok(response) = client.get(url).send().await {
             if let Ok(body) = response.text().await {
                 if let Ok(json) = serde_json::from_str::<Value>(&body) {
@@ -196,25 +311,38 @@ async fn request(
                                                 found.push(entry.get("name").unwrap().to_string());
                                             }
                                         }
-                                        write(
+                                        let mut time = (frames.to_string().parse::<f64>().unwrap()
+                                            / 1000.0)
+                                            .to_string();
+                                        time.push_str("s");
+                                        contents = vec![
+                                            position.to_string(),
+                                            time,
+                                            (found.len() + 1).to_string(),
+                                        ];
+                                        write_embed(
                                             &ctx,
-                                            format!(
-                                                "`{}. - {}s [Unique: {}.]`",
-                                                position,
-                                                frames.to_string().parse::<f64>().unwrap() / 1000.0,
-                                                found.len() + 1
-                                            ),
+                                            format!("Leaderboard"),
+                                            format!(""),
+                                            vec!["Ranking", "Time", "Unique"],
+                                            contents,
+                                            vec![true, true, true],
                                         )
                                         .await?;
                                     }
                                 } else {
-                                    write(
+                                    let mut time = (frames.to_string().parse::<f64>().unwrap()
+                                        / 1000.0)
+                                        .to_string();
+                                    time.push_str("s");
+                                    contents = vec![position.to_string(), time];
+                                    write_embed(
                                         &ctx,
-                                        format!(
-                                            "`{}. - {}s`",
-                                            position,
-                                            frames.to_string().parse::<f64>().unwrap() / 1000.0
-                                        ),
+                                        format!("Leaderboard"),
+                                        format!(""),
+                                        vec!["Ranking", "Time"],
+                                        contents,
+                                        vec![true, true],
                                     )
                                     .await?;
                                 }
@@ -260,7 +388,6 @@ async fn list(
     if id.len() > 0 {
         let client = reqwest::Client::new();
         let mut line_num: u32 = 1;
-        let mut output = String::new();
         let mut total_time = 0.0;
         let mut display_total = true;
         let track_ids: Vec<String> = tokio::fs::read_to_string("official_tracks.txt")
@@ -287,6 +414,9 @@ async fn list(
             .collect();
         results.sort_by_key(|(i, _)| *i);
         let responses: Vec<String> = results.into_iter().map(|(_, res)| res).collect();
+        let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
+        let mut headers = vec!["Track", "Ranking", "Time"];
+        let mut inlines = vec![true, true, true];
         for response in responses {
             if let Ok(json) = serde_json::from_str::<Value>(&response) {
                 if let Some(user_entry) = json.get("userEntry") {
@@ -312,41 +442,39 @@ async fn list(
                                         }
                                     }
                                     let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
-                                    output.push_str(
+                                    total_time += time;
+                                    let mut time = time.to_string();
+                                    time.push_str("s");
+                                    contents[0].push_str(format!("{}\n", line_num).as_str());
+                                    contents[1].push_str(
                                         format!(
-                                            "{:>2}: {:>6}. - {:3.3}s [Unique: {:>3}.]\n",
-                                            line_num,
+                                            "{} [{}]\n",
                                             position.to_string(),
-                                            time,
-                                            found.len() + 1
+                                            (found.len() + 1).to_string()
                                         )
                                         .as_str(),
                                     );
-                                    total_time += time;
+                                    contents[2].push_str(format!("{}\n", time).as_str());
                                 }
                             } else {
                                 let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
-                                output.push_str(
-                                    format!(
-                                        "{:>2}: {:>6}. - {:3.3}s\n",
-                                        line_num,
-                                        position.to_string(),
-                                        frames.to_string().parse::<f64>().unwrap() / 1000.0
-                                    )
-                                    .as_str(),
-                                );
                                 total_time += time;
+                                let mut time = time.to_string();
+                                time.push_str("s");
+                                contents[0].push_str(format!("{}\n", line_num).as_str());
+                                contents[1]
+                                    .push_str(format!("{}\n", position.to_string()).as_str());
+                                contents[2].push_str(format!("{}\n", time).as_str());
                             }
                         }
                     } else {
-                        output.push_str(format!("{:>2}:  Record not found\n", line_num).as_str());
                         display_total = false;
                     }
                 }
             } else {
                 write(
                     &ctx,
-                    format!("`Leaderboard servers could not be accessed or user does not exist.`"),
+                    format!("`Leaderboard servers could not be accessed or user is not valid.`"),
                 )
                 .await?;
                 return Ok(());
@@ -355,25 +483,24 @@ async fn list(
         }
         if display_total {
             let total_time = (total_time * 1000.0) as u32;
-            write(
-                &ctx,
-                format!(
-                    "```\n{}\n{}\nTotal: {:>2}:{:0>2}.{:0>3}\n```",
-                    user,
-                    output,
-                    total_time / 60000,
-                    total_time % 60000 / 1000,
-                    total_time % 1000
-                ),
-            )
-            .await?;
-        } else {
-            write(
-                &ctx,
-                format!("```\n{}\n{}\nNot all maps completed!\n```", user, output,),
-            )
-            .await?;
+            contents.push(format!(
+                "{:>2}:{:0>2}.{:0>3}",
+                total_time / 60000,
+                total_time & 60000 / 1000,
+                total_time & 1000
+            ));
+            headers.push("Total");
+            inlines.push(false);
         }
+        write_embed(
+            &ctx,
+            format!("Record list"),
+            format!(""),
+            headers,
+            contents,
+            inlines,
+        )
+        .await?;
     } else {
         write(&ctx, format!("`User ID not found`")).await?;
     }
@@ -537,7 +664,14 @@ async fn update_rankings(
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     rankings_update(entry_requirement).await?;
-    write(&ctx, format!("```\nGlobal Leaderboard\n{}```", tokio::fs::read_to_string(RANKINGS_FILE).await?)).await?;
+    write(
+        &ctx,
+        format!(
+            "```\nGlobal Leaderboard\n{}```",
+            tokio::fs::read_to_string(RANKINGS_FILE).await?
+        ),
+    )
+    .await?;
     Ok(())
 }
 
@@ -679,7 +813,31 @@ async fn rankings(
     } else {
         rankings_update(None).await?;
     }
-    write(&ctx, format!("```\nGlobal Leaderboard\n{}```", tokio::fs::read_to_string(RANKINGS_FILE).await?)).await?;
+    let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
+    let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
+
+    for line in tokio::fs::read_to_string(RANKINGS_FILE)
+        .await?
+        .lines()
+        .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
+    {
+        for i in 0..contents.len() {
+            contents
+                .get_mut(i)
+                .unwrap()
+                .push_str(format!("{}\n", line.get(i).unwrap()).as_str());
+        }
+    }
+    let inlines: Vec<bool> = vec![true, true, true];
+    write_embed(
+        &ctx,
+        format!("Global Leaderboard"),
+        format!(""),
+        headers,
+        contents,
+        inlines,
+    )
+    .await?;
     Ok(())
 }
 
@@ -698,7 +856,15 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
         .map(|g| g.name.clone())
         .collect::<Vec<_>>()
         .join("\n");
-    write(&ctx, format!("```\nGuilds:\n\n{}\n```", guild_names)).await?;
+    write_embed(
+        &ctx,
+        format!("Guilds"),
+        format!(""),
+        vec!["Guild name"],
+        vec![guild_names],
+        vec![true],
+    )
+    .await?;
     Ok(())
 }
 
