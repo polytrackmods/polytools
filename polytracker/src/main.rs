@@ -20,6 +20,7 @@ const BLACKLIST_FILE: &str = "blacklist.txt";
 const ALT_ACCOUNT_FILE: &str = "alt_accounts.txt";
 const RANKINGS_FILE: &str = "poly_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
+const MAX_EMBED_AGE: Duration = Duration::from_secs(60 * 60);
 
 #[derive(Serialize, Deserialize, Debug)]
 struct BotData {
@@ -29,14 +30,12 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, BotData, Error>;
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct LeaderBoardEntry {
     name: String,
     frames: f64,
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
@@ -87,101 +86,89 @@ async fn write_embed(
 ) -> Result<(), Error> {
     if headers.len() == contents.len() && contents.len() == inlines.len() {
         dotenv::dotenv()?;
-        if contents[0].len() > 30 {
-            let ctx_id = ctx.id();
-            let prev_id = format!("{}prev", ctx_id);
-            let next_id = format!("{}next", ctx_id);
-            let start_id = format!("{}start", ctx_id);
-            let del_id = format!("{}del", ctx_id);
-            let mut pages: Vec<Vec<String>> = Vec::new();
-            for i in 0..contents.len() {
-                pages.push(
-                    contents[i]
-                        .lines()
-                        .collect::<Vec<&str>>()
-                        .chunks(20)
-                        .map(|chunk| chunk.join("\n"))
-                        .collect(),
-                );
-            }
-            let fields = headers
-                .clone()
-                .into_iter()
-                .enumerate()
-                .map(|(i, h)| (h, pages.get(i).unwrap().get(0).unwrap().clone(), inlines[i]));
-            let embed = serenity::CreateEmbed::default()
-                .title(title.clone())
-                .description(description.clone())
-                .fields(fields.clone())
-                .color(serenity::Color::BLITZ_BLUE);
-            let reply = {
-                let components = CreateActionRow::Buttons(vec![
-                    CreateButton::new(&prev_id).emoji('◀'),
-                    CreateButton::new(&next_id).emoji('▶'),
-                    CreateButton::new(&start_id).emoji('🔝'),
-                    CreateButton::new(&del_id).emoji('❌'),
-                ]);
+        let ctx_id = ctx.id();
+        let prev_id = format!("{}prev", ctx_id);
+        let next_id = format!("{}next", ctx_id);
+        let start_id = format!("{}start", ctx_id);
+        let del_id = format!("{}del", ctx_id);
+        let mut pages: Vec<Vec<String>> = Vec::new();
+        for i in 0..contents.len() {
+            pages.push(
+                contents[i]
+                    .lines()
+                    .collect::<Vec<&str>>()
+                    .chunks(20)
+                    .map(|chunk| chunk.join("\n"))
+                    .collect(),
+            );
+        }
+        let fields = headers
+            .clone()
+            .into_iter()
+            .enumerate()
+            .map(|(i, h)| (h, pages.get(i).unwrap().get(0).unwrap().clone(), inlines[i]));
+        let embed = serenity::CreateEmbed::default()
+            .title(title.clone())
+            .description(description.clone())
+            .fields(fields.clone())
+            .color(serenity::Color::BLITZ_BLUE);
+        let reply = {
+            let components = CreateActionRow::Buttons(vec![
+                CreateButton::new(&prev_id).emoji('◀'),
+                CreateButton::new(&next_id).emoji('▶'),
+                CreateButton::new(&start_id).emoji('🔝'),
+                CreateButton::new(&del_id).emoji('❌'),
+            ]);
 
-                CreateReply::default()
-                    .embed(embed)
-                    .components(vec![components])
-            };
-            ctx.send(reply).await?;
-            let mut current_page = 0;
-            while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
-                .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-                .timeout(Duration::from_secs(3600))
-                .await
-            {
-                if press.data.custom_id == next_id {
-                    current_page += 1;
-                    if current_page >= pages[0].len() {
-                        current_page = 0;
-                    }
-                } else if press.data.custom_id == prev_id {
-                    current_page = current_page.checked_sub(1).unwrap_or(pages[0].len() - 1);
-                } else if press.data.custom_id == start_id {
+            CreateReply::default()
+                .embed(embed)
+                .components(vec![components])
+        };
+        let response = ctx.send(reply.clone()).await?;
+        let mut current_page = 0;
+        while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
+            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+            .timeout(MAX_EMBED_AGE)
+            .await
+        {
+            if press.data.custom_id == next_id {
+                current_page += 1;
+                if current_page >= pages[0].len() {
                     current_page = 0;
-                } else if press.data.custom_id == del_id {
-                    press.message.delete(ctx.http()).await?;
-                    return Ok(());
-                } else {
-                    continue;
                 }
-                let fields = headers.clone().into_iter().enumerate().map(|(i, h)| {
-                    (
-                        h,
-                        pages.get(i).unwrap().get(current_page).unwrap().clone(),
-                        inlines[i],
-                    )
-                });
-                let embed = serenity::CreateEmbed::default()
-                    .title(&title)
-                    .description(&description)
-                    .fields(fields)
-                    .color(serenity::Color::BLITZ_BLUE);
-
-                press
-                    .create_response(
-                        ctx.serenity_context(),
-                        serenity::CreateInteractionResponse::UpdateMessage(
-                            CreateInteractionResponseMessage::new().embed(embed),
-                        ),
-                    )
-                    .await?;
+            } else if press.data.custom_id == prev_id {
+                current_page = current_page.checked_sub(1).unwrap_or(pages[0].len() - 1);
+            } else if press.data.custom_id == start_id {
+                current_page = 0;
+            } else if press.data.custom_id == del_id {
+                press.message.delete(ctx.http()).await?;
+                return Ok(());
+            } else {
+                continue;
             }
-        } else {
-            let fields = headers
-                .into_iter()
-                .enumerate()
-                .map(|(i, h)| (h, contents.get(i).unwrap().clone(), inlines[i]));
+            let fields = headers.clone().into_iter().enumerate().map(|(i, h)| {
+                (
+                    h,
+                    pages.get(i).unwrap().get(current_page).unwrap().clone(),
+                    inlines[i],
+                )
+            });
             let embed = serenity::CreateEmbed::default()
-                .title(title)
-                .description(description)
+                .title(&title)
+                .description(&description)
                 .fields(fields)
                 .color(serenity::Color::BLITZ_BLUE);
-            ctx.send(CreateReply::default().embed(embed)).await?;
+
+            press
+                .create_response(
+                    ctx.serenity_context(),
+                    serenity::CreateInteractionResponse::UpdateMessage(
+                        CreateInteractionResponseMessage::new().embed(embed),
+                    ),
+                )
+                .await?;
         }
+        response.delete(*ctx).await?;
     } else {
         panic!("Different amounts of columns for write_embed!");
     }
