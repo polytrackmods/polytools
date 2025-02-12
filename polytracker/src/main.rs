@@ -141,8 +141,10 @@ async fn write_embed(
             } else if press.data.custom_id == start_id {
                 current_page = 0;
             } else if press.data.custom_id == del_id {
-                press.message.delete(ctx.http()).await?;
-                return Ok(());
+                if reply.ephemeral.unwrap() {
+                    press.message.delete(ctx.http()).await?;
+                    return Ok(());
+                }
             } else {
                 continue;
             }
