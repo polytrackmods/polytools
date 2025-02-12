@@ -468,8 +468,8 @@ async fn list(
             contents.push(format!(
                 "{:>2}:{:0>2}.{:0>3}",
                 total_time / 60000,
-                total_time & 60000 / 1000,
-                total_time & 1000
+                total_time % 60000 / 1000,
+                total_time % 1000
             ));
             headers.push("Total");
             inlines.push(false);
