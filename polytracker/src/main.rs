@@ -90,7 +90,6 @@ async fn write_embed(
         let prev_id = format!("{}prev", ctx_id);
         let next_id = format!("{}next", ctx_id);
         let start_id = format!("{}start", ctx_id);
-        let del_id = format!("{}del", ctx_id);
         let mut pages: Vec<Vec<String>> = Vec::new();
         for i in 0..contents.len() {
             pages.push(
@@ -117,7 +116,6 @@ async fn write_embed(
                 CreateButton::new(&prev_id).emoji('◀'),
                 CreateButton::new(&next_id).emoji('▶'),
                 CreateButton::new(&start_id).emoji('🔝'),
-                CreateButton::new(&del_id).emoji('❌'),
             ]);
 
             CreateReply::default()
@@ -140,11 +138,6 @@ async fn write_embed(
                 current_page = current_page.checked_sub(1).unwrap_or(pages[0].len() - 1);
             } else if press.data.custom_id == start_id {
                 current_page = 0;
-            } else if press.data.custom_id == del_id {
-                if reply.ephemeral.unwrap() {
-                    press.message.delete(ctx.http()).await?;
-                    return Ok(());
-                }
             } else {
                 continue;
             }
