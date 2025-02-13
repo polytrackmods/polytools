@@ -38,6 +38,72 @@ const RANKINGS_FILE: &str = "poly_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 
+#[get("/")]
+async fn index() -> Template {
+    let leaderboard = parse_leaderboard(RANKINGS_FILE).await;
+    Template::render("index", context! { leaderboard })
+}
+
+#[get("/tutorial")]
+async fn tutorial() -> Template {
+    let context: HashMap<String, String> = HashMap::new();
+    Template::render("tutorial", context)
+}
+
+#[main]
+async fn main() -> Result<(), rocket::Error> {
+    let rocket = rocket::build()
+        .mount("/", routes![index, tutorial])
+        .mount("/static", FileServer::from("static"))
+        .attach(Template::fairing());
+    task::spawn(async {
+        loop {
+            if tokio::fs::try_exists(RANKINGS_FILE).await.unwrap() {
+                let age = tokio::fs::metadata(RANKINGS_FILE)
+                    .await
+                    .unwrap()
+                    .modified()
+                    .unwrap()
+                    .elapsed()
+                    .unwrap();
+                if age > MAX_RANKINGS_AGE {
+                    rankings_update().await.expect("Failed update");
+                }
+            } else {
+                rankings_update().await.expect("Failed update");
+            }
+            sleep(AUTOUPDATE_TIMER).await;
+        }
+    });
+    rocket.launch().await?;
+    Ok(())
+}
+
+async fn parse_leaderboard(file_path: &str) -> Vec<Entry> {
+    let contents = fs::read_to_string(file_path)
+        .await
+        .expect("Failed to read file");
+    contents
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line
+                .trim_start()
+                .splitn(3, " - ")
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.len() == 3 {
+                Some(Entry {
+                    rank: parts[0].parse().ok()?,
+                    time: parts[1].to_string(),
+                    name: parts[2].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 async fn rankings_update() -> Result<(), Error> {
     dotenv::dotenv().ok();
     let id = env::var("LEADERBOARD_ID").expect("Expected OWNER_ID in env!");
@@ -149,65 +215,5 @@ async fn rankings_update() -> Result<(), Error> {
         );
     }
     tokio::fs::write(RANKINGS_FILE, output.clone()).await?;
-    Ok(())
-}
-
-async fn parse_leaderboard(file_path: &str) -> Vec<Entry> {
-    let contents = fs::read_to_string(file_path)
-        .await
-        .expect("Failed to read file");
-    contents
-        .lines()
-        .filter_map(|line| {
-            let parts: Vec<&str> = line
-                .trim_start()
-                .splitn(3, " - ")
-                .filter(|s| !s.is_empty())
-                .collect();
-            if parts.len() == 3 {
-                Some(Entry {
-                    rank: parts[0].parse().ok()?,
-                    time: parts[1].to_string(),
-                    name: parts[2].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-#[get("/")]
-async fn index() -> Template {
-    let leaderboard = parse_leaderboard(RANKINGS_FILE).await;
-    Template::render("index", context! { leaderboard })
-}
-
-#[main]
-async fn main() -> Result<(), rocket::Error> {
-    let rocket = rocket::build()
-        .mount("/", routes![index])
-        .mount("/static", FileServer::from("static"))
-        .attach(Template::fairing());
-    task::spawn(async {
-        loop {
-            if tokio::fs::try_exists(RANKINGS_FILE).await.unwrap() {
-                let age = tokio::fs::metadata(RANKINGS_FILE)
-                    .await
-                    .unwrap()
-                    .modified()
-                    .unwrap()
-                    .elapsed()
-                    .unwrap();
-                if age > MAX_RANKINGS_AGE {
-                    rankings_update().await.expect("Failed update");
-                }
-            } else {
-                rankings_update().await.expect("Failed update");
-            }
-            sleep(AUTOUPDATE_TIMER).await;
-        }
-    });
-    rocket.launch().await?;
     Ok(())
 }

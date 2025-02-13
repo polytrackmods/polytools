@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>PolyTracker Setup Tutorial</title>
+	<link rel="stylesheet" href="/static/style.css">
+	<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+	<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+	<link rel="manifest" href="/static/site.webmanifest">
+</head>
+<body>
+	<h1>PolyTracker Setup Tutorial</h1>
+	<h3>Add the bot to your account</h3>
+	Click on "Add App" to add the bot to your account.<br>
+	<img src="/static/tutorial/PolyTrackerTutorial1.png" alt="Adding the app"><br>
+	<br>
+	<h3>Copy your User ID</h3>
+	Go to "Profile", then click on the profile you want to add, then copy the code in the bottom left corner.<br>
+	<img src="/static/tutorial/PolyTrackerTutorial2.png" alt="Finding the User ID"><br>
+	<h3>Register your user</h3><br>
+	Go to Discord and type the command "/assign", then choose the correct bot.<br>
+	<img src="/static/tutorial/PolyTrackerTutorial3.png" alt="Finding the right command"><p>
+	For "user" input your preferred username (does not have to match your in-game name), for "id" paste the User ID you copied earlier.<br>
+	<img src="/static/tutorial/PolyTrackerTutorial4.png" alt="Inputting your name and ID"><p>
+	Lastly, send the command. You should get feedback like this:<br>
+	<img src="/static/tutorial/PolyTrackerTutorial5.png" alt="Feedback after adding the user"><p>
+	<br>
+	<h3>Use the bot as you please</h3>
+	You should now be able to use a majority of the bot's commands.<br>
+	If you encounter any issues, just message this bot's creator (@ireozar on Discord).
+	<br>
+</body>
+</html>
