@@ -124,6 +124,7 @@ async fn write_embed(
         };
         let response = ctx.send(reply.clone()).await?;
         let mut current_page = 0;
+        let del_ctx = ctx.clone();
         while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
             .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
             .timeout(MAX_EMBED_AGE)
@@ -163,7 +164,7 @@ async fn write_embed(
                 )
                 .await?;
         }
-        response.delete(*ctx).await?;
+        response.delete(del_ctx).await?;
     } else {
         panic!("Different amounts of columns for write_embed!");
     }
