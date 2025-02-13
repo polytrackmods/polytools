@@ -20,7 +20,7 @@ const BLACKLIST_FILE: &str = "blacklist.txt";
 const ALT_ACCOUNT_FILE: &str = "alt_accounts.txt";
 const RANKINGS_FILE: &str = "poly_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
-const MAX_EMBED_AGE: Duration = Duration::from_secs(60 * 60);
+const MAX_EMBED_AGE: Duration = Duration::from_secs(60 * 10);
 
 #[derive(Serialize, Deserialize, Debug)]
 struct BotData {
