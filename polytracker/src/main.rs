@@ -14,13 +14,14 @@ use std::{collections::HashMap, time::Duration};
 use tokio::fs;
 use tokio::io;
 use tokio::task;
+use tokio::time::sleep;
 
 const USER_FILE: &str = "userIDs.json";
 const BLACKLIST_FILE: &str = "blacklist.txt";
 const ALT_ACCOUNT_FILE: &str = "alt_accounts.txt";
 const RANKINGS_FILE: &str = "poly_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
-const MAX_EMBED_AGE: Duration = Duration::from_secs(60 * 10);
+const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 
 #[derive(Serialize, Deserialize, Debug)]
 struct BotData {
@@ -54,6 +55,7 @@ impl BotData {
     }
 }
 async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
+    let response;
     if text.chars().count() > 2000 {
         if text.chars().nth(0).unwrap() == text.chars().nth(1).unwrap()
             && text.chars().nth(1).unwrap() == text.chars().nth(2).unwrap()
@@ -68,10 +70,12 @@ async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
             text.pop();
         }
         let file = CreateAttachment::bytes(text.as_bytes(), "polytrackerMsg.txt");
-        ctx.send(CreateReply::default().attachment(file)).await?;
+        response = ctx.send(CreateReply::default().attachment(file)).await?;
     } else {
-        ctx.say(text).await?;
+        response = ctx.say(text).await?;
     }
+    sleep(MAX_MSG_AGE).await;
+    response.delete(*ctx).await?;
     Ok(())
 }
 
@@ -123,10 +127,9 @@ async fn write_embed(
         };
         let response = ctx.send(reply.clone()).await?;
         let mut current_page = 0;
-        let del_ctx = ctx.clone();
         while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
             .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-            .timeout(MAX_EMBED_AGE)
+            .timeout(MAX_MSG_AGE)
             .await
         {
             if press.data.custom_id == next_id {
@@ -163,7 +166,7 @@ async fn write_embed(
                 )
                 .await?;
         }
-        response.delete(del_ctx).await?;
+        response.delete(*ctx).await?;
     } else {
         panic!("Different amounts of columns for write_embed!");
     }
