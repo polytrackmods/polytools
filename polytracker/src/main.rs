@@ -183,6 +183,8 @@ async fn assign(
     ctx.defer_ephemeral().await?;
     let response = format!("`Added user '{}' with ID '{}'`", user, id);
     ctx.data().user_ids.lock().unwrap().insert(user, id);
+    let bot_data = ctx.data();
+    bot_data.save_to_file(USER_FILE).await?;
     write(&ctx, response).await?;
     Ok(())
 }
@@ -877,7 +879,7 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
 async fn save(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let bot_data = ctx.data();
-    bot_data.save_to_file(USER_FILE).await.unwrap();
+    bot_data.save_to_file(USER_FILE).await?;
     write(&ctx, format!("`User IDs saved.`")).await?;
     Ok(())
 }
