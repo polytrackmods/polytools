@@ -184,8 +184,12 @@ async fn assign(
     #[description = "Player ID"] id: String,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let response = format!("`Added user '{}' with ID '{}'`", user, id);
-    ctx.data().user_ids.lock().unwrap().insert(user, id);
+    let mut user_id = id;
+    if user_id.starts_with("User ID: ") {
+        user_id = user_id.trim_start_matches("User ID: ").to_string();
+    }
+    let response = format!("`Added user '{}' with ID '{}'`", user, user_id);
+    ctx.data().user_ids.lock().unwrap().insert(user, user_id);
     let bot_data = ctx.data();
     bot_data.save_to_file(USER_FILE).await?;
     write(&ctx, response).await?;
@@ -194,7 +198,7 @@ async fn assign(
 
 /// Delete an already assigned username-ID pair (bot-admin only)
 ///
-/// Only deletes the data from the bot, you account stays intact.
+/// Only deletes the data from the bot, you game account stays intact.
 #[poise::command(
     slash_command,
     prefix_command,
@@ -224,7 +228,7 @@ async fn delete(
 ///
 /// Choose between standard tracks (off=True) or custom tracks (off=False).
 /// For standard tracks use the track number (1-13).
-/// For custom tracks use the track ID (Tutorial in help).
+/// For custom tracks use the track ID.
 #[poise::command(slash_command, prefix_command, category = "Query")]
 async fn request(
     ctx: Context<'_>,
