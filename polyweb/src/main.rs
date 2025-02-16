@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate rocket;
-use rocket::form::validate::Len;
 use rocket::fs::FileServer;
 use rocket::futures::future::join_all;
 use rocket::serde::{Deserialize, Serialize};
@@ -72,7 +71,7 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(Template::fairing());
     task::spawn(async {
         loop {
-            /* if tokio::fs::try_exists(GLOBAL_RANKINGS_FILE).await.unwrap() {
+            if tokio::fs::try_exists(GLOBAL_RANKINGS_FILE).await.unwrap() {
                 let age = tokio::fs::metadata(GLOBAL_RANKINGS_FILE)
                     .await
                     .unwrap()
@@ -85,7 +84,7 @@ async fn main() -> Result<(), rocket::Error> {
                 }
             } else {
                 rankings_update().await.expect("Failed update");
-            } */
+            }
             if tokio::fs::try_exists(HOF_RANKINGS_FILE).await.unwrap() {
                 let age = tokio::fs::metadata(HOF_RANKINGS_FILE)
                     .await
@@ -352,11 +351,6 @@ async fn hof_update() -> Result<(), Error> {
         }
         final_leaderboard.push((rank_prev, points_prev, entry.0));
     }
-    /* let leaderboard: Vec<(usize, String, u32)> = sorted_leaderboard
-        .into_iter()
-        .enumerate()
-        .map(|(i, (name, ranking))| (i, name, ranking))
-        .collect(); */
     let mut output = String::new();
     for entry in final_leaderboard {
         output.push_str(format!("{:>3} - {} - {}\n", entry.0, entry.1, entry.2,).as_str());
