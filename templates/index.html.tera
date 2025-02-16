@@ -10,12 +10,12 @@
     <link rel="manifest" href="/static/site.webmanifest">
 </head>
 <body>
-    <h1>Global Leaderboard</h1>
+    <h1>{{ title }}</h1>
     <table>
         <thead>
             <tr>
                 <th>Rank</th>
-                <th>Time</th>
+                <th>{{ stat }}</th>
                 <th>Player</th>
             </tr>
         </thead>
@@ -23,7 +23,7 @@
             {% for entry in leaderboard %}
             <tr>
                 <td>{{ entry.rank }}</td>
-                <td>{{ entry.time }}</td>
+                <td>{{ entry.stat }}</td>
                 <td>{{ entry.name }}</td>
             </tr>
             {% endfor %}
