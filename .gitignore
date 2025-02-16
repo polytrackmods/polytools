@@ -3,5 +3,6 @@ userIDs.json
 blacklist.txt
 alt_accounts.txt
 poly_rankings.txt
+hof_rankings.txt
 .env
 /.cargo
