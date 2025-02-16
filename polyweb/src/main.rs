@@ -71,20 +71,6 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(Template::fairing());
     task::spawn(async {
         loop {
-            if tokio::fs::try_exists(GLOBAL_RANKINGS_FILE).await.unwrap() {
-                let age = tokio::fs::metadata(GLOBAL_RANKINGS_FILE)
-                    .await
-                    .unwrap()
-                    .modified()
-                    .unwrap()
-                    .elapsed()
-                    .unwrap();
-                if age > MAX_RANKINGS_AGE {
-                    rankings_update().await.expect("Failed update");
-                }
-            } else {
-                rankings_update().await.expect("Failed update");
-            }
             if tokio::fs::try_exists(HOF_RANKINGS_FILE).await.unwrap() {
                 let age = tokio::fs::metadata(HOF_RANKINGS_FILE)
                     .await
@@ -99,7 +85,22 @@ async fn main() -> Result<(), rocket::Error> {
             } else {
                 hof_update().await.expect("Failed update");
             }
-            sleep(AUTOUPDATE_TIMER).await;
+            sleep(AUTOUPDATE_TIMER / 2).await;
+            if tokio::fs::try_exists(GLOBAL_RANKINGS_FILE).await.unwrap() {
+                let age = tokio::fs::metadata(GLOBAL_RANKINGS_FILE)
+                    .await
+                    .unwrap()
+                    .modified()
+                    .unwrap()
+                    .elapsed()
+                    .unwrap();
+                if age > MAX_RANKINGS_AGE {
+                    rankings_update().await.expect("Failed update");
+                }
+            } else {
+                rankings_update().await.expect("Failed update");
+            }
+            sleep(AUTOUPDATE_TIMER / 2).await;
         }
     });
     rocket.launch().await?;
