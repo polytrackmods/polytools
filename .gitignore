@@ -1,7 +1,9 @@
 /target
 userIDs.json
 blacklist.txt
+hof_blacklist.txt
 alt_accounts.txt
+hof_alt_accounts.txt
 poly_rankings.txt
 hof_rankings.txt
 .env
