@@ -22,7 +22,7 @@
         <tbody>
             {% for entry in leaderboard %}
             <tr>
-                <td>{{ entry.rank }}</td>
+                <td>{{ entry.rank }}.</td>
                 <td>{{ entry.stat }}</td>
                 <td>{{ entry.name }}</td>
             </tr>
