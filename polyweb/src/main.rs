@@ -43,7 +43,7 @@ const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 async fn index() -> Template {
     let leaderboard = parse_leaderboard(GLOBAL_RANKINGS_FILE).await;
     Template::render(
-        "index",
+        "leaderboard",
         context! { title: "Global Leaderboard", stat: "Time", leaderboard },
     )
 }
@@ -52,7 +52,7 @@ async fn index() -> Template {
 async fn hof() -> Template {
     let leaderboard = parse_leaderboard(HOF_RANKINGS_FILE).await;
     Template::render(
-        "index",
+        "leaderboard",
         context! { title: "HOF Leaderboard", stat: "Points", leaderboard },
     )
 }
