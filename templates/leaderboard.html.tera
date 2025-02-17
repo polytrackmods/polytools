@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Leaderboard</title>
+    <title>{{ title }}</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
