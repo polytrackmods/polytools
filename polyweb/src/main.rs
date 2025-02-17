@@ -33,7 +33,9 @@ struct Entry {
 }
 
 const BLACKLIST_FILE: &str = "blacklist.txt";
+const HOF_BLACKLIST_FILE: &str = "hof_blacklist.txt";
 const ALT_ACCOUNT_FILE: &str = "alt_accounts.txt";
+const HOF_ALT_ACCOUNT_FILE: &str = "hof_alt_accounts.txt";
 const GLOBAL_RANKINGS_FILE: &str = "poly_rankings.txt";
 const HOF_RANKINGS_FILE: &str = "hof_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
@@ -276,12 +278,12 @@ async fn hof_update() -> Result<(), Error> {
         leaderboards.push(leaderboard);
     }
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
-    let blacklist: Vec<String> = tokio::fs::read_to_string(BLACKLIST_FILE)
+    let blacklist: Vec<String> = tokio::fs::read_to_string(HOF_BLACKLIST_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
         .collect();
-    let alt_file: Vec<String> = tokio::fs::read_to_string(ALT_ACCOUNT_FILE)
+    let alt_file: Vec<String> = tokio::fs::read_to_string(HOF_ALT_ACCOUNT_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
