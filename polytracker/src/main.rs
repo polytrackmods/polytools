@@ -684,7 +684,6 @@ async fn update_rankings(
 
 async fn rankings_update(entry_requirement: Option<usize>) -> Result<(), Error> {
     dotenv::dotenv().ok();
-    let id = env::var("LEADERBOARD_ID").expect("Expected OWNER_ID in env!");
     let lb_size = entry_requirement.unwrap_or_else(|| {
         env::var("LEADERBOARD_SIZE")
             .expect("Expected LEADERBOARD_SIZE in env!")
@@ -702,10 +701,10 @@ async fn rankings_update(entry_requirement: Option<usize>) -> Result<(), Error> 
         let client = client.clone();
         let mut urls = Vec::new();
         for i in 0..lb_size {
-            urls.push(format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip={}&amount=500&onlyVerified=false&userTokenHash={}",
+            urls.push(format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip={}&amount=500",
             track_id,
             i * 500,
-            id));
+            ));
         }
         task::spawn(
             async move {
