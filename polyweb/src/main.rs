@@ -134,7 +134,6 @@ async fn parse_leaderboard(file_path: &str) -> Vec<Entry> {
 
 async fn rankings_update() -> Result<(), Error> {
     dotenv::dotenv().ok();
-    let id = env::var("LEADERBOARD_ID").expect("Expected OWNER_ID in env!");
     let lb_size = env::var("LEADERBOARD_SIZE")
         .expect("Expected LEADERBOARD_SIZE in env!")
         .parse()
@@ -150,10 +149,9 @@ async fn rankings_update() -> Result<(), Error> {
         let client = client.clone();
         let mut urls = Vec::new();
         for i in 0..lb_size {
-            urls.push(format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip={}&amount=500&onlyVerified=false&userTokenHash={}",
+            urls.push(format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip={}&amount=500",
             track_id,
-            i * 500,
-            id));
+            i * 500));
         }
         task::spawn(
             async move {
@@ -247,8 +245,6 @@ async fn rankings_update() -> Result<(), Error> {
 }
 
 async fn hof_update() -> Result<(), Error> {
-    dotenv::dotenv().ok();
-    let id = env::var("LEADERBOARD_ID").expect("Expected OWNER_ID in env!");
     let client = reqwest::Client::new();
     let track_ids: Vec<String> = tokio::fs::read_to_string("hof_tracks.txt")
         .await?
@@ -258,15 +254,15 @@ async fn hof_update() -> Result<(), Error> {
     let track_num = track_ids.len() as u32;
     let futures = track_ids.into_iter().map(|track_id| {
         let client = client.clone();
-        let url = format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=100&onlyVerified=false&userTokenHash={}",
-            track_id.splitn(2, " ").next().unwrap(),
-            id);
-        task::spawn(
-            async move {
-                let res = client.get(url).send().await.unwrap().text().await.unwrap();
-                return Ok::<String, reqwest::Error>(res);
-            })
-        });
+        let url = format!(
+            "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=100",
+            track_id.splitn(2, " ").next().unwrap()
+        );
+        task::spawn(async move {
+            let res = client.get(url).send().await.unwrap().text().await.unwrap();
+            return Ok::<String, reqwest::Error>(res);
+        })
+    });
     let results: Vec<String> = join_all(futures)
         .await
         .into_iter()
