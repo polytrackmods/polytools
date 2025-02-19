@@ -44,19 +44,13 @@ const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 #[get("/")]
 async fn index() -> Template {
     let leaderboard = parse_leaderboard(GLOBAL_RANKINGS_FILE).await;
-    Template::render(
-        "leaderboard",
-        context! { title: "Global Leaderboard", stat: "Time", leaderboard },
-    )
+    Template::render("leaderboard", context! { leaderboard })
 }
 
 #[get("/hof")]
 async fn hof() -> Template {
-    let leaderboard = parse_leaderboard(HOF_RANKINGS_FILE).await;
-    Template::render(
-        "leaderboard",
-        context! { title: "HOF Leaderboard", stat: "Points", leaderboard },
-    )
+    let leaderboard = parse_hof_leaderboard(HOF_RANKINGS_FILE).await;
+    Template::render("hof", context! { leaderboard })
 }
 
 #[get("/tutorial")]
@@ -132,6 +126,58 @@ async fn parse_leaderboard(file_path: &str) -> Vec<Entry> {
             }
         })
         .collect()
+}
+
+async fn parse_hof_leaderboard(file_path: &str) -> (Vec<Entry>, Vec<Entry>) {
+    let contents = fs::read_to_string(file_path)
+        .await
+        .expect("Failed to read file");
+    let leaderboard: Vec<Entry> = contents
+        .lines()
+        .filter_map(|line| {
+            if line.starts_with("<|-|>") {
+                return None;
+            }
+            let parts: Vec<&str> = line
+                .trim_start()
+                .splitn(3, " - ")
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.len() == 3 {
+                Some(Entry {
+                    rank: parts[0].parse().ok()?,
+                    stat: parts[1].to_string(),
+                    name: parts[2].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    let record_leaderboard: Vec<Entry> = contents
+        .lines()
+        .filter_map(|line| {
+            if !line.starts_with("<|-|>") {
+                return None;
+            }
+            let parts: Vec<&str> = line
+                .trim_start_matches("<|-|>")
+                .trim_start()
+                .splitn(3, " - ")
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.len() == 3 {
+                Some(Entry {
+                    rank: parts[0].parse().ok()?,
+                    stat: parts[1].to_string(),
+                    name: parts[2].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    (leaderboard, record_leaderboard)
 }
 
 async fn rankings_update() -> Result<(), Error> {
@@ -327,6 +373,7 @@ async fn hof_update() -> Result<(), Error> {
         }
     }
     let mut sorted_leaderboard: Vec<(String, u32)> = player_rankings
+        .clone()
         .into_iter()
         .map(|(name, rankings)| {
             let mut points = 0;
@@ -338,21 +385,45 @@ async fn hof_update() -> Result<(), Error> {
             (name, points)
         })
         .collect();
-    sorted_leaderboard.sort_by_key(|(_, ranking)| *ranking);
+    sorted_leaderboard.sort_by_key(|(_, points)| *points);
     sorted_leaderboard.reverse();
     let mut final_leaderboard: Vec<(u32, u32, String)> = Vec::new();
     let mut points_prev = point_values[0] * track_num + 1;
     let mut rank_prev = 0;
-    for entry in sorted_leaderboard.clone() {
-        if entry.1 < points_prev {
-            points_prev = entry.1;
+    for (name, points) in sorted_leaderboard.clone() {
+        if points < points_prev {
+            points_prev = points;
             rank_prev += 1;
         }
-        final_leaderboard.push((rank_prev, points_prev, entry.0));
+        final_leaderboard.push((rank_prev, points_prev, name));
     }
     let mut output = String::new();
-    for entry in final_leaderboard {
-        output.push_str(format!("{:>3} - {} - {}\n", entry.0, entry.1, entry.2,).as_str());
+    for (rank, points, name) in final_leaderboard {
+        output.push_str(format!("{:>3} - {} - {}\n", rank, points, name).as_str());
+    }
+    let mut player_records: HashMap<String, u32> = HashMap::new();
+    for (name, rankings) in player_rankings {
+        for rank in rankings {
+            if rank == 1 {
+                *player_records.entry(name.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut player_records: Vec<(String, u32)> = player_records.into_iter().collect();
+    player_records.sort_by_key(|(_, amt)| *amt);
+    player_records.reverse();
+    let mut final_player_records: Vec<(u32, u32, String)> = Vec::new();
+    let mut records_prev = track_num + 1;
+    let mut rank_prev = 0;
+    for (name, records) in player_records.clone() {
+        if records < records_prev {
+            records_prev = records;
+            rank_prev += 1;
+        }
+        final_player_records.push((rank_prev, records_prev, name));
+    }
+    for (rank, records, name) in final_player_records {
+        output.push_str(format!("<|-|> {:>3} - {} - {}\n", rank, records, name).as_str());
     }
     tokio::fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
     Ok(())
