@@ -225,10 +225,10 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
         })
         .collect();
     let url;
-    if track_ids.contains_key(&track_id.to_string()) {
+    if track_ids.contains_key(&track_id.to_lowercase()) {
         url = format!(
             "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
-            track_ids.get(&track_id.to_string()).unwrap()
+            track_ids.get(&track_id.to_lowercase()).unwrap()
         );
     } else {
         url = format!(
@@ -236,12 +236,43 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
             track_id
         );
     }
-    println!("{}", url);
     let result = client.get(&url).send().await.unwrap().text().await.unwrap();
     let response: LeaderBoard = serde_json::from_str(&result).unwrap();
     let mut leaderboard = Vec::new();
+    let blacklist: Vec<String> = tokio::fs::read_to_string(BLACKLIST_FILE)
+        .await
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+    let alt_file: Vec<String> = tokio::fs::read_to_string(ALT_ACCOUNT_FILE)
+        .await
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+    let mut alt_list: HashMap<String, String> = HashMap::new();
+    for line in alt_file {
+        const SPLIT_CHAR: &str = "<|>";
+        for entry in line.split(SPLIT_CHAR).skip(1) {
+            alt_list.insert(
+                entry.to_string(),
+                line.split(SPLIT_CHAR).nth(0).unwrap().to_string(),
+            );
+        }
+    }
     let mut rank = 0;
+    let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
+        let name;
+        if alt_list.contains_key(&entry.name) {
+            name = alt_list.get(&entry.name).unwrap().clone();
+        } else {
+            name = entry.name.clone();
+        }
+        if has_time.contains(&name) || blacklist.contains(&name) {
+            continue;
+        }
         rank += 1;
         leaderboard.push(Entry {
             rank,
@@ -257,10 +288,11 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
                     )
                 }
             },
-            name: entry.name,
-        })
+            name: name.clone(),
+        });
+        has_time.push(name);
     }
-    let name = if track_ids.contains_key(&track_id.to_string()) {
+    let name = if track_ids.contains_key(&track_id.to_lowercase()) {
         format!("{} ", track_id)
     } else {
         String::new()
@@ -283,8 +315,40 @@ async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
     let result = client.get(&url).send().await.unwrap().text().await.unwrap();
     let response: LeaderBoard = serde_json::from_str(&result).unwrap();
     let mut leaderboard = Vec::new();
+    let blacklist: Vec<String> = tokio::fs::read_to_string(BLACKLIST_FILE)
+        .await
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+    let alt_file: Vec<String> = tokio::fs::read_to_string(ALT_ACCOUNT_FILE)
+        .await
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+    let mut alt_list: HashMap<String, String> = HashMap::new();
+    for line in alt_file {
+        const SPLIT_CHAR: &str = "<|>";
+        for entry in line.split(SPLIT_CHAR).skip(1) {
+            alt_list.insert(
+                entry.to_string(),
+                line.split(SPLIT_CHAR).nth(0).unwrap().to_string(),
+            );
+        }
+    }
     let mut rank = 0;
+    let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
+        let name;
+        if alt_list.contains_key(&entry.name) {
+            name = alt_list.get(&entry.name).unwrap().clone();
+        } else {
+            name = entry.name.clone();
+        }
+        if has_time.contains(&name) || blacklist.contains(&name) {
+            continue;
+        }
         rank += 1;
         leaderboard.push(Entry {
             rank,
@@ -300,8 +364,9 @@ async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
                     )
                 }
             },
-            name: entry.name,
-        })
+            name: name.clone(),
+        });
+        has_time.push(name);
     }
     leaderboard
 }
