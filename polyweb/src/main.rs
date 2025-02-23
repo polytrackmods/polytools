@@ -38,6 +38,7 @@ const ALT_ACCOUNT_FILE: &str = "alt_accounts.txt";
 const HOF_ALT_ACCOUNT_FILE: &str = "hof_alt_accounts.txt";
 const GLOBAL_RANKINGS_FILE: &str = "poly_rankings.txt";
 const HOF_RANKINGS_FILE: &str = "hof_rankings.txt";
+const CUSTOM_TRACK_FILE: &str = "custom_tracks.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 
@@ -53,6 +54,30 @@ async fn hof() -> Template {
     Template::render("hof", context! { leaderboard })
 }
 
+#[get("/lb-custom/<track_id>")]
+async fn custom_lb(track_id: &str) -> Template {
+    let (name, leaderboard) = get_custom_leaderboard(track_id).await;
+    Template::render(
+        "track_leaderboard",
+        context! { track_name: name, leaderboard },
+    )
+}
+
+#[get("/lb-standard/<track_id>")]
+async fn standard_lb(track_id: usize) -> Template {
+    let leaderboard = get_standard_leaderboard(track_id).await;
+    Template::render(
+        "track_leaderboard",
+        context! { track_name: format!("Track {} ", track_id), leaderboard },
+    )
+}
+
+#[get("/policy")]
+async fn policy() -> Template {
+    let context: HashMap<String, String> = HashMap::new();
+    Template::render("privacy_policy", context)
+}
+
 #[get("/tutorial")]
 async fn tutorial() -> Template {
     let context: HashMap<String, String> = HashMap::new();
@@ -62,7 +87,10 @@ async fn tutorial() -> Template {
 #[main]
 async fn main() -> Result<(), rocket::Error> {
     let rocket = rocket::build()
-        .mount("/", routes![index, hof, tutorial])
+        .mount(
+            "/",
+            routes![index, hof, tutorial, standard_lb, custom_lb, policy],
+        )
         .mount("/static", FileServer::from("static"))
         .attach(Template::fairing());
     task::spawn(async {
@@ -178,6 +206,104 @@ async fn parse_hof_leaderboard(file_path: &str) -> (Vec<Entry>, Vec<Entry>) {
         })
         .collect();
     (leaderboard, record_leaderboard)
+}
+
+async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
+    let client = reqwest::Client::new();
+    let track_ids: HashMap<String, String> = tokio::fs::read_to_string(CUSTOM_TRACK_FILE)
+        .await
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .map(|s| {
+            let mut parts = s.splitn(2, " ");
+            let output_reversed = (
+                parts.next().unwrap().to_string(),
+                parts.next().unwrap().to_string(),
+            );
+            (output_reversed.1, output_reversed.0)
+        })
+        .collect();
+    let url;
+    if track_ids.contains_key(&track_id.to_string()) {
+        url = format!(
+            "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
+            track_ids.get(&track_id.to_string()).unwrap()
+        );
+    } else {
+        url = format!(
+            "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
+            track_id
+        );
+    }
+    println!("{}", url);
+    let result = client.get(&url).send().await.unwrap().text().await.unwrap();
+    let response: LeaderBoard = serde_json::from_str(&result).unwrap();
+    let mut leaderboard = Vec::new();
+    let mut rank = 0;
+    for entry in response.entries {
+        rank += 1;
+        leaderboard.push(Entry {
+            rank,
+            stat: {
+                if entry.frames < 60000.0 {
+                    (entry.frames / 1000.0).to_string()
+                } else {
+                    format!(
+                        "{}:{}.{}",
+                        entry.frames as u32 / 60000,
+                        entry.frames as u32 % 60000 / 1000,
+                        entry.frames as u32 / 1000
+                    )
+                }
+            },
+            name: entry.name,
+        })
+    }
+    let name = if track_ids.contains_key(&track_id.to_string()) {
+        format!("Track {} ", track_id)
+    } else {
+        String::new()
+    };
+    (name, leaderboard)
+}
+
+async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
+    let client = reqwest::Client::new();
+    let track_ids: Vec<String> = tokio::fs::read_to_string("official_tracks.txt")
+        .await
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+    let url = format!(
+        "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
+        track_ids[track_id]
+    );
+    let result = client.get(&url).send().await.unwrap().text().await.unwrap();
+    let response: LeaderBoard = serde_json::from_str(&result).unwrap();
+    let mut leaderboard = Vec::new();
+    let mut rank = 0;
+    for entry in response.entries {
+        rank += 1;
+        leaderboard.push(Entry {
+            rank,
+            stat: {
+                if entry.frames < 60000.0 {
+                    (entry.frames / 1000.0).to_string()
+                } else {
+                    format!(
+                        "{}:{}.{}",
+                        entry.frames as u32 / 60000,
+                        entry.frames as u32 % 60000 / 1000,
+                        entry.frames as u32 / 1000
+                    )
+                }
+            },
+            name: entry.name,
+        })
+    }
+    leaderboard
 }
 
 async fn rankings_update() -> Result<(), Error> {

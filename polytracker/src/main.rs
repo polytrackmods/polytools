@@ -188,6 +188,14 @@ async fn assign(
     if user_id.starts_with("User ID: ") {
         user_id = user_id.trim_start_matches("User ID: ").to_string();
     }
+    if ctx.data().user_ids.lock().unwrap().contains_key(&user) {
+        let response = format!(
+            "`User '{}' is already assigned an ID, to reassign please contact this bot's owner`",
+            user
+        );
+        write(&ctx, response).await?;
+        return Ok(());
+    }
     let response = format!("`Added user '{}' with ID '{}'`", user, user_id);
     ctx.data().user_ids.lock().unwrap().insert(user, user_id);
     let bot_data = ctx.data();
@@ -929,6 +937,18 @@ async fn users(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Links the privacy policy
+#[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
+async fn policy(ctx: Context<'_>) -> Result<(), Error> {
+    dotenv::dotenv().ok();
+    let url = format!(
+        "https://{}/policy",
+        env::var("WEBSITE_URL").expect("Expected WEBSITE_URL in env!")
+    );
+    write(&ctx, format!("Privacy Policy: <{}>", url)).await?;
+    Ok(())
+}
+
 /// Displays help
 #[poise::command(slash_command, prefix_command, track_edits, category = "Info")]
 async fn help(
@@ -973,6 +993,7 @@ async fn main() {
                 compare(),
                 update_rankings(),
                 rankings(),
+                policy(),
             ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("~".into()),
