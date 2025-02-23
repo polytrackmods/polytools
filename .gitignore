@@ -8,3 +8,5 @@ poly_rankings.txt
 hof_rankings.txt
 .env
 /.cargo
+templates/privacy_policy.html.tera
+custom_tracks.txt
