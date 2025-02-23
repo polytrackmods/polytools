@@ -261,7 +261,7 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
         })
     }
     let name = if track_ids.contains_key(&track_id.to_string()) {
-        format!("Track {} ", track_id)
+        format!("{} ", track_id)
     } else {
         String::new()
     };
