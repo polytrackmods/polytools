@@ -310,7 +310,7 @@ async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
         .collect();
     let url = format!(
         "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
-        track_ids[track_id]
+        track_ids[track_id - 1]
     );
     let result = client.get(&url).send().await.unwrap().text().await.unwrap();
     let response: LeaderBoard = serde_json::from_str(&result).unwrap();
