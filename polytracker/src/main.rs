@@ -14,7 +14,6 @@ use std::{collections::HashMap, time::Duration};
 use tokio::fs;
 use tokio::io;
 use tokio::task;
-use tokio::time::sleep;
 
 const USER_FILE: &str = "userIDs.json";
 const BLACKLIST_FILE: &str = "blacklist.txt";
@@ -55,7 +54,6 @@ impl BotData {
     }
 }
 async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
-    let response;
     if text.chars().count() > 2000 {
         if text.chars().nth(0).unwrap() == text.chars().nth(1).unwrap()
             && text.chars().nth(1).unwrap() == text.chars().nth(2).unwrap()
@@ -70,12 +68,10 @@ async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
             text.pop();
         }
         let file = CreateAttachment::bytes(text.as_bytes(), "polytrackerMsg.txt");
-        response = ctx.send(CreateReply::default().attachment(file)).await?;
+        ctx.send(CreateReply::default().attachment(file)).await?;
     } else {
-        response = ctx.say(text).await?;
+        ctx.say(text).await?;
     }
-    sleep(MAX_MSG_AGE).await;
-    response.delete(*ctx).await?;
     Ok(())
 }
 
@@ -125,7 +121,7 @@ async fn write_embed(
                 .embed(embed)
                 .components(vec![components])
         };
-        let response = ctx.send(reply.clone()).await?;
+        ctx.send(reply.clone()).await?;
         let mut current_page = 0;
         while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
             .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
@@ -166,7 +162,6 @@ async fn write_embed(
                 )
                 .await?;
         }
-        response.delete(*ctx).await?;
     } else {
         panic!("Different amounts of columns for write_embed!");
     }
