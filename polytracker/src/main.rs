@@ -488,7 +488,7 @@ async fn list(
         }
         write_embed(
             &ctx,
-            format!("Record list"),
+            user,
             format!(""),
             headers,
             contents,
