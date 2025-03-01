@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate rocket;
+use rocket::form::validate::Contains;
 use rocket::fs::FileServer;
 use rocket::futures::future::join_all;
 use rocket::serde::{Deserialize, Serialize};
@@ -54,6 +55,29 @@ async fn hof() -> Template {
     Template::render("hof", context! { leaderboard })
 }
 
+#[get("/lb-custom")]
+async fn custom_lb_home() -> Template {
+    let tracks: Vec<String> = tokio::fs::read_to_string(CUSTOM_TRACK_FILE)
+        .await
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .map(|s| s.splitn(2, " ").skip(1).next().unwrap().to_string())
+        .collect();
+    Template::render("lb_custom_home", context! { tracks })
+}
+
+#[get("/lb-standard")]
+async fn standard_lb_home() -> Template {
+    let track_num = tokio::fs::read_to_string("official_tracks.txt")
+        .await
+        .unwrap()
+        .lines()
+        .count() as u32;
+    let numbers: Vec<String> = (1..=track_num).map(|num| format!("{:0>2}", num)).collect();
+    Template::render("lb_standard_home", context! { numbers })
+}
+
 #[get("/lb-custom/<track_id>")]
 async fn custom_lb(track_id: &str) -> Template {
     let (name, leaderboard) = get_custom_leaderboard(track_id).await;
@@ -89,7 +113,16 @@ async fn main() -> Result<(), rocket::Error> {
     let rocket = rocket::build()
         .mount(
             "/",
-            routes![index, hof, tutorial, standard_lb, custom_lb, policy],
+            routes![
+                index,
+                hof,
+                tutorial,
+                standard_lb_home,
+                standard_lb,
+                custom_lb_home,
+                custom_lb,
+                policy
+            ],
         )
         .mount("/static", FileServer::from("static"))
         .attach(Template::fairing());
@@ -225,10 +258,19 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
         })
         .collect();
     let url;
-    if track_ids.contains_key(&track_id.to_lowercase()) {
+    let mut real_track_id = String::new();
+    for track in track_ids.clone().into_keys() {
+        if track.to_lowercase() == track_id.to_lowercase() {
+            real_track_id = track;
+            break;
+        }
+    }
+    // if track_ids.contains_key(&track_id.to_lowercase()) {
+    if !real_track_id.is_empty()
+    {
         url = format!(
             "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
-            track_ids.get(&track_id.to_lowercase()).unwrap()
+            track_ids.get(&real_track_id).unwrap()
         );
     } else {
         url = format!(
@@ -292,8 +334,8 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
         });
         has_time.push(name);
     }
-    let name = if track_ids.contains_key(&track_id.to_lowercase()) {
-        format!("{} ", track_id)
+    let name = if track_ids.contains_key(&real_track_id) {
+        format!("{} ", real_track_id)
     } else {
         String::new()
     };

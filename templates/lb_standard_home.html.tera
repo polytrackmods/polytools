@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="robots" content="noindex, nofollow">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standard Track Leaderboards</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="manifest" href="/static/site.webmanifest">
+</head>
+<body>
+    <h1>Standard Track Leaderboards</h1>
+    <div class="poly-button-container">
+        {% for num in numbers %}
+            <a href="/lb-standard/{{ num }}" class="poly-button">Track {{ num }}</a>
+        {% endfor %}
+    </div>
+    <footer>
+        <a href="/policy">Privacy Policy</a>
+    </footer>
+</body>
+</html>
+

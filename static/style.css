@@ -1,8 +1,25 @@
+:root {
+    --text-color: #fff;
+    --text-disabled-color: #5d6a7c;
+    --surface-color: #121212;
+    --surface-secondary-color: #212b58;
+    --surface-tertiary-color: #192042;
+    --surface-transparent-color: rgba(40, 52, 106, 0.5);
+    --button-color: #112052;
+    --button-hover-color: #334b77;
+    --button-active-color: #151f41;
+    --button-disabled-color: #313d53;
+}
+
 body {
     font-family: Arial, sans-serif;
     text-align: center;
-    background-color: #121212;
+    background-color: var(--surface-color);
     color: #e0e0e0;
+}
+
+html {
+    min-height: 100%;
 }
 
 table {
@@ -35,5 +52,63 @@ footer {
     margin-top: 10px;
     font-size: 0.6em;
     color: #777;
+    position: fixed;
+    bottom: 0;
 }
 
+.poly-button {
+    position: relative;
+    margin: 0;
+    padding: 8px 18px;
+    background-color: var(--button-color);
+    border: none;
+    clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+    color: var(--text-color);
+    font-size: 32px;
+    pointer-events: auto;
+    user-select: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.poly-button:hover {
+    background-color: var(--button-hover-color);
+}
+
+.poly-button:active {
+    background-color: var(--button-active-color);
+}
+
+.poly-button:disabled {
+    background-color: var(--button-disabled-color);
+    color: var(--text-disabled-color);
+    cursor: not-allowed;
+}
+
+.poly-button::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    z-index: -1;
+    width: 0;
+    height: 100%;
+    background-color: var(--button-hover-color);
+    border-bottom: 2px solid var(--text-color);
+    transition: width 0.1s ease-in-out;
+}
+
+.poly-button:hover::after {
+    width: 100%;
+}
+
+.poly-button-container {
+    display: flex;
+    justify-content: space-between;
+    width: 50%;
+    margin: 0 auto;
+    flex-wrap: wrap;
+    gap: 10px;
+}
