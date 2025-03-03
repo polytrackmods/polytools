@@ -326,7 +326,7 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
                         "{}:{}.{}",
                         entry.frames as u32 / 60000,
                         entry.frames as u32 % 60000 / 1000,
-                        entry.frames as u32 / 1000
+                        entry.frames as u32 % 1000
                     )
                 }
             },
@@ -402,7 +402,7 @@ async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
                         "{}:{}.{}",
                         entry.frames as u32 / 60000,
                         entry.frames as u32 % 60000 / 1000,
-                        entry.frames as u32 / 1000
+                        entry.frames as u32 % 1000
                     )
                 }
             },
