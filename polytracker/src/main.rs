@@ -486,15 +486,7 @@ async fn list(
             headers.push("Total");
             inlines.push(false);
         }
-        write_embed(
-            &ctx,
-            user,
-            format!(""),
-            headers,
-            contents,
-            inlines,
-        )
-        .await?;
+        write_embed(&ctx, user, format!(""), headers, contents, inlines).await?;
     } else {
         write(&ctx, format!("`User ID not found`")).await?;
     }
