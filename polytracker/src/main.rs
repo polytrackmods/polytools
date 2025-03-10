@@ -14,6 +14,7 @@ use std::{collections::HashMap, time::Duration};
 use tokio::fs;
 use tokio::io;
 use tokio::task;
+use tokio::time::sleep;
 
 const USER_FILE: &str = "userIDs.json";
 const BLACKLIST_FILE: &str = "blacklist.txt";
@@ -645,17 +646,23 @@ async fn compare(
 )]
 async fn update_rankings(
     ctx: Context<'_>,
+    #[description = "Beta version"] beta: Option<bool>,
     #[description = "Ranking multiple of 500 that is needed on all tracks to enter"]
     entry_requirement: Option<usize>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    rankings_update(entry_requirement).await?;
+    let beta = beta.unwrap_or(false);
+    rankings_update(entry_requirement, beta).await?;
     let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-    for line in tokio::fs::read_to_string(RANKINGS_FILE)
-        .await?
-        .lines()
-        .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
+    for line in tokio::fs::read_to_string(if beta {
+        "0.5_poly_rankings.txt"
+    } else {
+        RANKINGS_FILE
+    })
+    .await?
+    .lines()
+    .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
     {
         for i in 0..contents.len() {
             contents
@@ -667,7 +674,12 @@ async fn update_rankings(
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         &ctx,
-        format!("Global Leaderboard"),
+        if beta {
+            "Beta Leaderboard"
+        } else {
+            "Global Leaderboard"
+        }
+        .to_string(),
         format!(""),
         headers,
         contents,
@@ -677,16 +689,24 @@ async fn update_rankings(
     Ok(())
 }
 
-async fn rankings_update(entry_requirement: Option<usize>) -> Result<(), Error> {
+async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result<(), Error> {
     dotenv::dotenv().ok();
-    let lb_size = entry_requirement.unwrap_or_else(|| {
+    let mut lb_size = entry_requirement.unwrap_or_else(|| {
         env::var("LEADERBOARD_SIZE")
             .expect("Expected LEADERBOARD_SIZE in env!")
             .parse()
             .expect("LEADERBOARD_SIZE not a valid integer!")
     });
+    if beta {
+        lb_size = 3;
+    }
     let client = reqwest::Client::new();
-    let track_ids: Vec<String> = tokio::fs::read_to_string("official_tracks.txt")
+    let official_tracks_file = if beta {
+        "0.5_official_tracks.txt"
+    } else {
+        "official_tracks.txt"
+    };
+    let track_ids: Vec<String> = tokio::fs::read_to_string(official_tracks_file)
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -696,20 +716,33 @@ async fn rankings_update(entry_requirement: Option<usize>) -> Result<(), Error> 
         let client = client.clone();
         let mut urls = Vec::new();
         for i in 0..lb_size {
-            urls.push(format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip={}&amount=500",
-            track_id,
-            i * 500,
+            urls.push(format!(
+                "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
+                if beta { 43274 } else { 43273 },
+                if beta { "0.5.0" } else { "0.4.2" },
+                track_id,
+                i * 500,
             ));
         }
-        task::spawn(
-            async move {
-                let mut res = Vec::new();
-                for i in 0..lb_size {
-                    res.push(client.get(&urls[i]).send().await.unwrap().text().await.unwrap());
-                }
-                return Ok::<Vec<String>, reqwest::Error>(res);
-            })
-        });
+        task::spawn(async move {
+            let mut res = Vec::new();
+            for i in 0..lb_size {
+                sleep(Duration::from_millis(500)).await;
+                res.push(
+                    client
+                        .get(&urls[i])
+                        .send()
+                        .await
+                        .unwrap()
+                        .text()
+                        .await
+                        .unwrap(),
+                );
+                // println!("Currently doing URL {} number {}", &urls[i], i);
+            }
+            return Ok::<Vec<String>, reqwest::Error>(res);
+        })
+    });
     let results: Vec<Vec<String>> = join_all(futures)
         .await
         .into_iter()
@@ -788,7 +821,11 @@ async fn rankings_update(entry_requirement: Option<usize>) -> Result<(), Error> 
             .as_str(),
         );
     }
-    tokio::fs::write(RANKINGS_FILE, output.clone()).await?;
+    if beta {
+        tokio::fs::write("0.5_poly_rankings.txt", output.clone()).await?
+    } else {
+        tokio::fs::write(RANKINGS_FILE, output.clone()).await?;
+    }
     Ok(())
 }
 
@@ -796,6 +833,7 @@ async fn rankings_update(entry_requirement: Option<usize>) -> Result<(), Error> 
 #[poise::command(slash_command, prefix_command, category = "Query")]
 async fn rankings(
     ctx: Context<'_>,
+    #[description = "Beta version"] beta: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -803,24 +841,39 @@ async fn rankings(
     } else {
         ctx.defer().await?;
     }
-    if tokio::fs::try_exists(RANKINGS_FILE).await? {
-        let age = tokio::fs::metadata(RANKINGS_FILE)
-            .await?
-            .modified()?
-            .elapsed()?;
+    let beta = beta.unwrap_or(false);
+    if tokio::fs::try_exists(if beta {
+        "0.5_poly_rankings.txt"
+    } else {
+        RANKINGS_FILE
+    })
+    .await?
+    {
+        let age = tokio::fs::metadata(if beta {
+            "0.5_poly_rankings.txt"
+        } else {
+            RANKINGS_FILE
+        })
+        .await?
+        .modified()?
+        .elapsed()?;
         if age > MAX_RANKINGS_AGE {
-            rankings_update(None).await?;
+            rankings_update(None, beta).await?;
         }
     } else {
-        rankings_update(None).await?;
+        rankings_update(None, beta).await?;
     }
     let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
 
-    for line in tokio::fs::read_to_string(RANKINGS_FILE)
-        .await?
-        .lines()
-        .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
+    for line in tokio::fs::read_to_string(if beta {
+        "0.5_poly_rankings.txt"
+    } else {
+        RANKINGS_FILE
+    })
+    .await?
+    .lines()
+    .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
     {
         for i in 0..contents.len() {
             contents
@@ -832,7 +885,12 @@ async fn rankings(
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         &ctx,
-        format!("Global Leaderboard"),
+        if beta {
+            "Beta Leaderboard"
+        } else {
+            "Global Leaderboard"
+        }
+        .to_string(),
         format!(""),
         headers,
         contents,
