@@ -525,6 +525,7 @@ async fn rankings_update() -> Result<(), Error> {
 }
 
 async fn hof_update() -> Result<(), Error> {
+    println!("Updating HOF leaderboards");
     let client = Client::new();
     let track_ids: Vec<String> = fs::read_to_string("hof_tracks.txt")
         .await?
