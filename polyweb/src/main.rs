@@ -525,7 +525,6 @@ async fn rankings_update() -> Result<(), Error> {
 }
 
 async fn hof_update() -> Result<(), Error> {
-    println!("Updating HOF leaderboards");
     let client = Client::new();
     let track_ids: Vec<String> = fs::read_to_string("hof_tracks.txt")
         .await?
@@ -637,7 +636,7 @@ async fn hof_update() -> Result<(), Error> {
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
-            if rank == 1 {
+            if rank == 0 {
                 *player_records.entry(name.clone()).or_insert(0) += 1;
             }
         }
