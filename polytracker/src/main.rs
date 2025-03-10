@@ -842,7 +842,7 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
     Ok(())
 }
 
-/// Leaderboard for official tracks (very much WIP)
+/// Leaderboard for official tracks
 #[poise::command(slash_command, prefix_command, category = "Query")]
 async fn rankings(
     ctx: Context<'_>,
