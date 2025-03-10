@@ -1,12 +1,25 @@
+use poise::builtins;
 use poise::serenity_prelude as serenity;
-use poise::serenity_prelude::futures::future::join_all;
-use poise::serenity_prelude::CreateActionRow;
-use poise::serenity_prelude::CreateAttachment;
-use poise::serenity_prelude::CreateButton;
-use poise::serenity_prelude::CreateInteractionResponseMessage;
 use poise::CreateReply;
+use poise::EditTracker;
+use poise::Framework;
+use poise::FrameworkOptions;
+use poise::Prefix;
+use poise::PrefixFrameworkOptions;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{Result as JsonResult, Value};
+use serenity::collector::ComponentInteractionCollector;
+use serenity::futures::future::join_all;
+use serenity::ClientBuilder;
+use serenity::Color;
+use serenity::CreateActionRow;
+use serenity::CreateAttachment;
+use serenity::CreateButton;
+use serenity::CreateEmbed;
+use serenity::CreateInteractionResponse;
+use serenity::CreateInteractionResponseMessage;
+use serenity::GatewayIntents;
 use std::env;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -68,7 +81,7 @@ async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
             text.remove(0);
             text.pop();
         }
-        let file = CreateAttachment::bytes(text.as_bytes(), "polytrackerMsg.txt");
+        let file = CreateAttachment::bytes(text.as_bytes(), "polytracker.txt");
         ctx.send(CreateReply::default().attachment(file)).await?;
     } else {
         ctx.say(text).await?;
@@ -106,11 +119,11 @@ async fn write_embed(
             .into_iter()
             .enumerate()
             .map(|(i, h)| (h, pages.get(i).unwrap().get(0).unwrap().clone(), inlines[i]));
-        let embed = serenity::CreateEmbed::default()
+        let embed = CreateEmbed::default()
             .title(title.clone())
             .description(description.clone())
             .fields(fields.clone())
-            .color(serenity::Color::BLITZ_BLUE);
+            .color(Color::BLITZ_BLUE);
         let reply = {
             let components = CreateActionRow::Buttons(vec![
                 CreateButton::new(&prev_id).emoji('◀'),
@@ -124,7 +137,7 @@ async fn write_embed(
         };
         ctx.send(reply.clone()).await?;
         let mut current_page = 0;
-        while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
+        while let Some(press) = ComponentInteractionCollector::new(ctx)
             .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
             .timeout(MAX_MSG_AGE)
             .await
@@ -148,16 +161,16 @@ async fn write_embed(
                     inlines[i],
                 )
             });
-            let embed = serenity::CreateEmbed::default()
+            let embed = CreateEmbed::default()
                 .title(&title)
                 .description(&description)
                 .fields(fields)
-                .color(serenity::Color::BLITZ_BLUE);
+                .color(Color::BLITZ_BLUE);
 
             press
                 .create_response(
                     ctx.serenity_context(),
-                    serenity::CreateInteractionResponse::UpdateMessage(
+                    CreateInteractionResponse::UpdateMessage(
                         CreateInteractionResponseMessage::new().embed(embed),
                     ),
                 )
@@ -253,7 +266,7 @@ async fn request(
         id = id_test.clone();
     }
     if id.len() > 0 {
-        let client = reqwest::Client::new();
+        let client = Client::new();
         let url;
         if off {
             if let Err(_) = track.parse::<usize>() {
@@ -265,7 +278,7 @@ async fn request(
                 ctx.say("Not an official track!").await?;
                 return Ok(());
             }
-            let track_ids: Vec<String> = tokio::fs::read_to_string("official_tracks.txt")
+            let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
                 .await?
                 .lines()
                 .map(|s| s.to_string())
@@ -381,11 +394,11 @@ async fn list(
         id = id_test.clone();
     }
     if id.len() > 0 {
-        let client = reqwest::Client::new();
+        let client = Client::new();
         let mut line_num: u32 = 1;
         let mut total_time = 0.0;
         let mut display_total = true;
-        let track_ids: Vec<String> = tokio::fs::read_to_string("official_tracks.txt")
+        let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
             .await?
             .lines()
             .map(|s| s.to_string())
@@ -519,10 +532,10 @@ async fn compare(
             id = id_test.clone();
         }
         if id.len() > 0 {
-            let client = reqwest::Client::new();
+            let client = Client::new();
             let mut total_time = 0.0;
             let mut display_total = true;
-            let track_ids: Vec<String> = tokio::fs::read_to_string("official_tracks.txt")
+            let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
                 .await?
                 .lines()
                 .map(|s| s.to_string())
@@ -655,7 +668,7 @@ async fn update_rankings(
     rankings_update(entry_requirement, beta).await?;
     let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-    for line in tokio::fs::read_to_string(if beta {
+    for line in fs::read_to_string(if beta {
         "0.5_poly_rankings.txt"
     } else {
         RANKINGS_FILE
@@ -700,13 +713,13 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
     if beta {
         lb_size = 3;
     }
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let official_tracks_file = if beta {
         "0.5_official_tracks.txt"
     } else {
         "official_tracks.txt"
     };
-    let track_ids: Vec<String> = tokio::fs::read_to_string(official_tracks_file)
+    let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -758,12 +771,12 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
         leaderboards.push(leaderboard);
     }
     let mut player_times: HashMap<String, Vec<f64>> = HashMap::new();
-    let blacklist: Vec<String> = tokio::fs::read_to_string(BLACKLIST_FILE)
+    let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
         .collect();
-    let alt_file: Vec<String> = tokio::fs::read_to_string(ALT_ACCOUNT_FILE)
+    let alt_file: Vec<String> = fs::read_to_string(ALT_ACCOUNT_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -822,9 +835,9 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
         );
     }
     if beta {
-        tokio::fs::write("0.5_poly_rankings.txt", output.clone()).await?
+        fs::write("0.5_poly_rankings.txt", output.clone()).await?
     } else {
-        tokio::fs::write(RANKINGS_FILE, output.clone()).await?;
+        fs::write(RANKINGS_FILE, output.clone()).await?;
     }
     Ok(())
 }
@@ -842,14 +855,14 @@ async fn rankings(
         ctx.defer().await?;
     }
     let beta = beta.unwrap_or(false);
-    if tokio::fs::try_exists(if beta {
+    if fs::try_exists(if beta {
         "0.5_poly_rankings.txt"
     } else {
         RANKINGS_FILE
     })
     .await?
     {
-        let age = tokio::fs::metadata(if beta {
+        let age = fs::metadata(if beta {
             "0.5_poly_rankings.txt"
         } else {
             RANKINGS_FILE
@@ -866,7 +879,7 @@ async fn rankings(
     let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
 
-    for line in tokio::fs::read_to_string(if beta {
+    for line in fs::read_to_string(if beta {
         "0.5_poly_rankings.txt"
     } else {
         RANKINGS_FILE
@@ -1000,13 +1013,13 @@ async fn help(
     ctx: Context<'_>,
     #[description = "Command"] cmd: Option<String>,
 ) -> Result<(), Error> {
-    let config = poise::builtins::HelpConfiguration {
+    let config = builtins::HelpConfiguration {
         extra_text_at_bottom: "\
             Type /help <cmd> for more detailed help.",
         ephemeral: true,
         ..Default::default()
     };
-    poise::builtins::help(ctx, cmd.as_deref(), config).await?;
+    builtins::help(ctx, cmd.as_deref(), config).await?;
     Ok(())
 }
 
@@ -1014,8 +1027,7 @@ async fn help(
 async fn main() {
     dotenv::dotenv().ok();
     let token = env::var("DISCORD_TOKEN").expect("Token missing");
-    let intents =
-        serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::GUILD_MEMBERS;
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS;
 
     let bot_data = BotData::load_from_file(USER_FILE)
         .await
@@ -1023,8 +1035,8 @@ async fn main() {
             user_ids: Mutex::new(HashMap::new()),
         });
 
-    let framework = poise::Framework::builder()
-        .options(poise::FrameworkOptions {
+    let framework = Framework::builder()
+        .options(FrameworkOptions {
             commands: vec![
                 assign(),
                 delete(),
@@ -1040,12 +1052,10 @@ async fn main() {
                 rankings(),
                 policy(),
             ],
-            prefix_options: poise::PrefixFrameworkOptions {
+            prefix_options: PrefixFrameworkOptions {
                 prefix: Some("~".into()),
-                edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
-                    Duration::from_secs(60),
-                ))),
-                additional_prefixes: vec![poise::Prefix::Literal("'")],
+                edit_tracker: Some(Arc::new(EditTracker::for_timespan(Duration::from_secs(60)))),
+                additional_prefixes: vec![Prefix::Literal("'")],
                 ..Default::default()
             },
             pre_command: |ctx| {
@@ -1070,13 +1080,13 @@ async fn main() {
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(bot_data)
             })
         })
         .build();
 
-    let client = serenity::ClientBuilder::new(token, intents)
+    let client = ClientBuilder::new(token, intents)
         .framework(framework)
         .await;
     client.unwrap().start().await.unwrap();
