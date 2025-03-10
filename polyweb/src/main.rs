@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate rocket;
+use reqwest::Client;
 use rocket::form::validate::Contains;
 use rocket::fs::FileServer;
 use rocket::futures::future::join_all;
@@ -57,7 +58,7 @@ async fn hof() -> Template {
 
 #[get("/lb-custom")]
 async fn custom_lb_home() -> Template {
-    let tracks: Vec<String> = tokio::fs::read_to_string(CUSTOM_TRACK_FILE)
+    let tracks: Vec<String> = fs::read_to_string(CUSTOM_TRACK_FILE)
         .await
         .unwrap()
         .lines()
@@ -69,7 +70,7 @@ async fn custom_lb_home() -> Template {
 
 #[get("/lb-standard")]
 async fn standard_lb_home() -> Template {
-    let track_num = tokio::fs::read_to_string("official_tracks.txt")
+    let track_num = fs::read_to_string("official_tracks.txt")
         .await
         .unwrap()
         .lines()
@@ -128,8 +129,8 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(Template::fairing());
     task::spawn(async {
         loop {
-            if tokio::fs::try_exists(HOF_RANKINGS_FILE).await.unwrap() {
-                let age = tokio::fs::metadata(HOF_RANKINGS_FILE)
+            if fs::try_exists(HOF_RANKINGS_FILE).await.unwrap() {
+                let age = fs::metadata(HOF_RANKINGS_FILE)
                     .await
                     .unwrap()
                     .modified()
@@ -143,8 +144,8 @@ async fn main() -> Result<(), rocket::Error> {
                 hof_update().await.expect("Failed update");
             }
             sleep(AUTOUPDATE_TIMER / 2).await;
-            if tokio::fs::try_exists(GLOBAL_RANKINGS_FILE).await.unwrap() {
-                let age = tokio::fs::metadata(GLOBAL_RANKINGS_FILE)
+            if fs::try_exists(GLOBAL_RANKINGS_FILE).await.unwrap() {
+                let age = fs::metadata(GLOBAL_RANKINGS_FILE)
                     .await
                     .unwrap()
                     .modified()
@@ -242,8 +243,8 @@ async fn parse_hof_leaderboard(file_path: &str) -> (Vec<Entry>, Vec<Entry>) {
 }
 
 async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
-    let client = reqwest::Client::new();
-    let track_ids: HashMap<String, String> = tokio::fs::read_to_string(CUSTOM_TRACK_FILE)
+    let client = Client::new();
+    let track_ids: HashMap<String, String> = fs::read_to_string(CUSTOM_TRACK_FILE)
         .await
         .unwrap()
         .lines()
@@ -280,13 +281,13 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
     let result = client.get(&url).send().await.unwrap().text().await.unwrap();
     let response: LeaderBoard = serde_json::from_str(&result).unwrap();
     let mut leaderboard = Vec::new();
-    let blacklist: Vec<String> = tokio::fs::read_to_string(BLACKLIST_FILE)
+    let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await
         .unwrap()
         .lines()
         .map(|s| s.to_string())
         .collect();
-    let alt_file: Vec<String> = tokio::fs::read_to_string(ALT_ACCOUNT_FILE)
+    let alt_file: Vec<String> = fs::read_to_string(ALT_ACCOUNT_FILE)
         .await
         .unwrap()
         .lines()
@@ -342,8 +343,8 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
 }
 
 async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
-    let client = reqwest::Client::new();
-    let track_ids: Vec<String> = tokio::fs::read_to_string("official_tracks.txt")
+    let client = Client::new();
+    let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
         .await
         .unwrap()
         .lines()
@@ -356,13 +357,13 @@ async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
     let result = client.get(&url).send().await.unwrap().text().await.unwrap();
     let response: LeaderBoard = serde_json::from_str(&result).unwrap();
     let mut leaderboard = Vec::new();
-    let blacklist: Vec<String> = tokio::fs::read_to_string(BLACKLIST_FILE)
+    let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await
         .unwrap()
         .lines()
         .map(|s| s.to_string())
         .collect();
-    let alt_file: Vec<String> = tokio::fs::read_to_string(ALT_ACCOUNT_FILE)
+    let alt_file: Vec<String> = fs::read_to_string(ALT_ACCOUNT_FILE)
         .await
         .unwrap()
         .lines()
@@ -418,8 +419,8 @@ async fn rankings_update() -> Result<(), Error> {
         .expect("Expected LEADERBOARD_SIZE in env!")
         .parse()
         .expect("LEADERBOARD_SIZE not a valid integer!");
-    let client = reqwest::Client::new();
-    let track_ids: Vec<String> = tokio::fs::read_to_string("official_tracks.txt")
+    let client = Client::new();
+    let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -457,12 +458,12 @@ async fn rankings_update() -> Result<(), Error> {
         leaderboards.push(leaderboard);
     }
     let mut player_times: HashMap<String, Vec<f64>> = HashMap::new();
-    let blacklist: Vec<String> = tokio::fs::read_to_string(BLACKLIST_FILE)
+    let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
         .collect();
-    let alt_file: Vec<String> = tokio::fs::read_to_string(ALT_ACCOUNT_FILE)
+    let alt_file: Vec<String> = fs::read_to_string(ALT_ACCOUNT_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -520,13 +521,13 @@ async fn rankings_update() -> Result<(), Error> {
             .as_str(),
         );
     }
-    tokio::fs::write(GLOBAL_RANKINGS_FILE, output.clone()).await?;
+    fs::write(GLOBAL_RANKINGS_FILE, output.clone()).await?;
     Ok(())
 }
 
 async fn hof_update() -> Result<(), Error> {
-    let client = reqwest::Client::new();
-    let track_ids: Vec<String> = tokio::fs::read_to_string("hof_tracks.txt")
+    let client = Client::new();
+    let track_ids: Vec<String> = fs::read_to_string("hof_tracks.txt")
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -556,12 +557,12 @@ async fn hof_update() -> Result<(), Error> {
         leaderboards.push(leaderboard);
     }
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
-    let blacklist: Vec<String> = tokio::fs::read_to_string(HOF_BLACKLIST_FILE)
+    let blacklist: Vec<String> = fs::read_to_string(HOF_BLACKLIST_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
         .collect();
-    let alt_file: Vec<String> = tokio::fs::read_to_string(HOF_ALT_ACCOUNT_FILE)
+    let alt_file: Vec<String> = fs::read_to_string(HOF_ALT_ACCOUNT_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -657,6 +658,6 @@ async fn hof_update() -> Result<(), Error> {
     for (rank, records, name) in final_player_records {
         output.push_str(format!("<|-|> {:>3} - {} - {}\n", rank, records, name).as_str());
     }
-    tokio::fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
+    fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
     Ok(())
 }
