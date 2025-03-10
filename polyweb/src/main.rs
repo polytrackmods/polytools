@@ -5,9 +5,8 @@ use rocket::form::validate::Contains;
 use rocket::fs::FileServer;
 use rocket::futures::future::join_all;
 use rocket::serde::{Deserialize, Serialize};
-use rocket::tokio::{self, fs};
 use rocket::tokio::{
-    task,
+    fs, task,
     time::{sleep, Duration},
 };
 use rocket_dyn_templates::{context, Template};
