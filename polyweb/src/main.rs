@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate rocket;
+use dotenvy::dotenv;
 use reqwest::Client;
 use rocket::form::validate::Contains;
 use rocket::fs::FileServer;
@@ -413,7 +414,7 @@ async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
 }
 
 async fn rankings_update() -> Result<(), Error> {
-    dotenv::dotenv().ok();
+    dotenv().ok();
     let lb_size = env::var("LEADERBOARD_SIZE")
         .expect("Expected LEADERBOARD_SIZE in env!")
         .parse()

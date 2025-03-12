@@ -1,3 +1,11 @@
+pub mod db;
+pub mod schema;
+
+use db::establish_connection;
+use db::NewUser;
+use db::User;
+use diesel::prelude::*;
+use dotenvy::dotenv;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::CreateReply;
@@ -8,7 +16,7 @@ use poise::Prefix;
 use poise::PrefixFrameworkOptions;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{Result as JsonResult, Value};
+use serde_json::Value;
 use serenity::collector::ComponentInteractionCollector;
 use serenity::futures::future::join_all;
 use serenity::ClientBuilder;
@@ -25,20 +33,18 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::{collections::HashMap, time::Duration};
 use tokio::fs;
-use tokio::io;
 use tokio::task;
 use tokio::time::sleep;
 
-const USER_FILE: &str = "userIDs.json";
 const BLACKLIST_FILE: &str = "blacklist.txt";
 const ALT_ACCOUNT_FILE: &str = "alt_accounts.txt";
 const RANKINGS_FILE: &str = "poly_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 
-#[derive(Serialize, Deserialize, Debug)]
 struct BotData {
     user_ids: Mutex<HashMap<String, String>>,
+    conn: Mutex<SqliteConnection>,
 }
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, BotData, Error>;
@@ -55,16 +61,39 @@ struct LeaderBoard {
 }
 
 impl BotData {
-    pub async fn load_from_file(file_path: &str) -> JsonResult<Self> {
-        let data = fs::read_to_string(file_path)
-            .await
-            .unwrap_or_else(|_| String::from("{}"));
-        let bot_data: BotData = serde_json::from_str(&data)?;
-        Ok(bot_data)
+    pub async fn load(&self) {
+        use crate::schema::users::dsl::*;
+        let connection = &mut *self.conn.lock().unwrap();
+        let results = users
+            .select(User::as_select())
+            .load(connection)
+            .expect("Error loading users");
+        let mut user_ids = self.user_ids.lock().unwrap();
+        user_ids.clear();
+        for user in results {
+            user_ids.insert(user.name, user.game_id);
+        }
     }
-    pub async fn save_to_file(&self, file_path: &str) -> io::Result<()> {
-        let data = serde_json::to_string(self).unwrap();
-        fs::write(file_path, data).await
+    pub async fn add(&self, name: &str, game_id: &str) {
+        use crate::schema::users;
+        let connection = &mut *self.conn.lock().unwrap();
+        let new_user = NewUser {
+            name,
+            game_id,
+            discord: None,
+        };
+        diesel::insert_into(users::table)
+            .values(&new_user)
+            .returning(User::as_returning())
+            .get_result(connection)
+            .expect("Error saving new user");
+    }
+    pub async fn delete(&self, delete_name: &str) {
+        use crate::schema::users::dsl::*;
+        let connection = &mut *self.conn.lock().unwrap();
+        diesel::delete(users.filter(name.eq(delete_name)))
+            .execute(connection)
+            .expect("Error deleting user");
     }
 }
 async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
@@ -98,7 +127,7 @@ async fn write_embed(
     inlines: Vec<bool>,
 ) -> Result<(), Error> {
     if headers.len() == contents.len() && contents.len() == inlines.len() {
-        dotenv::dotenv()?;
+        dotenv()?;
         let ctx_id = ctx.id();
         let prev_id = format!("{}prev", ctx_id);
         let next_id = format!("{}next", ctx_id);
@@ -206,9 +235,12 @@ async fn assign(
         return Ok(());
     }
     let response = format!("`Added user '{}' with ID '{}'`", user, user_id);
-    ctx.data().user_ids.lock().unwrap().insert(user, user_id);
-    let bot_data = ctx.data();
-    bot_data.save_to_file(USER_FILE).await?;
+    ctx.data()
+        .user_ids
+        .lock()
+        .unwrap()
+        .insert(user.clone(), user_id.clone());
+    ctx.data().add(user.as_str(), user_id.as_str()).await;
     write(&ctx, response).await?;
     Ok(())
 }
@@ -233,6 +265,7 @@ async fn delete(
     let response;
     if bot_data.user_ids.lock().unwrap().contains_key(&user) {
         let id = bot_data.user_ids.lock().unwrap().remove(&user).unwrap();
+        ctx.data().delete(user.as_str()).await;
         response = format!("`Removed user '{}' with ID '{}'`", user, id);
     } else {
         response = format!("`User not found!`");
@@ -703,7 +736,7 @@ async fn update_rankings(
 }
 
 async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result<(), Error> {
-    dotenv::dotenv().ok();
+    dotenv().ok();
     let mut lb_size = entry_requirement.unwrap_or_else(|| {
         env::var("LEADERBOARD_SIZE")
             .expect("Expected LEADERBOARD_SIZE in env!")
@@ -751,7 +784,6 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
                         .await
                         .unwrap(),
                 );
-                // println!("Currently doing URL {} number {}", &urls[i], i);
             }
             return Ok::<Vec<String>, reqwest::Error>(res);
         })
@@ -940,22 +972,6 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Saves data to disk (bot-admin only)
-#[poise::command(
-    slash_command,
-    prefix_command,
-    check = "is_owner",
-    category = "Administration",
-    ephemeral
-)]
-async fn save(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.defer_ephemeral().await?;
-    let bot_data = ctx.data();
-    bot_data.save_to_file(USER_FILE).await?;
-    write(&ctx, format!("`User IDs saved.`")).await?;
-    Ok(())
-}
-
 /// Loads data from disk (bot-admin only)
 #[poise::command(
     slash_command,
@@ -965,20 +981,7 @@ async fn save(ctx: Context<'_>) -> Result<(), Error> {
     ephemeral
 )]
 async fn load(ctx: Context<'_>) -> Result<(), Error> {
-    let user_ids = BotData::load_from_file(USER_FILE)
-        .await
-        .unwrap_or_else(|_| BotData {
-            user_ids: Mutex::new(HashMap::new()),
-        })
-        .user_ids;
-    ctx.data().user_ids.lock().unwrap().clear();
-    for (user, id) in user_ids.lock().unwrap().iter() {
-        ctx.data()
-            .user_ids
-            .lock()
-            .unwrap()
-            .insert(user.to_string(), id.to_string());
-    }
+    ctx.data().load().await;
     write(&ctx, format!("`User IDs loaded.`")).await?;
     Ok(())
 }
@@ -998,7 +1001,7 @@ async fn users(ctx: Context<'_>) -> Result<(), Error> {
 /// Links the privacy policy
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
 async fn policy(ctx: Context<'_>) -> Result<(), Error> {
-    dotenv::dotenv().ok();
+    dotenv().ok();
     let url = format!(
         "https://{}/policy",
         env::var("WEBSITE_URL").expect("Expected WEBSITE_URL in env!")
@@ -1025,15 +1028,16 @@ async fn help(
 
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().ok();
+    dotenv().ok();
+    let conn = Mutex::new(establish_connection());
     let token = env::var("DISCORD_TOKEN").expect("Token missing");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS;
 
-    let bot_data = BotData::load_from_file(USER_FILE)
-        .await
-        .unwrap_or_else(|_| BotData {
-            user_ids: Mutex::new(HashMap::new()),
-        });
+    let bot_data = BotData {
+        user_ids: Mutex::new(HashMap::new()),
+        conn,
+    };
+    bot_data.load().await;
 
     let framework = Framework::builder()
         .options(FrameworkOptions {
@@ -1043,7 +1047,6 @@ async fn main() {
                 request(),
                 list(),
                 guilds(),
-                save(),
                 load(),
                 users(),
                 help(),
@@ -1093,7 +1096,7 @@ async fn main() {
 }
 
 async fn is_owner(ctx: Context<'_>) -> Result<bool, Error> {
-    dotenv::dotenv().ok();
+    dotenv().ok();
     let owner_id = env::var("OWNER_ID").expect("Expected owner ID in environment");
     Ok(ctx.author().name == owner_id)
 }
