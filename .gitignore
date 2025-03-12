@@ -4,9 +4,6 @@
 
 /userIDs.json
 *.db
-/migrations
-/diesel.toml
-/src/schema.rs
 
 /blacklist.txt
 /alt_accounts.txt
