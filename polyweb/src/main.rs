@@ -34,19 +34,30 @@ struct Entry {
     name: String,
 }
 
-const BLACKLIST_FILE: &str = "blacklist.txt";
-const HOF_BLACKLIST_FILE: &str = "hof_blacklist.txt";
-const ALT_ACCOUNT_FILE: &str = "alt_accounts.txt";
-const HOF_ALT_ACCOUNT_FILE: &str = "hof_alt_accounts.txt";
-const GLOBAL_RANKINGS_FILE: &str = "poly_rankings.txt";
-const HOF_RANKINGS_FILE: &str = "hof_rankings.txt";
-const CUSTOM_TRACK_FILE: &str = "custom_tracks.txt";
+const BLACKLIST_FILE: &str = "data/blacklist.txt";
+const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
+const GLOBAL_RANKINGS_FILE: &str = "data/poly_rankings.txt";
+const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
+const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
+const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
+const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
+const TRACK_FILE: &str = "lists/official_tracks.txt";
+const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
+// const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
+const BETA_RANKINGS_FILE: &str = "data/hof_rankings.txt";
+const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 
 #[get("/")]
 async fn index() -> Template {
     let leaderboard = parse_leaderboard(GLOBAL_RANKINGS_FILE).await;
+    Template::render("leaderboard", context! { leaderboard })
+}
+
+#[get("/beta")]
+async fn beta() -> Template {
+    let leaderboard = parse_leaderboard(BETA_RANKINGS_FILE).await;
     Template::render("leaderboard", context! { leaderboard })
 }
 
@@ -70,7 +81,7 @@ async fn custom_lb_home() -> Template {
 
 #[get("/lb-standard")]
 async fn standard_lb_home() -> Template {
-    let track_num = fs::read_to_string("official_tracks.txt")
+    let track_num = fs::read_to_string(TRACK_FILE)
         .await
         .unwrap()
         .lines()
@@ -117,6 +128,7 @@ async fn main() -> Result<(), rocket::Error> {
             routes![
                 index,
                 hof,
+                beta,
                 tutorial,
                 standard_lb_home,
                 standard_lb,
@@ -344,7 +356,7 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
 
 async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
     let client = Client::new();
-    let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
+    let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
         .await
         .unwrap()
         .lines()
@@ -420,7 +432,7 @@ async fn rankings_update() -> Result<(), Error> {
         .parse()
         .expect("LEADERBOARD_SIZE not a valid integer!");
     let client = Client::new();
-    let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
+    let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -527,7 +539,7 @@ async fn rankings_update() -> Result<(), Error> {
 
 async fn hof_update() -> Result<(), Error> {
     let client = Client::new();
-    let track_ids: Vec<String> = fs::read_to_string("hof_tracks.txt")
+    let track_ids: Vec<String> = fs::read_to_string(HOF_TRACK_FILE)
         .await?
         .lines()
         .map(|s| s.to_string())
@@ -577,7 +589,7 @@ async fn hof_update() -> Result<(), Error> {
             );
         }
     }
-    let point_values: Vec<u32> = fs::read_to_string("hof_points.txt")
+    let point_values: Vec<u32> = fs::read_to_string(HOF_POINTS_FILE)
         .await?
         .lines()
         .map(|s| s.to_string().parse().unwrap())

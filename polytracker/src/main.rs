@@ -36,9 +36,12 @@ use tokio::fs;
 use tokio::task;
 use tokio::time::sleep;
 
-const BLACKLIST_FILE: &str = "blacklist.txt";
-const ALT_ACCOUNT_FILE: &str = "alt_accounts.txt";
-const RANKINGS_FILE: &str = "poly_rankings.txt";
+const BLACKLIST_FILE: &str = "data/blacklist.txt";
+const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
+const RANKINGS_FILE: &str = "data/poly_rankings.txt";
+const TRACK_FILE: &str = "lists/official_tracks.txt";
+const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
+const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 
@@ -311,7 +314,7 @@ async fn request(
                 ctx.say("Not an official track!").await?;
                 return Ok(());
             }
-            let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
+            let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
                 .await?
                 .lines()
                 .map(|s| s.to_string())
@@ -431,7 +434,7 @@ async fn list(
         let mut line_num: u32 = 1;
         let mut total_time = 0.0;
         let mut display_total = true;
-        let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
+        let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
             .await?
             .lines()
             .map(|s| s.to_string())
@@ -568,7 +571,7 @@ async fn compare(
             let client = Client::new();
             let mut total_time = 0.0;
             let mut display_total = true;
-            let track_ids: Vec<String> = fs::read_to_string("official_tracks.txt")
+            let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
                 .await?
                 .lines()
                 .map(|s| s.to_string())
@@ -702,7 +705,7 @@ async fn update_rankings(
     let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
     for line in fs::read_to_string(if beta {
-        "0.5_poly_rankings.txt"
+        BETA_RANKINGS_FILE
     } else {
         RANKINGS_FILE
     })
@@ -748,9 +751,9 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
     }
     let client = Client::new();
     let official_tracks_file = if beta {
-        "0.5_official_tracks.txt"
+        BETA_TRACK_FILE
     } else {
-        "official_tracks.txt"
+        TRACK_FILE
     };
     let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
         .await?
@@ -867,7 +870,7 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
         );
     }
     if beta {
-        fs::write("0.5_poly_rankings.txt", output.clone()).await?
+        fs::write(BETA_RANKINGS_FILE, output.clone()).await?
     } else {
         fs::write(RANKINGS_FILE, output.clone()).await?;
     }
@@ -888,14 +891,14 @@ async fn rankings(
     }
     let beta = beta.unwrap_or(false);
     if fs::try_exists(if beta {
-        "0.5_poly_rankings.txt"
+        BETA_RANKINGS_FILE
     } else {
         RANKINGS_FILE
     })
     .await?
     {
         let age = fs::metadata(if beta {
-            "0.5_poly_rankings.txt"
+            BETA_RANKINGS_FILE
         } else {
             RANKINGS_FILE
         })
@@ -912,7 +915,7 @@ async fn rankings(
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
 
     for line in fs::read_to_string(if beta {
-        "0.5_poly_rankings.txt"
+        BETA_RANKINGS_FILE
     } else {
         RANKINGS_FILE
     })

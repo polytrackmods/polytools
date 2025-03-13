@@ -1,4 +1,4 @@
-use crate::schema::users;
+use crate::schema::*;
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use dotenvy::dotenv;
