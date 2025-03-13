@@ -975,20 +975,6 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Loads data from disk (bot-admin only)
-#[poise::command(
-    slash_command,
-    prefix_command,
-    check = "is_owner",
-    category = "Administration",
-    ephemeral
-)]
-async fn load(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.data().load().await;
-    write(&ctx, format!("`User IDs loaded.`")).await?;
-    Ok(())
-}
-
 /// Lists currently registered users and their IDs
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
 async fn users(ctx: Context<'_>) -> Result<(), Error> {
@@ -1050,7 +1036,6 @@ async fn main() {
                 request(),
                 list(),
                 guilds(),
-                load(),
                 users(),
                 help(),
                 compare(),
