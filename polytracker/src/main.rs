@@ -768,7 +768,7 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
             urls.push(format!(
                 "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
                 if beta { 43274 } else { 43273 },
-                if beta { "0.5.0" } else { "0.4.2" },
+                if beta { "0.5.0-beta2" } else { "0.4.2" },
                 track_id,
                 i * 500,
             ));
