@@ -747,7 +747,7 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
             .expect("LEADERBOARD_SIZE not a valid integer!")
     });
     if beta {
-        lb_size = 3;
+        lb_size = 5;
     }
     let client = Client::new();
     let official_tracks_file = if beta {
