@@ -1,16 +1,14 @@
 #!/bin/sh
-touch userIDs.json
+touch data/blacklist.txt
+touch data/alt_accounts.txt
+touch data/poly_rankings.txt
 
-touch blacklist.txt
-touch alt_accounts.txt
-touch poly_rankings.txt
+touch data/hof_blacklist.txt
+touch data/hof_alt_accounts.txt
+touch data/hof_rankings.txt
 
-touch hof_blacklist.txt
-touch hof_alt_accounts.txt
-touch hof_rankings.txt
-
-touch custom_tracks.txt
-touch 0.5_poly_rankings.txt
+touch data/0.5_poly_rankings.txt
+touch data/custom_tracks.txt
 
 cat .env &> /dev/null || cp .env.example .env
 

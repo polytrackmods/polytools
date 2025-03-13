@@ -2,19 +2,10 @@
 .env
 /.cargo
 
-/userIDs.json
 *.db
 
-/blacklist.txt
-/alt_accounts.txt
-/poly_rankings.txt
-
-/hof_rankings.txt
-/hof_blacklist.txt
-/hof_alt_accounts.txt
-
-/0.5_poly_rankings.txt
+/data/*
 
 /templates/privacy_policy.html.tera
 
-/custom_tracks.txt
+!*/.keep
