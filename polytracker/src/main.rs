@@ -788,7 +788,7 @@ async fn compare(
     }
     output.push_str("\nTotal:");
     for track in &results {
-        let total = track[13].1 as u32;
+        let total = track.last().unwrap().1 as u32;
         if total != 0 {
             output.push_str(
                 format!(
@@ -808,7 +808,7 @@ async fn compare(
     }
     if display_total_diff {
         output.push_str(
-            format!("{:>7.3}s", ((results[0][13].1 - results[1][13].1) / 1000.0)).as_str(),
+            format!("{:>7.3}s", ((results[0].last().unwrap().1 - results[1].last().unwrap().1) / 1000.0)).as_str(),
         );
     }
     output.push_str("\n```");
