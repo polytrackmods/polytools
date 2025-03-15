@@ -3,4 +3,11 @@ CREATE TABLE users (
     name VARCHAR NOT NULL,
     game_id VARCHAR(64) NOT NULL,
     discord VARCHAR
-)
+);
+
+CREATE TABLE beta_users (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR NOT NULL,
+    game_id VARCHAR(64) NOT NULL,
+    discord VARCHAR
+);

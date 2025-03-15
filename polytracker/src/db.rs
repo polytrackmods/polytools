@@ -29,3 +29,21 @@ pub struct NewUser<'a> {
     pub game_id: &'a str,
     pub discord: Option<&'a str>,
 }
+
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = beta_users)]
+#[diesel(check_for_backend(Sqlite))]
+pub struct BetaUser {
+    pub id: i32,
+    pub name: String,
+    pub game_id: String,
+    pub discord: Option<String>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = beta_users)]
+pub struct NewBetaUser<'a> {
+    pub name: &'a str,
+    pub game_id: &'a str,
+    pub discord: Option<&'a str>,
+}
