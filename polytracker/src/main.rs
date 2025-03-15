@@ -2,10 +2,13 @@ pub mod db;
 pub mod schema;
 
 use db::establish_connection;
+use db::BetaUser;
+use db::NewBetaUser;
 use db::NewUser;
 use db::User;
 use diesel::prelude::*;
 use dotenvy::dotenv;
+use itertools::Itertools;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::CreateReply;
@@ -47,6 +50,7 @@ const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 
 struct BotData {
     user_ids: Mutex<HashMap<String, String>>,
+    beta_user_ids: Mutex<HashMap<String, String>>,
     conn: Mutex<SqliteConnection>,
 }
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -65,6 +69,7 @@ struct LeaderBoard {
 
 impl BotData {
     pub async fn load(&self) {
+        use crate::schema::beta_users::dsl::*;
         use crate::schema::users::dsl::*;
         let connection = &mut *self.conn.lock().unwrap();
         let results = users
@@ -76,6 +81,17 @@ impl BotData {
         for user in results {
             user_ids.insert(user.name, user.game_id);
         }
+        // beta (temporary)
+        let results = beta_users
+            .select(BetaUser::as_select())
+            .load(connection)
+            .expect("Error loading users");
+        let mut beta_user_ids = self.beta_user_ids.lock().unwrap();
+        beta_user_ids.clear();
+        for beta_user in results {
+            beta_user_ids.insert(beta_user.name, beta_user.game_id);
+        }
+        // end of beta
     }
     pub async fn add(&self, name: &str, game_id: &str) {
         use crate::schema::users;
@@ -91,6 +107,22 @@ impl BotData {
             .get_result(connection)
             .expect("Error saving new user");
     }
+    // beta (temporary)
+    pub async fn beta_add(&self, name: &str, game_id: &str) {
+        use crate::schema::beta_users;
+        let connection = &mut *self.conn.lock().unwrap();
+        let new_beta_user = NewBetaUser {
+            name,
+            game_id,
+            discord: None,
+        };
+        diesel::insert_into(beta_users::table)
+            .values(&new_beta_user)
+            .returning(BetaUser::as_returning())
+            .get_result(connection)
+            .expect("Error saving new user");
+    }
+    // end of beta
     pub async fn delete(&self, delete_name: &str) {
         use crate::schema::users::dsl::*;
         let connection = &mut *self.conn.lock().unwrap();
@@ -98,6 +130,15 @@ impl BotData {
             .execute(connection)
             .expect("Error deleting user");
     }
+    // beta (temporary)
+    pub async fn beta_delete(&self, delete_name: &str) {
+        use crate::schema::beta_users::dsl::*;
+        let connection = &mut *self.conn.lock().unwrap();
+        diesel::delete(beta_users.filter(name.eq(delete_name)))
+            .execute(connection)
+            .expect("Error deleting user");
+    }
+    // end of beta
 }
 async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
     if text.chars().count() > 2000 {
@@ -223,13 +264,19 @@ async fn assign(
     ctx: Context<'_>,
     #[description = "Username"] user: String,
     #[description = "Player ID"] id: String,
+    #[description = "Beta version"] beta: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
+    let beta = beta.unwrap_or(false);
     let mut user_id = id;
     if user_id.starts_with("User ID: ") {
         user_id = user_id.trim_start_matches("User ID: ").to_string();
     }
-    if ctx.data().user_ids.lock().unwrap().contains_key(&user) {
+    if if beta {
+        ctx.data().beta_user_ids.lock().unwrap().contains_key(&user)
+    } else {
+        ctx.data().user_ids.lock().unwrap().contains_key(&user)
+    } {
         let response = format!(
             "`User '{}' is already assigned an ID, to reassign please contact this bot's owner`",
             user
@@ -238,12 +285,21 @@ async fn assign(
         return Ok(());
     }
     let response = format!("`Added user '{}' with ID '{}'`", user, user_id);
-    ctx.data()
-        .user_ids
-        .lock()
-        .unwrap()
-        .insert(user.clone(), user_id.clone());
-    ctx.data().add(user.as_str(), user_id.as_str()).await;
+    if beta {
+        ctx.data()
+            .beta_user_ids
+            .lock()
+            .unwrap()
+            .insert(user.clone(), user_id.clone());
+        ctx.data().beta_add(user.as_str(), user_id.as_str()).await;
+    } else {
+        ctx.data()
+            .user_ids
+            .lock()
+            .unwrap()
+            .insert(user.clone(), user_id.clone());
+        ctx.data().add(user.as_str(), user_id.as_str()).await;
+    }
     write(&ctx, response).await?;
     Ok(())
 }
@@ -262,14 +318,38 @@ async fn delete(
     #[description = "Username"]
     #[autocomplete = "autocomplete_users"]
     user: String,
+    #[description = "Beta version"] beta: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
+    let beta = beta.unwrap_or(false);
     let bot_data = ctx.data();
     let response;
-    if bot_data.user_ids.lock().unwrap().contains_key(&user) {
-        let id = bot_data.user_ids.lock().unwrap().remove(&user).unwrap();
-        ctx.data().delete(user.as_str()).await;
-        response = format!("`Removed user '{}' with ID '{}'`", user, id);
+    if if beta {
+        bot_data.beta_user_ids.lock().unwrap().contains_key(&user)
+    } else {
+        bot_data.user_ids.lock().unwrap().contains_key(&user)
+    } {
+        let id = if beta {
+            bot_data
+                .beta_user_ids
+                .lock()
+                .unwrap()
+                .remove(&user)
+                .unwrap()
+        } else {
+            bot_data.user_ids.lock().unwrap().remove(&user).unwrap()
+        };
+        if beta {
+            ctx.data().beta_delete(user.as_str()).await;
+        } else {
+            ctx.data().delete(user.as_str()).await;
+        }
+        response = format!(
+            "`Removed user '{}' with ID '{}'{}`",
+            user,
+            id,
+            if beta { " from beta users" } else { "" }
+        );
     } else {
         response = format!("`User not found!`");
     }
@@ -418,6 +498,7 @@ async fn list(
     #[description = "User"]
     #[autocomplete = "autocomplete_users"]
     user: String,
+    #[description = "Beta version"] beta: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -425,23 +506,33 @@ async fn list(
     } else {
         ctx.defer().await?;
     }
+    let beta = beta.unwrap_or(false);
     let mut id = String::new();
-    if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
-        id = id_test.clone();
+    if beta {
+        if let Some(id_test) = ctx.data().beta_user_ids.lock().unwrap().get(&user) {
+            id = id_test.clone();
+        }
+    } else {
+        if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
+            id = id_test.clone();
+        }
     }
     if id.len() > 0 {
         let client = Client::new();
         let mut line_num: u32 = 1;
         let mut total_time = 0.0;
         let mut display_total = true;
-        let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
-            .await?
-            .lines()
-            .map(|s| s.to_string())
-            .collect();
+        let track_ids: Vec<String> =
+            fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
+                .await?
+                .lines()
+                .map(|s| s.to_string())
+                .collect();
         let futures = track_ids.into_iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
-            let url = format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
+            let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
+            if beta {43274} else {43273},
+            if beta {"0.5.0-beta2"} else {"0.4.2"},
             track_id,
             id);
             task::spawn(
@@ -475,14 +566,32 @@ async fn list(
                                         if i == position.to_string().parse::<u32>().unwrap() {
                                             break;
                                         }
-                                        if !found.contains(&entry.get("name").unwrap().to_string())
-                                            && entry
-                                                .get("verifiedState")
-                                                .unwrap()
-                                                .as_bool()
-                                                .unwrap_or_else(|| false)
-                                        {
-                                            found.push(entry.get("name").unwrap().to_string());
+                                        if beta {
+                                            if !found
+                                                .contains(&entry.get("name").unwrap().to_string())
+                                                && match entry
+                                                    .get("verifiedState")
+                                                    .unwrap()
+                                                    .as_u64()
+                                                    .unwrap()
+                                                {
+                                                    1 => true,
+                                                    _ => false,
+                                                }
+                                            {
+                                                found.push(entry.get("name").unwrap().to_string());
+                                            }
+                                        } else {
+                                            if !found
+                                                .contains(&entry.get("name").unwrap().to_string())
+                                                && entry
+                                                    .get("verifiedState")
+                                                    .unwrap()
+                                                    .as_bool()
+                                                    .unwrap_or_else(|| false)
+                                            {
+                                                found.push(entry.get("name").unwrap().to_string());
+                                            }
                                         }
                                     }
                                     let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
@@ -536,7 +645,19 @@ async fn list(
             headers.push("Total");
             inlines.push(false);
         }
-        write_embed(&ctx, user, format!(""), headers, contents, inlines).await?;
+        write_embed(
+            &ctx,
+            if beta {
+                format!("{} (Beta)", user)
+            } else {
+                user
+            },
+            format!(""),
+            headers,
+            contents,
+            inlines,
+        )
+        .await?;
     } else {
         write(&ctx, format!("`User ID not found`")).await?;
     }
@@ -553,6 +674,7 @@ async fn compare(
     #[description = "User 2"]
     #[autocomplete = "autocomplete_users"]
     user2: String,
+    #[description = "Beta version"] beta: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -560,25 +682,35 @@ async fn compare(
     } else {
         ctx.defer().await?;
     }
+    let beta = beta.unwrap_or(false);
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
     for user in vec![user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
         let mut id = String::new();
-        if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
-            id = id_test.clone();
+        if beta {
+            if let Some(id_test) = ctx.data().beta_user_ids.lock().unwrap().get(&user) {
+                id = id_test.clone();
+            }
+        } else {
+            if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
+                id = id_test.clone();
+            }
         }
         if id.len() > 0 {
             let client = Client::new();
             let mut total_time = 0.0;
             let mut display_total = true;
-            let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
-                .await?
-                .lines()
-                .map(|s| s.to_string())
-                .collect();
+            let track_ids: Vec<String> =
+                fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
+                    .await?
+                    .lines()
+                    .map(|s| s.to_string())
+                    .collect();
             let futures = track_ids.into_iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
-            let url = format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
+            let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
+            if beta {43274} else {43273},
+            if beta {"0.5.0-beta2"} else {"0.4.2"},
             track_id,
             id);
             task::spawn(
@@ -750,11 +882,7 @@ async fn rankings_update(entry_requirement: Option<usize>, beta: bool) -> Result
         lb_size = 5;
     }
     let client = Client::new();
-    let official_tracks_file = if beta {
-        BETA_TRACK_FILE
-    } else {
-        TRACK_FILE
-    };
+    let official_tracks_file = if beta { BETA_TRACK_FILE } else { TRACK_FILE };
     let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
         .await?
         .lines()
@@ -977,11 +1105,21 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Lists currently registered users and their IDs
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
-async fn users(ctx: Context<'_>) -> Result<(), Error> {
+async fn users(
+    ctx: Context<'_>,
+    #[description = "Beta version"] beta: Option<bool>,
+) -> Result<(), Error> {
+    let beta = beta.unwrap_or(false);
     let bot_data = ctx.data();
     let mut users = String::new();
-    for (user, id) in bot_data.user_ids.lock().unwrap().iter() {
-        users.push_str(format!("{}: {}\n", user, id).as_str());
+    if beta {
+        for (user, id) in bot_data.beta_user_ids.lock().unwrap().iter() {
+            users.push_str(format!("{}: {}\n", user, id).as_str());
+        }
+    } else {
+        for (user, id) in bot_data.user_ids.lock().unwrap().iter() {
+            users.push_str(format!("{}: {}\n", user, id).as_str());
+        }
     }
     write(&ctx, format!("```{}```", users)).await?;
     Ok(())
@@ -1024,6 +1162,7 @@ async fn main() {
 
     let bot_data = BotData {
         user_ids: Mutex::new(HashMap::new()),
+        beta_user_ids: Mutex::new(HashMap::new()),
         conn,
     };
     bot_data.load().await;
@@ -1090,46 +1229,50 @@ async fn is_owner(ctx: Context<'_>) -> Result<bool, Error> {
 }
 
 async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
-    let user_ids = ctx.data().user_ids.lock().unwrap();
-    if user_ids.keys().filter(|k| k.starts_with(partial)).count() > 0 {
-        return user_ids
-            .keys()
-            .filter(|k| k.starts_with(partial))
-            .cloned()
-            .collect();
-    } else if user_ids.keys().filter(|k| k.contains(partial)).count() > 0 {
-        return user_ids
-            .keys()
-            .filter(|k| k.contains(partial))
-            .cloned()
-            .collect();
-    } else if user_ids
+    let mut user_ids: Vec<String> = ctx
+        .data()
+        .user_ids
+        .lock()
+        .unwrap()
         .keys()
+        .cloned()
+        .collect();
+    user_ids.append(
+        &mut ctx
+            .data()
+            .beta_user_ids
+            .lock()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect(),
+    );
+    let user_ids = user_ids.into_iter().unique();
+    if user_ids.clone().filter(|k| k.starts_with(partial)).count() > 0 {
+        return user_ids.filter(|k| k.starts_with(partial)).collect();
+    } else if user_ids.clone().filter(|k| k.contains(partial)).count() > 0 {
+        return user_ids.filter(|k| k.contains(partial)).collect();
+    } else if user_ids
+        .clone()
         .filter(|k| k.to_lowercase().starts_with(&partial.to_lowercase()))
         .count()
         > 0
     {
         return user_ids
-            .keys()
             .filter(|k| k.to_lowercase().starts_with(&partial.to_lowercase()))
-            .cloned()
             .collect();
     } else if user_ids
-        .keys()
+        .clone()
         .filter(|k| k.to_lowercase().contains(&partial.to_lowercase()))
         .count()
         > 0
     {
         return user_ids
-            .keys()
             .filter(|k| k.to_lowercase().contains(&partial.to_lowercase()))
-            .cloned()
             .collect();
     } else {
         return user_ids
-            .keys()
             .filter(|key| key.to_lowercase().starts_with(&partial.to_lowercase()))
-            .cloned()
             .collect();
     }
 }
