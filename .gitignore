@@ -3,7 +3,7 @@
 /.cargo
 
 *.db
-schema.rs
+**/schema.rs
 
 /data/*
 
