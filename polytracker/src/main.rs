@@ -808,7 +808,11 @@ async fn compare(
     }
     if display_total_diff {
         output.push_str(
-            format!("{:>7.3}s", ((results[0].last().unwrap().1 - results[1].last().unwrap().1) / 1000.0)).as_str(),
+            format!(
+                "{:>7.3}s",
+                ((results[0].last().unwrap().1 - results[1].last().unwrap().1) / 1000.0)
+            )
+            .as_str(),
         );
     }
     output.push_str("\n```");
