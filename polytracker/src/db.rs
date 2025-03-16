@@ -47,3 +47,19 @@ pub struct NewBetaUser<'a> {
     pub game_id: &'a str,
     pub discord: Option<&'a str>,
 }
+
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = admins)]
+#[diesel(check_for_backend(Sqlite))]
+pub struct Admin {
+    pub id: i32,
+    pub discord: String,
+    pub privilege: i32,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = admins)]
+pub struct NewAdmin<'a> {
+    pub discord: &'a str,
+    pub privilege: &'a i32,
+}
