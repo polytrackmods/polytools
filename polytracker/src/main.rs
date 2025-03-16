@@ -2,6 +2,7 @@ pub mod db;
 pub mod schema;
 
 use db::establish_connection;
+use db::Admin;
 use db::BetaUser;
 use db::NewBetaUser;
 use db::NewUser;
@@ -51,6 +52,7 @@ const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 struct BotData {
     user_ids: Mutex<HashMap<String, String>>,
     beta_user_ids: Mutex<HashMap<String, String>>,
+    admins: Mutex<HashMap<String, u32>>,
     conn: Mutex<SqliteConnection>,
 }
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -69,6 +71,7 @@ struct LeaderBoard {
 
 impl BotData {
     pub async fn load(&self) {
+        use crate::schema::admins::dsl::*;
         use crate::schema::beta_users::dsl::*;
         use crate::schema::users::dsl::*;
         let connection = &mut *self.conn.lock().unwrap();
@@ -92,6 +95,15 @@ impl BotData {
             beta_user_ids.insert(beta_user.name, beta_user.game_id);
         }
         // end of beta
+        let results = admins
+            .select(Admin::as_select())
+            .load(connection)
+            .expect("Error loading users");
+        let mut admin_ids = self.admins.lock().unwrap();
+        admin_ids.clear();
+        for admin in results {
+            admin_ids.insert(admin.discord, admin.privilege as u32);
+        }
     }
     pub async fn add(&self, name: &str, game_id: &str) {
         use crate::schema::users;
@@ -311,7 +323,6 @@ async fn assign(
     slash_command,
     prefix_command,
     category = "Administration",
-    check = "is_owner"
 )]
 async fn delete(
     ctx: Context<'_>,
@@ -321,6 +332,11 @@ async fn delete(
     #[description = "Beta version"] beta: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
+    let (is_admin, is_admin_msg) = is_admin(&ctx, 1).await;
+    if !is_admin {
+        write(&ctx, is_admin_msg).await?;
+        return Ok(());
+    }
     let beta = beta.unwrap_or(false);
     let bot_data = ctx.data();
     let response;
@@ -826,7 +842,6 @@ async fn compare(
 #[poise::command(
     slash_command,
     prefix_command,
-    check = "is_owner",
     category = "Administration"
 )]
 async fn update_rankings(
@@ -836,6 +851,11 @@ async fn update_rankings(
     entry_requirement: Option<usize>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
+    let (is_admin, is_admin_msg) = is_admin(&ctx, 2).await;
+    if !is_admin {
+        write(&ctx, is_admin_msg).await?;
+        return Ok(());
+    }
     let beta = beta.unwrap_or(false);
     rankings_update(entry_requirement, beta).await?;
     let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
@@ -1084,11 +1104,15 @@ async fn rankings(
 #[poise::command(
     slash_command,
     prefix_command,
-    check = "is_owner",
     category = "Administration",
     ephemeral
 )]
 async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
+    let (is_admin, is_admin_msg) = is_admin(&ctx, 0).await;
+    if !is_admin {
+        write(&ctx, is_admin_msg).await?;
+        return Ok(());
+    }
     let guilds = ctx.http().get_guilds(None, None).await?;
     let guild_names = guilds
         .iter()
@@ -1167,6 +1191,7 @@ async fn main() {
     let bot_data = BotData {
         user_ids: Mutex::new(HashMap::new()),
         beta_user_ids: Mutex::new(HashMap::new()),
+        admins: Mutex::new(HashMap::new()),
         conn,
     };
     bot_data.load().await;
@@ -1226,10 +1251,17 @@ async fn main() {
     client.unwrap().start().await.unwrap();
 }
 
-async fn is_owner(ctx: Context<'_>) -> Result<bool, Error> {
-    dotenv().ok();
-    let owner_id = env::var("OWNER_ID").expect("Expected owner ID in environment");
-    Ok(ctx.author().name == owner_id)
+async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
+    let admin_list = ctx.data().admins.lock().unwrap();
+    if admin_list.contains_key(&ctx.author().name) {
+        if admin_list.get(&ctx.author().name).unwrap() <= &level {
+            (true, format!(""))
+        } else {
+            (false, format!("Not privileged!"))
+        }
+    } else {
+        (false, format!("Not an admin!"))
+    }
 }
 
 async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
