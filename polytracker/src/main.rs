@@ -2,36 +2,24 @@ pub mod db;
 pub mod schema;
 
 use db::establish_connection;
-use db::Admin;
-use db::BetaUser;
-use db::NewBetaUser;
-use db::NewUser;
-use db::User;
+use db::{Admin, BetaUser, NewBetaUser, NewUser, User};
 use diesel::prelude::*;
 use dotenvy::dotenv;
 use itertools::Itertools;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
-use poise::CreateReply;
-use poise::EditTracker;
-use poise::Framework;
-use poise::FrameworkOptions;
-use poise::Prefix;
-use poise::PrefixFrameworkOptions;
+use poise::{
+    CreateReply, EditTracker, Framework, FrameworkOptions, Prefix, PrefixFrameworkOptions,
+};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serenity::collector::ComponentInteractionCollector;
 use serenity::futures::future::join_all;
-use serenity::ClientBuilder;
-use serenity::Color;
-use serenity::CreateActionRow;
-use serenity::CreateAttachment;
-use serenity::CreateButton;
-use serenity::CreateEmbed;
-use serenity::CreateInteractionResponse;
-use serenity::CreateInteractionResponseMessage;
-use serenity::GatewayIntents;
+use serenity::{
+    ClientBuilder, Color, CreateActionRow, CreateAttachment, CreateButton, CreateEmbed,
+    CreateInteractionResponse, CreateInteractionResponseMessage, GatewayIntents,
+};
 use std::env;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -319,11 +307,7 @@ async fn assign(
 /// Delete an already assigned username-ID pair (bot-admin only)
 ///
 /// Only deletes the data from the bot, you game account stays intact.
-#[poise::command(
-    slash_command,
-    prefix_command,
-    category = "Administration",
-)]
+#[poise::command(slash_command, prefix_command, category = "Administration")]
 async fn delete(
     ctx: Context<'_>,
     #[description = "Username"]
@@ -839,11 +823,7 @@ async fn compare(
 /// Update leaderboard for official tracks
 ///
 /// displays users with top (500 * entry_requirement) records on all tracks (default: 2500)
-#[poise::command(
-    slash_command,
-    prefix_command,
-    category = "Administration"
-)]
+#[poise::command(slash_command, prefix_command, category = "Administration")]
 async fn update_rankings(
     ctx: Context<'_>,
     #[description = "Beta version"] beta: Option<bool>,
@@ -1101,12 +1081,7 @@ async fn rankings(
 }
 
 /// Lists guilds the bot is in (bot-admin only)
-#[poise::command(
-    slash_command,
-    prefix_command,
-    category = "Administration",
-    ephemeral
-)]
+#[poise::command(slash_command, prefix_command, category = "Administration", ephemeral)]
 async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
     let (is_admin, is_admin_msg) = is_admin(&ctx, 0).await;
     if !is_admin {
