@@ -24,10 +24,7 @@ use std::sync::Mutex;
 use std::{collections::HashMap, time::Duration};
 use tokio::fs;
 use tokio::task;
-use tokio::time::sleep;
 
-const BLACKLIST_FILE: &str = "data/blacklist.txt";
-const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
 const RANKINGS_FILE: &str = "data/poly_rankings.txt";
 const TRACK_FILE: &str = "lists/official_tracks.txt";
 const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
