@@ -31,6 +31,8 @@ const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
 const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
+const BETA_VERSION: &str = "0.5.0-beta3";
+const VERSION: &str = "0.4.2";
 
 struct BotData {
     user_ids: Mutex<HashMap<String, String>>,
@@ -527,7 +529,7 @@ async fn list(
             let client = client.clone();
             let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
             if beta {43274} else {43273},
-            if beta {"0.5.0-beta2"} else {"0.4.2"},
+            if beta {BETA_VERSION} else {VERSION},
             track_id,
             id);
             task::spawn(
@@ -705,7 +707,7 @@ async fn compare(
             let client = client.clone();
             let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
             if beta {43274} else {43273},
-            if beta {"0.5.0-beta2"} else {"0.4.2"},
+            if beta {BETA_VERSION} else {VERSION},
             track_id,
             id);
             task::spawn(
