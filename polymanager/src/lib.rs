@@ -44,16 +44,10 @@ pub async fn global_rankings_update(
     }
     let client = Client::new();
     let official_tracks_file = if beta { BETA_TRACK_FILE } else { TRACK_FILE };
-    let track_ids: Vec<(String, String)> = fs::read_to_string(official_tracks_file)
+    let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
         .await?
         .lines()
-        .map(|s| {
-            let mut parts = s.splitn(2, " ");
-            (
-                parts.next().unwrap().to_string(),
-                parts.next().unwrap().to_string(),
-            )
-        })
+        .map(|s| s.splitn(2, " ").next().unwrap().to_string())
         .collect();
     let track_num = track_ids.len();
     let futures = track_ids.clone().into_iter().map(|track_id| {
@@ -64,7 +58,7 @@ pub async fn global_rankings_update(
                 "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
                 if beta { 43274 } else { 43273 },
                 if beta { "0.5.0-beta3" } else { "0.4.2" },
-                track_id.0,
+                track_id,
                 i * 500,
             ));
         }
@@ -155,7 +149,7 @@ pub async fn global_rankings_update(
         output.push_str(
             format!(
                 "{:>3} - {:>2}:{:0>2}.{:0>3.3} - {}\n",
-                track_ids[entry.0].1,
+                entry.0 + 1,
                 entry.2 / 60000,
                 entry.2 % 60000 / 1000,
                 entry.2 % 1000,
