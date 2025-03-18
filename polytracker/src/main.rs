@@ -516,21 +516,27 @@ async fn list(
     }
     if id.len() > 0 {
         let client = Client::new();
-        let mut line_num: u32 = 1;
+        let mut line_num: u32 = 0;
         let mut total_time = 0.0;
         let mut display_total = true;
-        let track_ids: Vec<String> =
+        let track_ids: Vec<(String, String)> =
             fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
                 .await?
                 .lines()
-                .map(|s| s.to_string())
+                .map(|s| {
+                    let mut parts = s.splitn(2, " ");
+                    (
+                        parts.next().unwrap().to_string(),
+                        parts.next().unwrap().to_string(),
+                    )
+                })
                 .collect();
-        let futures = track_ids.into_iter().enumerate().map(|(i, track_id)| {
+        let futures = track_ids.clone().into_iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
             let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
             if beta {43274} else {43273},
             if beta {BETA_VERSION} else {VERSION},
-            track_id,
+            track_id.0,
             id);
             task::spawn(
             async move {
@@ -595,7 +601,9 @@ async fn list(
                                     total_time += time;
                                     let mut time = time.to_string();
                                     time.push_str("s");
-                                    contents[0].push_str(format!("{}\n", line_num).as_str());
+                                    contents[0].push_str(
+                                        format!("{}\n", track_ids[line_num as usize].1).as_str(),
+                                    );
                                     contents[1].push_str(
                                         format!(
                                             "{} [{}]\n",
@@ -611,7 +619,9 @@ async fn list(
                                 total_time += time;
                                 let mut time = time.to_string();
                                 time.push_str("s");
-                                contents[0].push_str(format!("{}\n", line_num).as_str());
+                                contents[0].push_str(
+                                    format!("{}\n", track_ids[line_num as usize].1).as_str(),
+                                );
                                 contents[1]
                                     .push_str(format!("{}\n", position.to_string()).as_str());
                                 contents[2].push_str(format!("{}\n", time).as_str());
@@ -681,6 +691,18 @@ async fn compare(
     }
     let beta = beta.unwrap_or(false);
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
+    let track_ids: Vec<(String, String)> =
+        fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
+            .await?
+            .lines()
+            .map(|s| {
+                let mut parts = s.splitn(2, " ");
+                (
+                    parts.next().unwrap().to_string(),
+                    parts.next().unwrap().to_string(),
+                )
+            })
+            .collect();
     for user in vec![user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
         let mut id = String::new();
@@ -697,18 +719,12 @@ async fn compare(
             let client = Client::new();
             let mut total_time = 0.0;
             let mut display_total = true;
-            let track_ids: Vec<String> =
-                fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
-                    .await?
-                    .lines()
-                    .map(|s| s.to_string())
-                    .collect();
-            let futures = track_ids.into_iter().enumerate().map(|(i, track_id)| {
+            let futures = track_ids.clone().into_iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
             let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
             if beta {43274} else {43273},
             if beta {BETA_VERSION} else {VERSION},
-            track_id,
+            track_id.0,
             id);
             task::spawn(
             async move {
@@ -767,7 +783,7 @@ async fn compare(
     output.push_str("Difference\n");
     for i in 0..results[0].len() - 1 {
         let mut display_diff = true;
-        output.push_str(format!("{:>2}: ", i + 1).as_str());
+        output.push_str(format!("{}: ", track_ids[i].1).as_str());
         for track in &results {
             if track[i].1 != 0.0 {
                 output.push_str(
