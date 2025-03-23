@@ -1,6 +1,5 @@
 use diesel::prelude::*;
 use dotenvy::dotenv;
-use itertools::Itertools;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::{
@@ -1134,9 +1133,10 @@ async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
             .unwrap()
             .keys()
             .cloned()
+            .map(|k| format!("{} (BETA)", k))
             .collect(),
     );
-    let user_ids = user_ids.into_iter().unique();
+    let user_ids = user_ids.into_iter();
     if user_ids.clone().filter(|k| k.starts_with(partial)).count() > 0 {
         return user_ids.filter(|k| k.starts_with(partial)).collect();
     } else if user_ids.clone().filter(|k| k.contains(partial)).count() > 0 {
