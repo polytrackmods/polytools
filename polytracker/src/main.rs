@@ -308,7 +308,7 @@ async fn delete(
     ctx: Context<'_>,
     #[description = "Username"]
     #[autocomplete = "autocomplete_users"]
-    user: String,
+    mut user: String,
     #[description = "Beta version"] beta: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
@@ -318,6 +318,9 @@ async fn delete(
         return Ok(());
     }
     let beta = beta.unwrap_or(false);
+    if beta {
+        user = user.trim_end_matches(" (BETA)").to_string();
+    }
     let bot_data = ctx.data();
     let response;
     if if beta {
@@ -493,7 +496,7 @@ async fn list(
     ctx: Context<'_>,
     #[description = "User"]
     #[autocomplete = "autocomplete_users"]
-    user: String,
+    mut user: String,
     #[description = "Beta version"] beta: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
@@ -503,6 +506,9 @@ async fn list(
         ctx.defer().await?;
     }
     let beta = beta.unwrap_or(false);
+    if beta {
+        user = user.trim_end_matches(" (BETA)").to_string();
+    }
     let mut id = String::new();
     if beta {
         if let Some(id_test) = ctx.data().beta_user_ids.lock().unwrap().get(&user) {
@@ -676,10 +682,10 @@ async fn compare(
     ctx: Context<'_>,
     #[description = "User 1"]
     #[autocomplete = "autocomplete_users"]
-    user1: String,
+    mut user1: String,
     #[description = "User 2"]
     #[autocomplete = "autocomplete_users"]
-    user2: String,
+    mut user2: String,
     #[description = "Beta version"] beta: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
@@ -689,6 +695,10 @@ async fn compare(
         ctx.defer().await?;
     }
     let beta = beta.unwrap_or(false);
+    if beta {
+        user1 = user1.trim_end_matches(" (BETA)").to_string();
+        user2 = user2.trim_end_matches(" (BETA)").to_string();
+    }
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
     let track_ids: Vec<(String, String)> =
         fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
