@@ -139,7 +139,7 @@ impl BotData {
 }
 async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
     if text.chars().count() > 2000 {
-        if text.chars().nth(0).unwrap() == text.chars().nth(1).unwrap()
+        if text.chars().next().unwrap() == text.chars().nth(1).unwrap()
             && text.chars().nth(1).unwrap() == text.chars().nth(2).unwrap()
             && text.chars().nth(2).unwrap() == '`'
         {
@@ -147,7 +147,7 @@ async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
                 text.remove(0);
                 text.pop();
             }
-        } else if text.chars().nth(0).unwrap() == '`' {
+        } else if text.starts_with('`') {
             text.remove(0);
             text.pop();
         }
@@ -174,9 +174,9 @@ async fn write_embed(
         let next_id = format!("{}next", ctx_id);
         let start_id = format!("{}start", ctx_id);
         let mut pages: Vec<Vec<String>> = Vec::new();
-        for i in 0..contents.len() {
+        for content in contents {
             pages.push(
-                contents[i]
+                content
                     .lines()
                     .collect::<Vec<&str>>()
                     .chunks(20)
@@ -184,11 +184,13 @@ async fn write_embed(
                     .collect(),
             );
         }
-        let fields = headers
-            .clone()
-            .into_iter()
-            .enumerate()
-            .map(|(i, h)| (h, pages.get(i).unwrap().get(0).unwrap().clone(), inlines[i]));
+        let fields = headers.clone().into_iter().enumerate().map(|(i, h)| {
+            (
+                h,
+                pages.get(i).unwrap().first().unwrap().clone(),
+                inlines[i],
+            )
+        });
         let embed = CreateEmbed::default()
             .title(title.clone())
             .description(description.clone())
@@ -351,7 +353,7 @@ async fn delete(
             if beta { " from beta users" } else { "" }
         );
     } else {
-        response = format!("`User not found!`");
+        response = "`User not found!`".to_string();
     }
     write(&ctx, response).await?;
     Ok(())
@@ -381,15 +383,13 @@ async fn request(
     if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
         id = id_test.clone();
     }
-    if id.len() > 0 {
+    if !id.is_empty() {
         let client = Client::new();
         let url;
         if off {
-            if let Err(_) = track.parse::<usize>() {
-                ctx.defer_ephemeral().await?;
-                ctx.say("Not an official track!").await?;
-                return Ok(());
-            } else if !(1..=13).contains(&track.parse::<usize>().unwrap()) {
+            if track.parse::<usize>().is_err()
+                || !(1..=13).contains(&track.parse::<usize>().unwrap())
+            {
                 ctx.defer_ephemeral().await?;
                 ctx.say("Not an official track!").await?;
                 return Ok(());
@@ -430,7 +430,7 @@ async fn request(
                                                     .get("verifiedState")
                                                     .unwrap()
                                                     .as_bool()
-                                                    .unwrap_or_else(|| false)
+                                                    .unwrap_or(false)
                                             {
                                                 found.push(entry.get("name").unwrap().to_string());
                                             }
@@ -438,7 +438,7 @@ async fn request(
                                         let mut time = (frames.to_string().parse::<f64>().unwrap()
                                             / 1000.0)
                                             .to_string();
-                                        time.push_str("s");
+                                        time.push('s');
                                         contents = vec![
                                             position.to_string(),
                                             time,
@@ -446,8 +446,8 @@ async fn request(
                                         ];
                                         write_embed(
                                             &ctx,
-                                            format!("Leaderboard"),
-                                            format!(""),
+                                            "Leaderboard".to_string(),
+                                            String::new(),
                                             vec!["Ranking", "Time", "Unique"],
                                             contents,
                                             vec![true, true, true],
@@ -458,12 +458,12 @@ async fn request(
                                     let mut time = (frames.to_string().parse::<f64>().unwrap()
                                         / 1000.0)
                                         .to_string();
-                                    time.push_str("s");
+                                    time.push('s');
                                     contents = vec![position.to_string(), time];
                                     write_embed(
                                         &ctx,
-                                        format!("Leaderboard"),
-                                        format!(""),
+                                        "Leaderboard".to_string(),
+                                        String::new(),
                                         vec!["Ranking", "Time"],
                                         contents,
                                         vec![true, true],
@@ -472,13 +472,13 @@ async fn request(
                                 }
                             }
                         } else {
-                            write(&ctx, format!("`Record not found!`")).await?;
+                            write(&ctx, "`Record not found!`".to_string()).await?;
                         }
                     }
                 } else {
                     write(
                         &ctx,
-                        format!("`Leaderboard servers could not be accessed.`"),
+                        "`Leaderboard servers could not be accessed.`".to_string(),
                     )
                     .await?;
                     return Ok(());
@@ -486,7 +486,7 @@ async fn request(
             }
         }
     } else {
-        write(&ctx, format!("`User ID not found`")).await?;
+        write(&ctx, "`User ID not found`".to_string()).await?;
     }
     Ok(())
 }
@@ -515,12 +515,10 @@ async fn list(
         if let Some(id_test) = ctx.data().beta_user_ids.lock().unwrap().get(&user) {
             id = id_test.clone();
         }
-    } else {
-        if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
-            id = id_test.clone();
-        }
+    } else if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
+        id = id_test.clone();
     }
-    if id.len() > 0 {
+    if !id.is_empty() {
         let client = Client::new();
         let mut line_num: u32 = 0;
         let mut total_time = 0.0;
@@ -547,7 +545,7 @@ async fn list(
             task::spawn(
             async move {
                 let res = client.get(&url).send().await.unwrap().text().await.unwrap();
-                return Ok::<(usize, String), reqwest::Error>((i, res));
+                Ok::<(usize, String), reqwest::Error>((i, res))
             })
         });
         let mut results: Vec<(usize, String)> = join_all(futures)
@@ -578,45 +576,37 @@ async fn list(
                                         if beta {
                                             if !found
                                                 .contains(&entry.get("name").unwrap().to_string())
-                                                && match entry
-                                                    .get("verifiedState")
-                                                    .unwrap()
-                                                    .as_u64()
-                                                    .unwrap()
-                                                {
-                                                    1 => true,
-                                                    _ => false,
-                                                }
+                                                && matches!(
+                                                    entry
+                                                        .get("verifiedState")
+                                                        .unwrap()
+                                                        .as_u64()
+                                                        .unwrap(),
+                                                    1
+                                                )
                                             {
                                                 found.push(entry.get("name").unwrap().to_string());
                                             }
-                                        } else {
-                                            if !found
-                                                .contains(&entry.get("name").unwrap().to_string())
-                                                && entry
-                                                    .get("verifiedState")
-                                                    .unwrap()
-                                                    .as_bool()
-                                                    .unwrap_or_else(|| false)
-                                            {
-                                                found.push(entry.get("name").unwrap().to_string());
-                                            }
+                                        } else if !found
+                                            .contains(&entry.get("name").unwrap().to_string())
+                                            && entry
+                                                .get("verifiedState")
+                                                .unwrap()
+                                                .as_bool()
+                                                .unwrap_or(false)
+                                        {
+                                            found.push(entry.get("name").unwrap().to_string());
                                         }
                                     }
                                     let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
                                     total_time += time;
                                     let mut time = time.to_string();
-                                    time.push_str("s");
+                                    time.push('s');
                                     contents[0].push_str(
                                         format!("{}\n", track_ids[line_num as usize].1).as_str(),
                                     );
                                     contents[1].push_str(
-                                        format!(
-                                            "{} [{}]\n",
-                                            position.to_string(),
-                                            (found.len() + 1).to_string()
-                                        )
-                                        .as_str(),
+                                        format!("{} [{}]\n", position, (found.len() + 1)).as_str(),
                                     );
                                     contents[2].push_str(format!("{}\n", time).as_str());
                                 }
@@ -624,12 +614,11 @@ async fn list(
                                 let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
                                 total_time += time;
                                 let mut time = time.to_string();
-                                time.push_str("s");
+                                time.push('s');
                                 contents[0].push_str(
                                     format!("{}\n", track_ids[line_num as usize].1).as_str(),
                                 );
-                                contents[1]
-                                    .push_str(format!("{}\n", position.to_string()).as_str());
+                                contents[1].push_str(format!("{}\n", position).as_str());
                                 contents[2].push_str(format!("{}\n", time).as_str());
                             }
                         }
@@ -640,7 +629,7 @@ async fn list(
             } else {
                 write(
                     &ctx,
-                    format!("`Leaderboard servers could not be accessed or user is not valid.`"),
+                    "`Leaderboard servers could not be accessed or user is not valid.`".to_string(),
                 )
                 .await?;
                 return Ok(());
@@ -665,14 +654,14 @@ async fn list(
             } else {
                 user
             },
-            format!(""),
+            String::new(),
             headers,
             contents,
             inlines,
         )
         .await?;
     } else {
-        write(&ctx, format!("`User ID not found`")).await?;
+        write(&ctx, "`User ID not found`".to_string()).await?;
     }
     Ok(())
 }
@@ -713,19 +702,17 @@ async fn compare(
                 )
             })
             .collect();
-    for user in vec![user1.clone(), user2.clone()] {
+    for user in [user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
         let mut id = String::new();
         if beta {
             if let Some(id_test) = ctx.data().beta_user_ids.lock().unwrap().get(&user) {
                 id = id_test.clone();
             }
-        } else {
-            if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
-                id = id_test.clone();
-            }
+        } else if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
+            id = id_test.clone();
         }
-        if id.len() > 0 {
+        if !id.is_empty() {
             let client = Client::new();
             let mut total_time = 0.0;
             let mut display_total = true;
@@ -739,7 +726,7 @@ async fn compare(
             task::spawn(
             async move {
                 let res = client.get(&url).send().await.unwrap().text().await.unwrap();
-                return Ok::<(usize, String), reqwest::Error>((i, res));
+                Ok::<(usize, String), reqwest::Error>((i, res))
             })
         });
             let mut results: Vec<(usize, String)> = join_all(futures)
@@ -767,7 +754,7 @@ async fn compare(
                 } else {
                     write(
                         &ctx,
-                        format!("`Leaderboard servers could not be accessed.`"),
+                        "`Leaderboard servers could not be accessed.`".to_string(),
                     )
                     .await?;
                     return Ok(());
@@ -780,14 +767,14 @@ async fn compare(
                 user_results.push((0, 0.0));
             }
         } else {
-            write(&ctx, format!("`User ID not found`")).await?;
+            write(&ctx, "`User ID not found`".to_string()).await?;
         }
         results.push(user_results);
     }
     let mut output = String::new();
     let mut display_total_diff = true;
     output.push_str("```\n    ");
-    for user in vec![user1.clone(), user2.clone()] {
+    for user in [user1.clone(), user2.clone()] {
         output.push_str(format!("{:<21}", user).as_str());
     }
     output.push_str("Difference\n");
@@ -807,7 +794,7 @@ async fn compare(
         if display_diff {
             output.push_str(format!("{:>9.3}s", (results[0][i].1 - results[1][i].1)).as_str());
         }
-        output.push_str("\n");
+        output.push('\n');
     }
     output.push_str("\nTotal:");
     for track in &results {
@@ -888,7 +875,7 @@ async fn update_rankings(
             "Global Leaderboard"
         }
         .to_string(),
-        format!(""),
+        String::new(),
         headers,
         contents,
         inlines,
@@ -959,7 +946,7 @@ async fn rankings(
             "Global Leaderboard"
         }
         .to_string(),
-        format!(""),
+        String::new(),
         headers,
         contents,
         inlines,
@@ -999,7 +986,7 @@ async fn hof_rankings(
     write_embed(
         &ctx,
         "HOF Leaderboard".to_string(),
-        format!(""),
+        String::new(),
         headers,
         contents,
         inlines,
@@ -1024,8 +1011,8 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
         .join("\n");
     write_embed(
         &ctx,
-        format!("Guilds"),
-        format!(""),
+        "Guilds".to_string(),
+        String::new(),
         vec!["Guild name"],
         vec![guild_names],
         vec![true],
@@ -1159,12 +1146,12 @@ async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
     let admin_list = ctx.data().admins.lock().unwrap();
     if admin_list.contains_key(&ctx.author().name) {
         if admin_list.get(&ctx.author().name).unwrap() <= &level {
-            (true, format!(""))
+            (true, String::new())
         } else {
-            (false, format!("Not privileged!"))
+            (false, "Not privileged!".to_string())
         }
     } else {
-        (false, format!("Not an admin!"))
+        (false, "Not an admin!".to_string())
     }
 }
 
@@ -1190,9 +1177,9 @@ async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
     );
     let user_ids = user_ids.into_iter();
     if user_ids.clone().filter(|k| k.starts_with(partial)).count() > 0 {
-        return user_ids.filter(|k| k.starts_with(partial)).collect();
+        user_ids.filter(|k| k.starts_with(partial)).collect()
     } else if user_ids.clone().filter(|k| k.contains(partial)).count() > 0 {
-        return user_ids.filter(|k| k.contains(partial)).collect();
+        user_ids.filter(|k| k.contains(partial)).collect()
     } else if user_ids
         .clone()
         .filter(|k| k.to_lowercase().starts_with(&partial.to_lowercase()))
