@@ -1112,6 +1112,7 @@ async fn main() {
                 compare(),
                 update_rankings(),
                 rankings(),
+                hof_rankings(),
                 policy(),
             ],
             prefix_options: PrefixFrameworkOptions {
