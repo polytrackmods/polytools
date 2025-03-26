@@ -73,7 +73,7 @@ async fn custom_lb_home() -> Template {
         .unwrap()
         .lines()
         .map(|s| s.to_string())
-        .map(|s| s.splitn(2, " ").skip(1).next().unwrap().to_string())
+        .map(|s| s.split_once(" ").unwrap().1.to_string())
         .collect();
     Template::render("lb_custom_home", context! { tracks })
 }
@@ -164,10 +164,14 @@ async fn main() -> Result<(), rocket::Error> {
                     .elapsed()
                     .unwrap();
                 if age > MAX_RANKINGS_AGE {
-                    global_rankings_update(None, false).await.expect("Failed update");
+                    global_rankings_update(None, false)
+                        .await
+                        .expect("Failed update");
                 }
             } else {
-                global_rankings_update(None, false).await.expect("Failed update");
+                global_rankings_update(None, false)
+                    .await
+                    .expect("Failed update");
             }
             sleep(AUTOUPDATE_TIMER / 2).await;
         }
@@ -269,7 +273,6 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
             (output_reversed.1, output_reversed.0)
         })
         .collect();
-    let url;
     let mut real_track_id = String::new();
     for track in track_ids.clone().into_keys() {
         if track.to_lowercase() == track_id.to_lowercase() {
@@ -278,17 +281,17 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
         }
     }
     // if track_ids.contains_key(&track_id.to_lowercase()) {
-    if !real_track_id.is_empty() {
-        url = format!(
+    let url = if !real_track_id.is_empty() {
+        format!(
             "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
             track_ids.get(&real_track_id).unwrap()
-        );
+        )
     } else {
-        url = format!(
+        format!(
             "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
             track_id
-        );
-    }
+        )
+    };
     let result = client.get(&url).send().await.unwrap().text().await.unwrap();
     let response: LeaderBoard = serde_json::from_str(&result).unwrap();
     let mut leaderboard = Vec::new();
@@ -310,19 +313,18 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
         for entry in line.split(SPLIT_CHAR).skip(1) {
             alt_list.insert(
                 entry.to_string(),
-                line.split(SPLIT_CHAR).nth(0).unwrap().to_string(),
+                line.split(SPLIT_CHAR).next().unwrap().to_string(),
             );
         }
     }
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
-        let name;
-        if alt_list.contains_key(&entry.name) {
-            name = alt_list.get(&entry.name).unwrap().clone();
+        let name = if alt_list.contains_key(&entry.name) {
+            alt_list.get(&entry.name).unwrap().clone()
         } else {
-            name = entry.name.clone();
-        }
+            entry.name.clone()
+        };
         if has_time.contains(&name) || blacklist.contains(&name) {
             continue;
         }
@@ -386,19 +388,18 @@ async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
         for entry in line.split(SPLIT_CHAR).skip(1) {
             alt_list.insert(
                 entry.to_string(),
-                line.split(SPLIT_CHAR).nth(0).unwrap().to_string(),
+                line.split(SPLIT_CHAR).next().unwrap().to_string(),
             );
         }
     }
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
-        let name;
-        if alt_list.contains_key(&entry.name) {
-            name = alt_list.get(&entry.name).unwrap().clone();
+        let name = if alt_list.contains_key(&entry.name) {
+            alt_list.get(&entry.name).unwrap().clone()
         } else {
-            name = entry.name.clone();
-        }
+            entry.name.clone()
+        };
         if has_time.contains(&name) || blacklist.contains(&name) {
             continue;
         }
@@ -436,11 +437,11 @@ async fn hof_update() -> Result<(), Error> {
         let client = client.clone();
         let url = format!(
             "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=100",
-            track_id.splitn(2, " ").next().unwrap()
+            track_id.split(" ").next().unwrap()
         );
         task::spawn(async move {
             let res = client.get(url).send().await.unwrap().text().await.unwrap();
-            return Ok::<String, reqwest::Error>(res);
+            Ok::<String, reqwest::Error>(res)
         })
     });
     let results: Vec<String> = join_all(futures)
@@ -472,7 +473,7 @@ async fn hof_update() -> Result<(), Error> {
         for entry in line.split(SPLIT_CHAR).skip(1) {
             alt_list.insert(
                 entry.to_string(),
-                line.split(SPLIT_CHAR).nth(0).unwrap().to_string(),
+                line.split(SPLIT_CHAR).next().unwrap().to_string(),
             );
         }
     }
@@ -488,16 +489,15 @@ async fn hof_update() -> Result<(), Error> {
             if pos + 1 > point_values.len() {
                 break;
             }
-            let name;
-            if alt_list.contains_key(&entry.name) {
-                name = alt_list.get(&entry.name).unwrap().clone();
+            let name = if alt_list.contains_key(&entry.name) {
+                alt_list.get(&entry.name).unwrap().clone()
             } else {
-                name = entry.name.clone();
-            }
+                entry.name.clone()
+            };
             if !has_ranking.contains(&name) && !blacklist.contains(&name) {
                 player_rankings
                     .entry(name.clone())
-                    .or_insert(Vec::new())
+                    .or_default()
                     .push(pos);
                 has_ranking.push(name);
                 pos += 1;

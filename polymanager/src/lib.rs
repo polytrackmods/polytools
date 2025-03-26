@@ -47,7 +47,7 @@ pub async fn global_rankings_update(
     let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
         .await?
         .lines()
-        .map(|s| s.splitn(2, " ").next().unwrap().to_string())
+        .map(|s| s.split(" ").next().unwrap().to_string())
         .collect();
     let track_num = track_ids.len();
     let futures = track_ids.clone().into_iter().map(|track_id| {
@@ -64,20 +64,11 @@ pub async fn global_rankings_update(
         }
         task::spawn(async move {
             let mut res = Vec::new();
-            for i in 0..lb_size {
+            for url in urls {
                 sleep(Duration::from_millis(500)).await;
-                res.push(
-                    client
-                        .get(&urls[i])
-                        .send()
-                        .await
-                        .unwrap()
-                        .text()
-                        .await
-                        .unwrap(),
-                );
+                res.push(client.get(url).send().await.unwrap().text().await.unwrap());
             }
-            return Ok::<Vec<String>, reqwest::Error>(res);
+            Ok::<Vec<String>, reqwest::Error>(res)
         })
     });
     let results: Vec<Vec<String>> = join_all(futures)
@@ -111,23 +102,22 @@ pub async fn global_rankings_update(
         for entry in line.split(SPLIT_CHAR).skip(1) {
             alt_list.insert(
                 entry.to_string(),
-                line.split(SPLIT_CHAR).nth(0).unwrap().to_string(),
+                line.split(SPLIT_CHAR).next().unwrap().to_string(),
             );
         }
     }
     for leaderboard in leaderboards {
         let mut has_time: Vec<String> = Vec::new();
         for entry in leaderboard {
-            let name;
-            if alt_list.contains_key(&entry.name) {
-                name = alt_list.get(&entry.name).unwrap().clone();
+            let name: String = if alt_list.contains_key(&entry.name) {
+                alt_list.get(&entry.name).unwrap().clone()
             } else {
-                name = entry.name.clone();
-            }
+                entry.name.clone()
+            };
             if !has_time.contains(&name) && !blacklist.contains(&name) {
                 player_times
                     .entry(name.clone())
-                    .or_insert(Vec::new())
+                    .or_default()
                     .push(entry.frames);
                 has_time.push(name);
             }
