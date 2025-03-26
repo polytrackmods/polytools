@@ -28,6 +28,7 @@ const RANKINGS_FILE: &str = "data/poly_rankings.txt";
 const TRACK_FILE: &str = "lists/official_tracks.txt";
 const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
 const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
+const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 const BETA_VERSION: &str = "0.5.0-beta3";
@@ -958,6 +959,46 @@ async fn rankings(
             "Global Leaderboard"
         }
         .to_string(),
+        format!(""),
+        headers,
+        contents,
+        inlines,
+    )
+    .await?;
+    Ok(())
+}
+
+/// HOF leaderboard
+#[poise::command(slash_command, prefix_command, category = "Query")]
+async fn hof_rankings(
+    ctx: Context<'_>,
+    #[description = "Hidden"] hidden: Option<bool>,
+) -> Result<(), Error> {
+    if hidden.is_some_and(|x| x) {
+        ctx.defer_ephemeral().await?;
+    } else {
+        ctx.defer().await?;
+    }
+    let headers: Vec<&str> = vec!["Ranking", "Points", "Player"];
+    let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
+
+    for line in fs::read_to_string(HOF_RANKINGS_FILE)
+        .await?
+        .lines()
+        .filter(|s| !s.starts_with("<|-|>"))
+        .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
+    {
+        for i in 0..contents.len() {
+            contents
+                .get_mut(i)
+                .unwrap()
+                .push_str(format!("{}\n", line.get(i).unwrap()).as_str());
+        }
+    }
+    let inlines: Vec<bool> = vec![true, true, true];
+    write_embed(
+        &ctx,
+        "HOF Leaderboard".to_string(),
         format!(""),
         headers,
         contents,
