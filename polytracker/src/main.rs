@@ -31,7 +31,7 @@ const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
 const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
-const BETA_VERSION: &str = "0.5.0-beta3";
+const BETA_VERSION: &str = "0.5.0-beta4";
 const VERSION: &str = "0.4.2";
 
 struct BotData {
