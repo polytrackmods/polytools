@@ -1011,7 +1011,11 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
         .join("\n");
     let guild_icons = guilds
         .iter()
-        .map(|g| format!("[O](<{}>)", g.icon_url().unwrap_or_default()))
+        .map(|g| {
+            format!("[O](<{}>)", g.icon_url().unwrap_or_default())
+                .trim_start_matches("[O](<>)")
+                .to_string()
+        })
         .collect::<Vec<_>>()
         .join("\n");
     write_embed(
