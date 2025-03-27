@@ -1020,7 +1020,7 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
         String::new(),
         vec!["Icon", "Name"],
         vec![guild_icons, guild_names],
-        vec![true],
+        vec![true, true],
     )
     .await?;
     Ok(())
