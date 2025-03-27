@@ -1009,12 +1009,17 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
         .map(|g| g.name.clone())
         .collect::<Vec<_>>()
         .join("\n");
+    let guild_icons = guilds
+        .iter()
+        .map(|g| g.icon_url().unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
     write_embed(
         &ctx,
         "Guilds".to_string(),
         String::new(),
-        vec!["Guild name"],
-        vec![guild_names],
+        vec!["Icon", "Name"],
+        vec![guild_icons, guild_names],
         vec![true],
     )
     .await?;
