@@ -57,7 +57,7 @@ pub async fn global_rankings_update(
             urls.push(format!(
                 "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
                 if beta { 43274 } else { 43273 },
-                if beta { "0.5.0-beta3" } else { "0.4.2" },
+                if beta { "0.5.0-beta4" } else { "0.4.2" },
                 track_id,
                 i * 500,
             ));
