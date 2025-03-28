@@ -280,7 +280,6 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
             break;
         }
     }
-    // if track_ids.contains_key(&track_id.to_lowercase()) {
     let url = if !real_track_id.is_empty() {
         format!(
             "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500",
@@ -336,7 +335,7 @@ async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
                     (entry.frames / 1000.0).to_string()
                 } else {
                     format!(
-                        "{}:{}.{}",
+                        "{}:{:0>2}.{:0>3}",
                         entry.frames as u32 / 60000,
                         entry.frames as u32 % 60000 / 1000,
                         entry.frames as u32 % 1000
