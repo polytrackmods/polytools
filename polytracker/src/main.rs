@@ -52,6 +52,7 @@ struct LeaderBoardEntry {
 #[derive(Deserialize, Serialize)]
 struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
+    total: u32,
 }
 
 impl BotData {
@@ -1052,6 +1053,54 @@ async fn users(
     Ok(())
 }
 
+/// Displays player numbers
+#[poise::command(slash_command, prefix_command, category = "Info")]
+async fn players(
+    ctx: Context<'_>,
+    #[description = "Beta version"] beta: Option<bool>,
+) -> Result<(), Error> {
+    let beta = beta.unwrap_or(false);
+    let track_ids: Vec<(String, String)> =
+        fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
+            .await
+            .unwrap()
+            .lines()
+            .map(|s| {
+                let mut parts = s.splitn(2, " ").map(|s| s.to_string());
+                (parts.next().unwrap(), parts.next().unwrap())
+            })
+            .collect();
+    let mut contents = vec![String::new(), String::new()];
+    let client = Client::new();
+    for (id, name) in track_ids {
+        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false",
+            if beta {43274} else {43273},
+            if beta {BETA_VERSION} else {VERSION},
+            id);
+        let number =
+            serde_json::from_str::<LeaderBoard>(&client.get(&url).send().await?.text().await?)?
+                .total;
+        contents
+            .get_mut(0)
+            .unwrap()
+            .push_str(&format!("{}\n", name));
+        contents
+            .get_mut(1)
+            .unwrap()
+            .push_str(&format!("{}\n", number));
+    }
+    write_embed(
+        &ctx,
+        "Player numbers".to_string(),
+        String::new(),
+        vec!["Track", "Players"],
+        contents,
+        vec![true, true],
+    )
+    .await?;
+    Ok(())
+}
+
 /// Links the privacy policy
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
 async fn policy(ctx: Context<'_>) -> Result<(), Error> {
@@ -1104,6 +1153,7 @@ async fn main() {
                 list(),
                 guilds(),
                 users(),
+                players(),
                 help(),
                 compare(),
                 update_rankings(),
