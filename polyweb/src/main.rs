@@ -16,17 +16,20 @@ use std::collections::HashMap;
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
 struct LeaderBoardEntry {
     name: String,
     frames: f64,
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
 struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
 struct Entry {
     rank: u32,
     stat: String,
