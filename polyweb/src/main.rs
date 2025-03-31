@@ -1,10 +1,9 @@
 #[macro_use]
 extern crate rocket;
-use polymanager::global_rankings_update;
+use polymanager::{global_rankings_update, hof_update};
 use reqwest::Client;
 use rocket::form::validate::Contains;
 use rocket::fs::FileServer;
-use rocket::futures::future::join_all;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::tokio::{
     fs, task,
@@ -12,8 +11,6 @@ use rocket::tokio::{
 };
 use rocket_dyn_templates::{context, Template};
 use std::collections::HashMap;
-
-type Error = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
@@ -39,13 +36,8 @@ struct Entry {
 const BLACKLIST_FILE: &str = "data/blacklist.txt";
 const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
 const GLOBAL_RANKINGS_FILE: &str = "data/poly_rankings.txt";
-const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
-const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
 const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
-const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
 const TRACK_FILE: &str = "lists/official_tracks.txt";
-const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
-// const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
 const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
 const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
@@ -425,140 +417,4 @@ async fn get_standard_leaderboard(track_id: usize) -> Vec<Entry> {
         has_time.push(name);
     }
     leaderboard
-}
-
-async fn hof_update() -> Result<(), Error> {
-    let client = Client::new();
-    let track_ids: Vec<String> = fs::read_to_string(HOF_TRACK_FILE)
-        .await?
-        .lines()
-        .map(|s| s.to_string())
-        .collect();
-    let track_num = track_ids.len() as u32;
-    let futures = track_ids.into_iter().map(|track_id| {
-        let client = client.clone();
-        let url = format!(
-            "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=100",
-            track_id.split(" ").next().unwrap()
-        );
-        task::spawn(async move {
-            let res = client.get(url).send().await.unwrap().text().await.unwrap();
-            Ok::<String, reqwest::Error>(res)
-        })
-    });
-    let results: Vec<String> = join_all(futures)
-        .await
-        .into_iter()
-        .map(|res| res.unwrap())
-        .filter_map(|res| res.ok())
-        .collect();
-    let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
-    for result in results {
-        let leaderboard: Vec<LeaderBoardEntry> =
-            serde_json::from_str::<LeaderBoard>(&result)?.entries;
-        leaderboards.push(leaderboard);
-    }
-    let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
-    let blacklist: Vec<String> = fs::read_to_string(HOF_BLACKLIST_FILE)
-        .await?
-        .lines()
-        .map(|s| s.to_string())
-        .collect();
-    let alt_file: Vec<String> = fs::read_to_string(HOF_ALT_ACCOUNT_FILE)
-        .await?
-        .lines()
-        .map(|s| s.to_string())
-        .collect();
-    let mut alt_list: HashMap<String, String> = HashMap::new();
-    for line in alt_file {
-        const SPLIT_CHAR: &str = "<|>";
-        for entry in line.split(SPLIT_CHAR).skip(1) {
-            alt_list.insert(
-                entry.to_string(),
-                line.split(SPLIT_CHAR).next().unwrap().to_string(),
-            );
-        }
-    }
-    let point_values: Vec<u32> = fs::read_to_string(HOF_POINTS_FILE)
-        .await?
-        .lines()
-        .map(|s| s.to_string().parse().unwrap())
-        .collect();
-    for leaderboard in leaderboards {
-        let mut has_ranking: Vec<String> = Vec::new();
-        let mut pos = 0;
-        for entry in leaderboard {
-            if pos + 1 > point_values.len() {
-                break;
-            }
-            let name = if alt_list.contains_key(&entry.name) {
-                alt_list.get(&entry.name).unwrap().clone()
-            } else {
-                entry.name.clone()
-            };
-            if !has_ranking.contains(&name) && !blacklist.contains(&name) {
-                player_rankings
-                    .entry(name.clone())
-                    .or_default()
-                    .push(pos);
-                has_ranking.push(name);
-                pos += 1;
-            }
-        }
-    }
-    let mut sorted_leaderboard: Vec<(String, u32)> = player_rankings
-        .clone()
-        .into_iter()
-        .map(|(name, rankings)| {
-            let mut points = 0;
-            for ranking in rankings {
-                if ranking < point_values.len() {
-                    points += point_values[ranking];
-                }
-            }
-            (name, points)
-        })
-        .collect();
-    sorted_leaderboard.sort_by_key(|(_, points)| *points);
-    sorted_leaderboard.reverse();
-    let mut final_leaderboard: Vec<(u32, u32, String)> = Vec::new();
-    let mut points_prev = point_values[0] * track_num + 1;
-    let mut rank_prev = 0;
-    for (name, points) in sorted_leaderboard.clone() {
-        if points < points_prev {
-            points_prev = points;
-            rank_prev += 1;
-        }
-        final_leaderboard.push((rank_prev, points_prev, name));
-    }
-    let mut output = String::new();
-    for (rank, points, name) in final_leaderboard {
-        output.push_str(format!("{:>3} - {} - {}\n", rank, points, name).as_str());
-    }
-    let mut player_records: HashMap<String, u32> = HashMap::new();
-    for (name, rankings) in player_rankings {
-        for rank in rankings {
-            if rank == 0 {
-                *player_records.entry(name.clone()).or_insert(0) += 1;
-            }
-        }
-    }
-    let mut player_records: Vec<(String, u32)> = player_records.into_iter().collect();
-    player_records.sort_by_key(|(_, amt)| *amt);
-    player_records.reverse();
-    let mut final_player_records: Vec<(u32, u32, String)> = Vec::new();
-    let mut records_prev = track_num + 1;
-    let mut rank_prev = 0;
-    for (name, records) in player_records.clone() {
-        if records < records_prev {
-            records_prev = records;
-            rank_prev += 1;
-        }
-        final_player_records.push((rank_prev, records_prev, name));
-    }
-    for (rank, records, name) in final_player_records {
-        output.push_str(format!("<|-|> {:>3} - {} - {}\n", rank, records, name).as_str());
-    }
-    fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
-    Ok(())
 }
