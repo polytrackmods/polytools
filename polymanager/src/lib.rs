@@ -243,10 +243,7 @@ pub async fn hof_update() -> Result<(), Error> {
         .clone()
         .into_iter()
         .map(|(name, rankings)| {
-            let mut tiebreakers = Vec::new();
-            for _ in 0..point_values.len() {
-                tiebreakers.push(0);
-            }
+            let mut tiebreakers = vec![0; point_values.len()];
             let mut points = 0;
             for ranking in rankings {
                 if ranking < point_values.len() {
