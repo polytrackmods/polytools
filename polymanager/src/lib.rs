@@ -272,6 +272,8 @@ pub async fn hof_update() -> Result<(), Error> {
         final_leaderboard.push((rank_prev, points_prev, name));
     }
     let mut output = String::new();
+    // to be removed after April Fools
+    output.push_str("  0 - 2137 - Ireozar");
     for (rank, points, name) in final_leaderboard {
         output.push_str(format!("{:>3} - {} - {}\n", rank, points, name).as_str());
     }
