@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="robots" content="noindex, nofollow">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community Track Leaderboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="manifest" href="/static/site.webmanifest">
+</head>
+<body>
+    <h1>Community Track Leaderboard</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Points</th>
+                <th>Player</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in leaderboard.0 %}
+            <tr>
+                <td>{{ entry.rank }}.</td>
+                <td>{{ entry.stat }}</td>
+                <td>{{ entry.name }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <h3>WR Amounts</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Records</th>
+                <th>Player</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in leaderboard.1 %}
+            <tr>
+                <td>{{ entry.rank }}.</td>
+                <td>{{ entry.stat }}</td>
+                <td>{{ entry.name }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <footer>
+        <a href="/policy">Privacy Policy</a>
+    </footer>
+</body>
+</html>
+
