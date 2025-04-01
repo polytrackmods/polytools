@@ -1082,6 +1082,7 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Lets privileged users edit certain internal data
 #[poise::command(slash_command, category = "Administration", ephemeral)]
 async fn edit_lists(
     ctx: ApplicationContext<'_, BotData, Error>,
