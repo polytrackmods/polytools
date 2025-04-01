@@ -141,7 +141,7 @@ pub async fn global_rankings_update(
         .collect();
     let mut output = String::new();
     // to be removed after April Fools
-    output.push_str("  0 - 25:04.001 - Ireozar");
+    output.push_str("  0 - 25:04.001 - Ireozar\n");
     for entry in leaderboard {
         output.push_str(
             format!(
@@ -273,7 +273,7 @@ pub async fn hof_update() -> Result<(), Error> {
     }
     let mut output = String::new();
     // to be removed after April Fools
-    output.push_str("  0 - 2137 - Ireozar");
+    output.push_str("  0 - 2137 - Ireozar\n");
     for (rank, points, name) in final_leaderboard {
         output.push_str(format!("{:>3} - {} - {}\n", rank, points, name).as_str());
     }
