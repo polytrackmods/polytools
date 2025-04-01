@@ -394,10 +394,8 @@ pub async fn community_update() -> Result<(), Error> {
             let mut tiebreakers = vec![0; COMMUNITY_LB_SIZE as usize * 500];
             let mut points = 0;
             for ranking in rankings {
-                if ranking < COMMUNITY_LB_SIZE as usize * 500 {
-                    points += COMMUNITY_LB_SIZE as usize * 500 / (ranking + 1);
-                    *tiebreakers.get_mut(ranking).unwrap() += 1;
-                }
+                points += (100.0 / (ranking as f64 + 1.0).sqrt()) as u32;
+                *tiebreakers.get_mut(ranking).unwrap_or(&mut 0) += 1;
             }
             (name, points as u32, tiebreakers)
         })
