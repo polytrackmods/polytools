@@ -1,6 +1,10 @@
 #[macro_use]
 extern crate rocket;
-use polymanager::{global_rankings_update, hof_update};
+use polymanager::{
+    community_update, global_rankings_update, hof_update, ALT_ACCOUNT_FILE, BETA_RANKINGS_FILE,
+    BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE,
+    TRACK_FILE,
+};
 use reqwest::Client;
 use rocket::form::validate::Contains;
 use rocket::fs::FileServer;
@@ -33,19 +37,12 @@ struct Entry {
     name: String,
 }
 
-const BLACKLIST_FILE: &str = "data/blacklist.txt";
-const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
-const GLOBAL_RANKINGS_FILE: &str = "data/poly_rankings.txt";
-const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
-const TRACK_FILE: &str = "lists/official_tracks.txt";
-const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
-const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 
 #[get("/")]
 async fn index() -> Template {
-    let leaderboard = parse_leaderboard(GLOBAL_RANKINGS_FILE).await;
+    let leaderboard = parse_leaderboard(RANKINGS_FILE).await;
     Template::render("leaderboard", context! { leaderboard })
 }
 
@@ -53,6 +50,12 @@ async fn index() -> Template {
 async fn beta() -> Template {
     let leaderboard = parse_leaderboard(BETA_RANKINGS_FILE).await;
     Template::render("leaderboard", context! { leaderboard })
+}
+
+#[get("/community")]
+async fn community() -> Template {
+    let leaderboard = parse_community_leaderboard(COMMUNITY_RANKINGS_FILE).await;
+    Template::render("community", context! { leaderboard })
 }
 
 #[get("/hof")]
@@ -123,6 +126,7 @@ async fn main() -> Result<(), rocket::Error> {
                 index,
                 hof,
                 beta,
+                community,
                 tutorial,
                 standard_lb_home,
                 standard_lb,
@@ -135,6 +139,21 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(Template::fairing());
     task::spawn(async {
         loop {
+            community_update().await.expect("Failed update");
+            if fs::try_exists(COMMUNITY_RANKINGS_FILE).await.unwrap() {
+                let age = fs::metadata(COMMUNITY_RANKINGS_FILE)
+                    .await
+                    .unwrap()
+                    .modified()
+                    .unwrap()
+                    .elapsed()
+                    .unwrap();
+                if age > MAX_RANKINGS_AGE {
+                    community_update().await.expect("Failed update");
+                }
+            } else {
+                community_update().await.expect("Failed update");
+            }
             if fs::try_exists(HOF_RANKINGS_FILE).await.unwrap() {
                 let age = fs::metadata(HOF_RANKINGS_FILE)
                     .await
@@ -150,8 +169,8 @@ async fn main() -> Result<(), rocket::Error> {
                 hof_update().await.expect("Failed update");
             }
             sleep(AUTOUPDATE_TIMER / 2).await;
-            if fs::try_exists(GLOBAL_RANKINGS_FILE).await.unwrap() {
-                let age = fs::metadata(GLOBAL_RANKINGS_FILE)
+            if fs::try_exists(RANKINGS_FILE).await.unwrap() {
+                let age = fs::metadata(RANKINGS_FILE)
                     .await
                     .unwrap()
                     .modified()
@@ -201,6 +220,58 @@ async fn parse_leaderboard(file_path: &str) -> Vec<Entry> {
 }
 
 async fn parse_hof_leaderboard(file_path: &str) -> (Vec<Entry>, Vec<Entry>) {
+    let contents = fs::read_to_string(file_path)
+        .await
+        .expect("Failed to read file");
+    let leaderboard: Vec<Entry> = contents
+        .lines()
+        .filter_map(|line| {
+            if line.starts_with("<|-|>") {
+                return None;
+            }
+            let parts: Vec<&str> = line
+                .trim_start()
+                .splitn(3, " - ")
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.len() == 3 {
+                Some(Entry {
+                    rank: parts[0].parse().ok()?,
+                    stat: parts[1].to_string(),
+                    name: parts[2].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    let record_leaderboard: Vec<Entry> = contents
+        .lines()
+        .filter_map(|line| {
+            if !line.starts_with("<|-|>") {
+                return None;
+            }
+            let parts: Vec<&str> = line
+                .trim_start_matches("<|-|>")
+                .trim_start()
+                .splitn(3, " - ")
+                .filter(|s| !s.is_empty())
+                .collect();
+            if parts.len() == 3 {
+                Some(Entry {
+                    rank: parts[0].parse().ok()?,
+                    stat: parts[1].to_string(),
+                    name: parts[2].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    (leaderboard, record_leaderboard)
+}
+
+async fn parse_community_leaderboard(file_path: &str) -> (Vec<Entry>, Vec<Entry>) {
     let contents = fs::read_to_string(file_path)
         .await
         .expect("Failed to read file");

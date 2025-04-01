@@ -8,6 +8,10 @@ use poise::{
 use polymanager::db::establish_connection;
 use polymanager::db::{Admin, BetaUser, NewBetaUser, NewUser, User};
 use polymanager::global_rankings_update;
+use polymanager::BETA_RANKINGS_FILE;
+use polymanager::HOF_RANKINGS_FILE;
+use polymanager::RANKINGS_FILE;
+use polymanager::TRACK_FILE;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,11 +28,7 @@ use std::{collections::HashMap, time::Duration};
 use tokio::fs;
 use tokio::task;
 
-const RANKINGS_FILE: &str = "data/poly_rankings.txt";
-const TRACK_FILE: &str = "lists/official_tracks.txt";
-const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
 const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
-const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 const BETA_VERSION: &str = "0.5.0-beta5";
