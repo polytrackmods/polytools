@@ -16,8 +16,8 @@ pub const TRACK_FILE: &str = "lists/official_tracks.txt";
 pub const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
 const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
 const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
-const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
-const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
+pub const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
+pub const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
 const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
 pub const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
 const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
@@ -397,7 +397,7 @@ pub async fn community_update() -> Result<(), Error> {
                 points += (100.0 / (ranking as f64 + 1.0).sqrt()) as u32;
                 *tiebreakers.get_mut(ranking).unwrap_or(&mut 0) += 1;
             }
-            (name, points as u32, tiebreakers)
+            (name, points, tiebreakers)
         })
         .collect();
     sorted_leaderboard.sort_by(|a, b| {

@@ -3,15 +3,16 @@ use dotenvy::dotenv;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::{
-    CreateReply, EditTracker, Framework, FrameworkOptions, Prefix, PrefixFrameworkOptions,
+    ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, EditTracker,
+    Framework, FrameworkOptions, Modal, Prefix, PrefixFrameworkOptions,
 };
 use polymanager::db::establish_connection;
 use polymanager::db::{Admin, BetaUser, NewBetaUser, NewUser, User};
 use polymanager::global_rankings_update;
-use polymanager::BETA_RANKINGS_FILE;
-use polymanager::HOF_RANKINGS_FILE;
-use polymanager::RANKINGS_FILE;
-use polymanager::TRACK_FILE;
+use polymanager::{
+    ALT_ACCOUNT_FILE, BETA_RANKINGS_FILE, BLACKLIST_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE,
+    HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
+};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -22,11 +23,9 @@ use serenity::{
     CreateInteractionResponse, CreateInteractionResponseMessage, GatewayIntents,
 };
 use std::env;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, time::Duration};
-use tokio::fs;
-use tokio::task;
+use tokio::{fs, task};
 
 const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
@@ -138,6 +137,58 @@ impl BotData {
     }
     // end of beta
 }
+
+#[derive(Modal, Clone)]
+#[name = "List Editor"]
+struct EditModal {
+    #[name = "List"]
+    #[paragraph]
+    list: String,
+}
+
+#[derive(Clone)]
+enum EditModalList {
+    Black,
+    Alt,
+    HOFBlack,
+    HOFAlt,
+}
+
+impl ChoiceParameter for EditModalList {
+    fn list() -> Vec<CommandParameterChoice> {
+        let names = vec!["Black List", "Alt List", "HOF Black List", "HOF Alt List"];
+        names
+            .into_iter()
+            .map(|n| CommandParameterChoice {
+                name: n.to_string(),
+                localizations: HashMap::new(),
+                __non_exhaustive: (),
+            })
+            .collect()
+    }
+    fn from_index(index: usize) -> Option<Self> {
+        use EditModalList::*;
+        let values = [Black, Alt, HOFBlack, HOFAlt];
+        values.get(index).cloned()
+    }
+    fn localized_name(&self, _locale: &str) -> Option<&'static str> {
+        None
+    }
+    fn from_name(name: &str) -> Option<Self> {
+        use EditModalList::*;
+        match name {
+            "Black List" => Some(Black),
+            "Alt List" => Some(Alt),
+            "HOF Black List" => Some(HOFBlack),
+            "HOF Alt List" => Some(HOFAlt),
+            _ => None,
+        }
+    }
+    fn name(&self) -> &'static str {
+        "List"
+    }
+}
+
 async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
     if text.chars().count() > 2000 {
         if text.chars().next().unwrap() == text.chars().nth(1).unwrap()
@@ -1031,6 +1082,34 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+#[poise::command(slash_command, category = "Administration", ephemeral)]
+async fn edit_lists(
+    ctx: ApplicationContext<'_, BotData, Error>,
+    modal_list: EditModalList,
+) -> Result<(), Error> {
+    let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 2).await;
+    if !is_admin {
+        write(&ctx.into(), is_admin_msg).await?;
+        return Ok(());
+    }
+    let list_file = {
+        use EditModalList::*;
+        match modal_list {
+            Black => BLACKLIST_FILE,
+            Alt => ALT_ACCOUNT_FILE,
+            HOFBlack => HOF_BLACKLIST_FILE,
+            HOFAlt => HOF_ALT_ACCOUNT_FILE,
+        }
+    };
+    let list = fs::read_to_string(list_file).await?;
+    let modal_defaults = EditModal { list };
+    let modal_returned = EditModal::execute_with_defaults(ctx, modal_defaults.clone())
+        .await?
+        .unwrap_or(modal_defaults);
+    fs::write(list_file, modal_returned.list).await.unwrap();
+    Ok(())
+}
+
 /// Lists currently registered users and their IDs
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
 async fn users(
@@ -1152,6 +1231,7 @@ async fn main() {
                 request(),
                 list(),
                 guilds(),
+                edit_lists(),
                 users(),
                 players(),
                 help(),
