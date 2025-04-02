@@ -37,7 +37,6 @@ struct Entry {
     name: String,
 }
 
-const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 
 #[get("/")]
@@ -140,54 +139,13 @@ async fn main() -> Result<(), rocket::Error> {
     task::spawn(async {
         loop {
             community_update().await.expect("Failed update");
-            if fs::try_exists(COMMUNITY_RANKINGS_FILE).await.unwrap() {
-                let age = fs::metadata(COMMUNITY_RANKINGS_FILE)
-                    .await
-                    .unwrap()
-                    .modified()
-                    .unwrap()
-                    .elapsed()
-                    .unwrap();
-                if age > MAX_RANKINGS_AGE {
-                    community_update().await.expect("Failed update");
-                }
-            } else {
-                community_update().await.expect("Failed update");
-            }
-            if fs::try_exists(HOF_RANKINGS_FILE).await.unwrap() {
-                let age = fs::metadata(HOF_RANKINGS_FILE)
-                    .await
-                    .unwrap()
-                    .modified()
-                    .unwrap()
-                    .elapsed()
-                    .unwrap();
-                if age > MAX_RANKINGS_AGE {
-                    hof_update().await.expect("Failed update");
-                }
-            } else {
-                hof_update().await.expect("Failed update");
-            }
-            sleep(AUTOUPDATE_TIMER / 2).await;
-            if fs::try_exists(RANKINGS_FILE).await.unwrap() {
-                let age = fs::metadata(RANKINGS_FILE)
-                    .await
-                    .unwrap()
-                    .modified()
-                    .unwrap()
-                    .elapsed()
-                    .unwrap();
-                if age > MAX_RANKINGS_AGE {
-                    global_rankings_update(None, false)
-                        .await
-                        .expect("Failed update");
-                }
-            } else {
-                global_rankings_update(None, false)
-                    .await
-                    .expect("Failed update");
-            }
-            sleep(AUTOUPDATE_TIMER / 2).await;
+            sleep(AUTOUPDATE_TIMER / 3).await;
+            hof_update().await.expect("Failed update");
+            sleep(AUTOUPDATE_TIMER / 3).await;
+            global_rankings_update(None, false)
+                .await
+                .expect("Failed update");
+            sleep(AUTOUPDATE_TIMER / 3).await;
         }
     });
     rocket.launch().await?;
