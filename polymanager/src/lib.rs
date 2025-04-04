@@ -15,12 +15,12 @@ pub const RANKINGS_FILE: &str = "data/poly_rankings.txt";
 pub const TRACK_FILE: &str = "lists/official_tracks.txt";
 pub const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
 const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
-const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
+pub const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
 pub const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
 pub const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
 const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
 pub const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
-const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
+pub const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
 pub const COMMUNITY_RANKINGS_FILE: &str = "data/community_rankings.txt";
 const COMMUNITY_LB_SIZE: u32 = 2;
 pub const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
@@ -37,17 +37,12 @@ struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
 
-pub async fn global_rankings_update(
-    entry_requirement: Option<usize>,
-    beta: bool,
-) -> Result<(), Error> {
+pub async fn global_rankings_update(beta: bool) -> Result<(), Error> {
     dotenv().ok();
-    let mut lb_size = entry_requirement.unwrap_or_else(|| {
-        env::var("LEADERBOARD_SIZE")
-            .expect("Expected LEADERBOARD_SIZE in env!")
-            .parse()
-            .expect("LEADERBOARD_SIZE not a valid integer!")
-    });
+    let mut lb_size = env::var("LEADERBOARD_SIZE")
+        .expect("Expected LEADERBOARD_SIZE in env!")
+        .parse()
+        .expect("LEADERBOARD_SIZE not a valid integer!");
     if beta {
         lb_size = 5;
     }

@@ -6,9 +6,12 @@ use poise::{
     ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, EditTracker,
     Framework, FrameworkOptions, Modal, Prefix, PrefixFrameworkOptions,
 };
+use polymanager::community_update;
 use polymanager::db::establish_connection;
 use polymanager::db::{Admin, BetaUser, NewBetaUser, NewUser, User};
 use polymanager::global_rankings_update;
+use polymanager::hof_update;
+use polymanager::COMMUNITY_RANKINGS_FILE;
 use polymanager::{
     ALT_ACCOUNT_FILE, BETA_RANKINGS_FILE, BLACKLIST_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE,
     HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
@@ -171,8 +174,8 @@ impl ChoiceParameter for EditModalList {
         let values = [Black, Alt, HOFBlack, HOFAlt];
         values.get(index).cloned()
     }
-    fn localized_name(&self, _locale: &str) -> Option<&'static str> {
-        None
+    fn localized_name(&self, _: &str) -> Option<&'static str> {
+        Some(self.name())
     }
     fn from_name(name: &str) -> Option<Self> {
         use EditModalList::*;
@@ -185,7 +188,13 @@ impl ChoiceParameter for EditModalList {
         }
     }
     fn name(&self) -> &'static str {
-        "List"
+        use EditModalList::*;
+        match self {
+            Black => "Blacklist",
+            Alt => "Alt-List",
+            HOFBlack => "HOF Blacklist",
+            HOFAlt => "HOF Alt-List",
+        }
     }
 }
 
@@ -882,15 +891,61 @@ async fn compare(
     Ok(())
 }
 
+#[derive(Clone)]
+enum UpdateLeaderboard {
+    Global,
+    Beta,
+    Community,
+    Hof,
+}
+
+impl ChoiceParameter for UpdateLeaderboard {
+    fn list() -> Vec<CommandParameterChoice> {
+        use UpdateLeaderboard::*;
+        [Global, Beta, Community, Hof]
+            .iter()
+            .map(|c| CommandParameterChoice {
+                name: c.name().to_string(),
+                localizations: HashMap::new(),
+                __non_exhaustive: (),
+            })
+            .collect()
+    }
+    fn name(&self) -> &'static str {
+        use UpdateLeaderboard::*;
+        match self {
+            Global => "Global",
+            Beta => "Beta",
+            Community => "Community",
+            Hof => "HOF",
+        }
+    }
+    fn from_index(index: usize) -> Option<Self> {
+        use UpdateLeaderboard::*;
+        [Global, Beta, Community, Hof].get(index).cloned()
+    }
+    fn localized_name(&self, _: &str) -> Option<&'static str> {
+        Some(self.name())
+    }
+    fn from_name(name: &str) -> Option<Self> {
+        use UpdateLeaderboard::*;
+        match name.to_lowercase().as_str() {
+            "global" => Some(Global),
+            "beta" => Some(Beta),
+            "community" => Some(Community),
+            "hof" => Some(Hof),
+            _ => None,
+        }
+    }
+}
+
 /// Update leaderboard for official tracks
 ///
 /// displays users with top (500 * entry_requirement) records on all tracks (default: 2500)
 #[poise::command(slash_command, prefix_command, category = "Administration")]
 async fn update_rankings(
     ctx: Context<'_>,
-    #[description = "Beta version"] beta: Option<bool>,
-    #[description = "Ranking multiple of 500 that is needed on all tracks to enter"]
-    entry_requirement: Option<usize>,
+    #[description = "Updated Leaderboard"] leaderboard: UpdateLeaderboard,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let (is_admin, is_admin_msg) = is_admin(&ctx, 2).await;
@@ -898,17 +953,24 @@ async fn update_rankings(
         write(&ctx, is_admin_msg).await?;
         return Ok(());
     }
-    let beta = beta.unwrap_or(false);
-    global_rankings_update(entry_requirement, beta).await?;
+    use UpdateLeaderboard::*;
+    match leaderboard {
+        Global => global_rankings_update(false).await,
+        Beta => global_rankings_update(true).await,
+        Community => community_update().await,
+        Hof => hof_update().await,
+    }?;
     let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-    for line in fs::read_to_string(if beta {
-        BETA_RANKINGS_FILE
-    } else {
-        RANKINGS_FILE
+    for line in fs::read_to_string(match leaderboard {
+        Global => RANKINGS_FILE,
+        Beta => BETA_RANKINGS_FILE,
+        Community => COMMUNITY_RANKINGS_FILE,
+        Hof => HOF_RANKINGS_FILE,
     })
     .await?
     .lines()
+    .filter(|s| !s.starts_with("<|-|>"))
     .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
     {
         for i in 0..contents.len() {
@@ -921,12 +983,7 @@ async fn update_rankings(
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         &ctx,
-        if beta {
-            "Beta Leaderboard"
-        } else {
-            "Global Leaderboard"
-        }
-        .to_string(),
+        format!("{} Leaderboard", leaderboard.name()),
         String::new(),
         headers,
         contents,
@@ -965,10 +1022,10 @@ async fn rankings(
         .modified()?
         .elapsed()?;
         if age > MAX_RANKINGS_AGE {
-            global_rankings_update(None, beta).await?;
+            global_rankings_update(beta).await?;
         }
     } else {
-        global_rankings_update(None, beta).await?;
+        global_rankings_update(beta).await?;
     }
     let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
@@ -1086,7 +1143,7 @@ async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command, category = "Administration", ephemeral)]
 async fn edit_lists(
     ctx: ApplicationContext<'_, BotData, Error>,
-    modal_list: EditModalList,
+    #[description = "List to edit"] list: EditModalList,
 ) -> Result<(), Error> {
     let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 2).await;
     if !is_admin {
@@ -1095,7 +1152,7 @@ async fn edit_lists(
     }
     let list_file = {
         use EditModalList::*;
-        match modal_list {
+        match list {
             Black => BLACKLIST_FILE,
             Alt => ALT_ACCOUNT_FILE,
             HOFBlack => HOF_BLACKLIST_FILE,
