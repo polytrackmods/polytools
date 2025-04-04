@@ -11,14 +11,12 @@ use polymanager::db::establish_connection;
 use polymanager::db::{Admin, BetaUser, NewBetaUser, NewUser, User};
 use polymanager::global_rankings_update;
 use polymanager::hof_update;
-use polymanager::COMMUNITY_RANKINGS_FILE;
 use polymanager::{
-    ALT_ACCOUNT_FILE, BETA_RANKINGS_FILE, BLACKLIST_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE,
-    HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
+    ALT_ACCOUNT_FILE, BETA_RANKINGS_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE,
+    HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serenity::collector::ComponentInteractionCollector;
 use serenity::futures::future::join_all;
 use serenity::{
@@ -36,25 +34,177 @@ const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 const BETA_VERSION: &str = "0.5.0-beta5";
 const VERSION: &str = "0.4.2";
 
+type Error = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, BotData, Error>;
+
+#[tokio::main]
+async fn main() {
+    dotenv().ok();
+    let conn = Mutex::new(establish_connection());
+    let token = env::var("DISCORD_TOKEN").expect("Token missing");
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS;
+
+    let bot_data = BotData {
+        user_ids: Mutex::new(HashMap::new()),
+        beta_user_ids: Mutex::new(HashMap::new()),
+        admins: Mutex::new(HashMap::new()),
+        conn,
+    };
+    bot_data.load().await;
+
+    let framework = Framework::builder()
+        .options(FrameworkOptions {
+            commands: vec![
+                assign(),
+                delete(),
+                request(),
+                list(),
+                edit_lists(),
+                users(),
+                players(),
+                help(),
+                compare(),
+                update_rankings(),
+                rankings(),
+                hof_rankings(),
+                policy(),
+            ],
+            prefix_options: PrefixFrameworkOptions {
+                prefix: Some("~".into()),
+                edit_tracker: Some(Arc::new(EditTracker::for_timespan(Duration::from_secs(60)))),
+                additional_prefixes: vec![Prefix::Literal("'")],
+                ..Default::default()
+            },
+            pre_command: |ctx| {
+                Box::pin(async move {
+                    println!(
+                        "Executing command {} issued by {}...",
+                        ctx.command().qualified_name,
+                        ctx.author().display_name()
+                    );
+                })
+            },
+            post_command: |ctx| {
+                Box::pin(async move {
+                    println!(
+                        "Executed command {} issued by {}!",
+                        ctx.command().qualified_name,
+                        ctx.author().display_name()
+                    );
+                })
+            },
+            ..Default::default()
+        })
+        .setup(|ctx, _ready, framework| {
+            Box::pin(async move {
+                builtins::register_globally(ctx, &framework.options().commands).await?;
+                Ok(bot_data)
+            })
+        })
+        .build();
+
+    let client = ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await;
+    client.unwrap().start().await.unwrap();
+}
+
+// structs for deserializing leaderboards
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LeaderBoardEntry {
+    name: String,
+    frames: f64,
+    verified_state: Option<VerifiedState>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LeaderBoard {
+    entries: Vec<LeaderBoardEntry>,
+    total: u32,
+    user_entry: Option<UserEntry>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct UserEntry {
+    position: u32,
+    frames: f64,
+    id: u64,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
+enum VerifiedState {
+    Bool(bool),
+    U8(u8),
+}
+
+// used by edit_lists() for the modal
+#[derive(Modal, Clone)]
+#[name = "List Editor"]
+struct EditModal {
+    #[name = "List"]
+    #[paragraph]
+    list: String,
+}
+
+// argument enum for edit_lists()
+#[derive(Clone)]
+enum EditModalChoice {
+    Black,
+    Alt,
+    HOFBlack,
+    HOFAlt,
+}
+
+impl ChoiceParameter for EditModalChoice {
+    fn list() -> Vec<CommandParameterChoice> {
+        let names = vec!["Black List", "Alt List", "HOF Black List", "HOF Alt List"];
+        names
+            .into_iter()
+            .map(|n| CommandParameterChoice {
+                name: n.to_string(),
+                localizations: HashMap::new(),
+                __non_exhaustive: (),
+            })
+            .collect()
+    }
+    fn from_index(index: usize) -> Option<Self> {
+        use EditModalChoice::*;
+        let values = [Black, Alt, HOFBlack, HOFAlt];
+        values.get(index).cloned()
+    }
+    fn localized_name(&self, _: &str) -> Option<&'static str> {
+        Some(self.name())
+    }
+    fn from_name(name: &str) -> Option<Self> {
+        use EditModalChoice::*;
+        match name {
+            "Black List" => Some(Black),
+            "Alt List" => Some(Alt),
+            "HOF Black List" => Some(HOFBlack),
+            "HOF Alt List" => Some(HOFAlt),
+            _ => None,
+        }
+    }
+    fn name(&self) -> &'static str {
+        use EditModalChoice::*;
+        match self {
+            Black => "Blacklist",
+            Alt => "Alt-List",
+            HOFBlack => "HOF Blacklist",
+            HOFAlt => "HOF Alt-List",
+        }
+    }
+}
+
+// the bot's shared data
 struct BotData {
     user_ids: Mutex<HashMap<String, String>>,
     beta_user_ids: Mutex<HashMap<String, String>>,
     admins: Mutex<HashMap<String, u32>>,
     conn: Mutex<SqliteConnection>,
-}
-type Error = Box<dyn std::error::Error + Send + Sync>;
-type Context<'a> = poise::Context<'a, BotData, Error>;
-
-#[derive(Deserialize, Serialize)]
-struct LeaderBoardEntry {
-    name: String,
-    frames: f64,
-}
-
-#[derive(Deserialize, Serialize)]
-struct LeaderBoard {
-    entries: Vec<LeaderBoardEntry>,
-    total: u32,
 }
 
 impl BotData {
@@ -141,63 +291,56 @@ impl BotData {
     // end of beta
 }
 
-#[derive(Modal, Clone)]
-#[name = "List Editor"]
-struct EditModal {
-    #[name = "List"]
-    #[paragraph]
-    list: String,
-}
-
+// argument enum for leaderboard related commands
 #[derive(Clone)]
-enum EditModalList {
-    Black,
-    Alt,
-    HOFBlack,
-    HOFAlt,
+enum LeaderboardChoice {
+    Global,
+    Beta,
+    Community,
+    Hof,
 }
 
-impl ChoiceParameter for EditModalList {
+impl ChoiceParameter for LeaderboardChoice {
     fn list() -> Vec<CommandParameterChoice> {
-        let names = vec!["Black List", "Alt List", "HOF Black List", "HOF Alt List"];
-        names
-            .into_iter()
-            .map(|n| CommandParameterChoice {
-                name: n.to_string(),
+        use LeaderboardChoice::*;
+        [Global, Beta, Community, Hof]
+            .iter()
+            .map(|c| CommandParameterChoice {
+                name: c.name().to_string(),
                 localizations: HashMap::new(),
                 __non_exhaustive: (),
             })
             .collect()
     }
+    fn name(&self) -> &'static str {
+        use LeaderboardChoice::*;
+        match self {
+            Global => "Global",
+            Beta => "Beta",
+            Community => "Community",
+            Hof => "HOF",
+        }
+    }
     fn from_index(index: usize) -> Option<Self> {
-        use EditModalList::*;
-        let values = [Black, Alt, HOFBlack, HOFAlt];
-        values.get(index).cloned()
+        use LeaderboardChoice::*;
+        [Global, Beta, Community, Hof].get(index).cloned()
     }
     fn localized_name(&self, _: &str) -> Option<&'static str> {
         Some(self.name())
     }
     fn from_name(name: &str) -> Option<Self> {
-        use EditModalList::*;
-        match name {
-            "Black List" => Some(Black),
-            "Alt List" => Some(Alt),
-            "HOF Black List" => Some(HOFBlack),
-            "HOF Alt List" => Some(HOFAlt),
+        use LeaderboardChoice::*;
+        match name.to_lowercase().as_str() {
+            "global" => Some(Global),
+            "beta" => Some(Beta),
+            "community" => Some(Community),
+            "hof" => Some(Hof),
             _ => None,
-        }
-    }
-    fn name(&self) -> &'static str {
-        use EditModalList::*;
-        match self {
-            Black => "Blacklist",
-            Alt => "Alt-List",
-            HOFBlack => "HOF Blacklist",
-            HOFAlt => "HOF Alt-List",
         }
     }
 }
 
+// non-embed output function
 async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
     if text.chars().count() > 2000 {
         if text.chars().next().unwrap() == text.chars().nth(1).unwrap()
@@ -220,6 +363,7 @@ async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
     Ok(())
 }
 
+// output function using embeds
 async fn write_embed(
     ctx: &Context<'_>,
     title: String,
@@ -472,69 +616,54 @@ async fn request(
         let contents: Vec<String>;
         if let Ok(response) = client.get(url).send().await {
             if let Ok(body) = response.text().await {
-                if let Ok(json) = serde_json::from_str::<Value>(&body) {
-                    if let Some(user_entry) = json.get("userEntry") {
-                        if let Some(position) = user_entry.get("position") {
-                            if let Some(frames) = user_entry.get("frames") {
-                                if position.to_string().parse::<u32>().unwrap() <= 501 {
-                                    if let Some(entries) = json["entries"].as_array() {
-                                        let mut found: Vec<String> = Vec::new();
-                                        let mut i = 0;
-                                        for entry in entries {
-                                            i += 1;
-                                            if i == position.to_string().parse::<u32>().unwrap() {
-                                                break;
-                                            }
-                                            if !found
-                                                .contains(&entry.get("name").unwrap().to_string())
-                                                && entry
-                                                    .get("verifiedState")
-                                                    .unwrap()
-                                                    .as_bool()
-                                                    .unwrap_or(false)
-                                            {
-                                                found.push(entry.get("name").unwrap().to_string());
-                                            }
-                                        }
-                                        let mut time = (frames.to_string().parse::<f64>().unwrap()
-                                            / 1000.0)
-                                            .to_string();
-                                        time.push('s');
-                                        contents = vec![
-                                            position.to_string(),
-                                            time,
-                                            (found.len() + 1).to_string(),
-                                        ];
-                                        write_embed(
-                                            &ctx,
-                                            "Leaderboard".to_string(),
-                                            String::new(),
-                                            vec!["Ranking", "Time", "Unique"],
-                                            contents,
-                                            vec![true, true, true],
-                                        )
-                                        .await?;
+                if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&body) {
+                    if let Some(user_entry) = leaderboard.user_entry {
+                        let position = user_entry.position;
+                        let frames = user_entry.frames;
+                        if position <= 501 {
+                            let entries = leaderboard.entries;
+                            let mut found: Vec<String> = Vec::new();
+                            let mut i = 0;
+                            for entry in entries {
+                                i += 1;
+                                if i == position {
+                                    break;
+                                }
+                                if !found.contains(&entry.name) {
+                                    if let Some(VerifiedState::Bool(true)) = entry.verified_state {
+                                        found.push(entry.name);
                                     }
-                                } else {
-                                    let mut time = (frames.to_string().parse::<f64>().unwrap()
-                                        / 1000.0)
-                                        .to_string();
-                                    time.push('s');
-                                    contents = vec![position.to_string(), time];
-                                    write_embed(
-                                        &ctx,
-                                        "Leaderboard".to_string(),
-                                        String::new(),
-                                        vec!["Ranking", "Time"],
-                                        contents,
-                                        vec![true, true],
-                                    )
-                                    .await?;
                                 }
                             }
+                            let mut time = (frames / 1000.0).to_string();
+                            time.push('s');
+                            contents =
+                                vec![position.to_string(), time, (found.len() + 1).to_string()];
+                            write_embed(
+                                &ctx,
+                                "Leaderboard".to_string(),
+                                String::new(),
+                                vec!["Ranking", "Time", "Unique"],
+                                contents,
+                                vec![true, true, true],
+                            )
+                            .await?;
                         } else {
-                            write(&ctx, "`Record not found!`".to_string()).await?;
+                            let mut time = (frames / 1000.0).to_string();
+                            time.push('s');
+                            contents = vec![position.to_string(), time];
+                            write_embed(
+                                &ctx,
+                                "Leaderboard".to_string(),
+                                String::new(),
+                                vec!["Ranking", "Time"],
+                                contents,
+                                vec![true, true],
+                            )
+                            .await?;
                         }
+                    } else {
+                        write(&ctx, "`Record not found!`".to_string()).await?;
                     }
                 } else {
                     write(
@@ -621,71 +750,56 @@ async fn list(
         let mut headers = vec!["Track", "Ranking", "Time"];
         let mut inlines = vec![true, true, true];
         for response in responses {
-            if let Ok(json) = serde_json::from_str::<Value>(&response) {
-                if let Some(user_entry) = json.get("userEntry") {
-                    if let Some(position) = user_entry.get("position") {
-                        if let Some(frames) = user_entry.get("frames") {
-                            if position.to_string().parse::<u32>().unwrap() <= 501 {
-                                if let Some(entries) = json["entries"].as_array() {
-                                    let mut found: Vec<String> = Vec::new();
-                                    let mut i = 0;
-                                    for entry in entries {
-                                        i += 1;
-                                        if i == position.to_string().parse::<u32>().unwrap() {
-                                            break;
-                                        }
-                                        if beta {
-                                            if !found
-                                                .contains(&entry.get("name").unwrap().to_string())
-                                                && matches!(
-                                                    entry
-                                                        .get("verifiedState")
-                                                        .unwrap()
-                                                        .as_u64()
-                                                        .unwrap(),
-                                                    1
-                                                )
-                                            {
-                                                found.push(entry.get("name").unwrap().to_string());
-                                            }
-                                        } else if !found
-                                            .contains(&entry.get("name").unwrap().to_string())
-                                            && entry
-                                                .get("verifiedState")
-                                                .unwrap()
-                                                .as_bool()
-                                                .unwrap_or(false)
-                                        {
-                                            found.push(entry.get("name").unwrap().to_string());
-                                        }
+            if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&response) {
+                if let Some(user_entry) = leaderboard.user_entry {
+                    let position = user_entry.position;
+                    let frames = user_entry.frames;
+                    if position <= 501 {
+                        let entries = leaderboard.entries;
+                        let mut found: Vec<String> = Vec::new();
+                        let mut i = 0;
+                        for entry in entries {
+                            i += 1;
+                            if i == position {
+                                break;
+                            }
+                            if beta {
+                                if let Some(VerifiedState::U8(verified_state)) =
+                                    entry.verified_state
+                                {
+                                    if !found.contains(&entry.name) && verified_state == 1 {
+                                        found.push(entry.name);
                                     }
-                                    let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
-                                    total_time += time;
-                                    let mut time = time.to_string();
-                                    time.push('s');
-                                    contents[0].push_str(
-                                        format!("{}\n", track_ids[line_num as usize].1).as_str(),
-                                    );
-                                    contents[1].push_str(
-                                        format!("{} [{}]\n", position, (found.len() + 1)).as_str(),
-                                    );
-                                    contents[2].push_str(format!("{}\n", time).as_str());
                                 }
-                            } else {
-                                let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
-                                total_time += time;
-                                let mut time = time.to_string();
-                                time.push('s');
-                                contents[0].push_str(
-                                    format!("{}\n", track_ids[line_num as usize].1).as_str(),
-                                );
-                                contents[1].push_str(format!("{}\n", position).as_str());
-                                contents[2].push_str(format!("{}\n", time).as_str());
+                            } else if let Some(VerifiedState::Bool(verified_state)) =
+                                entry.verified_state
+                            {
+                                if !found.contains(&entry.name) && verified_state {
+                                    found.push(entry.name);
+                                }
                             }
                         }
+                        let time = frames / 1000.0;
+                        total_time += time;
+                        let mut time = time.to_string();
+                        time.push('s');
+                        contents[0]
+                            .push_str(format!("{}\n", track_ids[line_num as usize].1).as_str());
+                        contents[1]
+                            .push_str(format!("{} [{}]\n", position, (found.len() + 1)).as_str());
+                        contents[2].push_str(format!("{}\n", time).as_str());
                     } else {
-                        display_total = false;
-                    }
+                        let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
+                        total_time += time;
+                        let mut time = time.to_string();
+                        time.push('s');
+                        contents[0]
+                            .push_str(format!("{}\n", track_ids[line_num as usize].1).as_str());
+                        contents[1].push_str(format!("{}\n", position).as_str());
+                        contents[2].push_str(format!("{}\n", time).as_str());
+                    };
+                } else {
+                    display_total = false;
                 }
             } else {
                 write(
@@ -799,18 +913,16 @@ async fn compare(
             results.sort_by_key(|(i, _)| *i);
             let responses: Vec<String> = results.into_iter().map(|(_, res)| res).collect();
             for response in responses {
-                if let Ok(json) = serde_json::from_str::<Value>(&response) {
-                    if let Some(user_entry) = json.get("userEntry") {
-                        if let Some(position) = user_entry.get("position") {
-                            if let Some(frames) = user_entry.get("frames") {
-                                let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
-                                user_results.push((position.to_string().parse()?, time));
-                                total_time += time;
-                            }
-                        } else {
-                            user_results.push((0, 0.0));
-                            display_total = false;
-                        }
+                if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&response) {
+                    if let Some(user_entry) = leaderboard.user_entry {
+                        let position = user_entry.position;
+                        let frames = user_entry.frames;
+                        let time = frames / 1000.0;
+                        user_results.push((position, time));
+                        total_time += time;
+                    } else {
+                        user_results.push((0, 0.0));
+                        display_total = false;
                     }
                 } else {
                     write(
@@ -891,61 +1003,13 @@ async fn compare(
     Ok(())
 }
 
-#[derive(Clone)]
-enum UpdateLeaderboard {
-    Global,
-    Beta,
-    Community,
-    Hof,
-}
-
-impl ChoiceParameter for UpdateLeaderboard {
-    fn list() -> Vec<CommandParameterChoice> {
-        use UpdateLeaderboard::*;
-        [Global, Beta, Community, Hof]
-            .iter()
-            .map(|c| CommandParameterChoice {
-                name: c.name().to_string(),
-                localizations: HashMap::new(),
-                __non_exhaustive: (),
-            })
-            .collect()
-    }
-    fn name(&self) -> &'static str {
-        use UpdateLeaderboard::*;
-        match self {
-            Global => "Global",
-            Beta => "Beta",
-            Community => "Community",
-            Hof => "HOF",
-        }
-    }
-    fn from_index(index: usize) -> Option<Self> {
-        use UpdateLeaderboard::*;
-        [Global, Beta, Community, Hof].get(index).cloned()
-    }
-    fn localized_name(&self, _: &str) -> Option<&'static str> {
-        Some(self.name())
-    }
-    fn from_name(name: &str) -> Option<Self> {
-        use UpdateLeaderboard::*;
-        match name.to_lowercase().as_str() {
-            "global" => Some(Global),
-            "beta" => Some(Beta),
-            "community" => Some(Community),
-            "hof" => Some(Hof),
-            _ => None,
-        }
-    }
-}
-
 /// Update leaderboard for official tracks
 ///
 /// displays users with top (500 * entry_requirement) records on all tracks (default: 2500)
 #[poise::command(slash_command, prefix_command, category = "Administration")]
 async fn update_rankings(
     ctx: Context<'_>,
-    #[description = "Updated Leaderboard"] leaderboard: UpdateLeaderboard,
+    #[description = "Updated Leaderboard"] leaderboard: LeaderboardChoice,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let (is_admin, is_admin_msg) = is_admin(&ctx, 2).await;
@@ -953,7 +1017,7 @@ async fn update_rankings(
         write(&ctx, is_admin_msg).await?;
         return Ok(());
     }
-    use UpdateLeaderboard::*;
+    use LeaderboardChoice::*;
     match leaderboard {
         Global => global_rankings_update(false).await,
         Beta => global_rankings_update(true).await,
@@ -1104,46 +1168,11 @@ async fn hof_rankings(
     Ok(())
 }
 
-/// Lists guilds the bot is in (bot-admin only)
-#[poise::command(slash_command, prefix_command, category = "Administration", ephemeral)]
-async fn guilds(ctx: Context<'_>) -> Result<(), Error> {
-    let (is_admin, is_admin_msg) = is_admin(&ctx, 0).await;
-    if !is_admin {
-        write(&ctx, is_admin_msg).await?;
-        return Ok(());
-    }
-    let guilds = ctx.http().get_guilds(None, None).await?;
-    let guild_names = guilds
-        .iter()
-        .map(|g| g.name.clone())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let guild_icons = guilds
-        .iter()
-        .map(|g| {
-            format!("[O](<{}>)", g.icon_url().unwrap_or_default())
-                .trim_start_matches("[O](<>)")
-                .to_string()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    write_embed(
-        &ctx,
-        "Guilds".to_string(),
-        String::new(),
-        vec!["Icon", "Name"],
-        vec![guild_icons, guild_names],
-        vec![true, true],
-    )
-    .await?;
-    Ok(())
-}
-
 /// Lets privileged users edit certain internal data
 #[poise::command(slash_command, category = "Administration", ephemeral)]
 async fn edit_lists(
     ctx: ApplicationContext<'_, BotData, Error>,
-    #[description = "List to edit"] list: EditModalList,
+    #[description = "List to edit"] list: EditModalChoice,
 ) -> Result<(), Error> {
     let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 2).await;
     if !is_admin {
@@ -1151,7 +1180,7 @@ async fn edit_lists(
         return Ok(());
     }
     let list_file = {
-        use EditModalList::*;
+        use EditModalChoice::*;
         match list {
             Black => BLACKLIST_FILE,
             Alt => ALT_ACCOUNT_FILE,
@@ -1266,79 +1295,7 @@ async fn help(
     Ok(())
 }
 
-#[tokio::main]
-async fn main() {
-    dotenv().ok();
-    let conn = Mutex::new(establish_connection());
-    let token = env::var("DISCORD_TOKEN").expect("Token missing");
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS;
-
-    let bot_data = BotData {
-        user_ids: Mutex::new(HashMap::new()),
-        beta_user_ids: Mutex::new(HashMap::new()),
-        admins: Mutex::new(HashMap::new()),
-        conn,
-    };
-    bot_data.load().await;
-
-    let framework = Framework::builder()
-        .options(FrameworkOptions {
-            commands: vec![
-                assign(),
-                delete(),
-                request(),
-                list(),
-                guilds(),
-                edit_lists(),
-                users(),
-                players(),
-                help(),
-                compare(),
-                update_rankings(),
-                rankings(),
-                hof_rankings(),
-                policy(),
-            ],
-            prefix_options: PrefixFrameworkOptions {
-                prefix: Some("~".into()),
-                edit_tracker: Some(Arc::new(EditTracker::for_timespan(Duration::from_secs(60)))),
-                additional_prefixes: vec![Prefix::Literal("'")],
-                ..Default::default()
-            },
-            pre_command: |ctx| {
-                Box::pin(async move {
-                    println!(
-                        "Executing command {} issued by {}...",
-                        ctx.command().qualified_name,
-                        ctx.author().display_name()
-                    );
-                })
-            },
-            post_command: |ctx| {
-                Box::pin(async move {
-                    println!(
-                        "Executed command {} issued by {}!",
-                        ctx.command().qualified_name,
-                        ctx.author().display_name()
-                    );
-                })
-            },
-            ..Default::default()
-        })
-        .setup(|ctx, _ready, framework| {
-            Box::pin(async move {
-                builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(bot_data)
-            })
-        })
-        .build();
-
-    let client = ClientBuilder::new(token, intents)
-        .framework(framework)
-        .await;
-    client.unwrap().start().await.unwrap();
-}
-
+// checks whether invoking user is an admin with the required privilege level
 async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
     let admin_list = ctx.data().admins.lock().unwrap();
     if admin_list.contains_key(&ctx.author().name) {
@@ -1352,6 +1309,7 @@ async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
     }
 }
 
+// autocompletion function for registered users
 async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
     let mut user_ids: Vec<String> = ctx
         .data()
