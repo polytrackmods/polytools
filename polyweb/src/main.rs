@@ -138,13 +138,17 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(Template::fairing());
     task::spawn(async {
         loop {
-            community_update().await.expect("Failed update");
-            sleep(AUTOUPDATE_TIMER / 3).await;
-            hof_update().await.expect("Failed update");
-            sleep(AUTOUPDATE_TIMER / 3).await;
-            global_rankings_update(None, false)
+            community_update()
                 .await
-                .expect("Failed update");
+                .unwrap_or_else(|_| println!("Failed update"));
+            sleep(AUTOUPDATE_TIMER / 3).await;
+            hof_update()
+                .await
+                .unwrap_or_else(|_| println!("Failed update"));
+            sleep(AUTOUPDATE_TIMER / 3).await;
+            global_rankings_update(false)
+                .await
+                .unwrap_or_else(|_| println!("Failed update"));
             sleep(AUTOUPDATE_TIMER / 3).await;
         }
     });
