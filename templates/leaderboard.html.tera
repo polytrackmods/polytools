@@ -1,3 +1,4 @@
+{% extends "base" %}
 {% block title %}Global Leaderboard{% endblock title %}
 {% block content %}
 <h1>Global Leaderboard</h1>

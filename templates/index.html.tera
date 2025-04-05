@@ -1,4 +1,4 @@
-{% extends "base.html.tera" %}
+{% extends "base" %}
 {% block title%}PolyWeb{% endblock title%}
 {% block content %}
 <h1>Polytrack Leaderboards</h1>

@@ -1,3 +1,4 @@
+{% extends "base" %}
 {% block title %}{{ track_name }}Leaderboard{% endblock title %}
 {% block content %}
 <h1>{{ track_name }}Leaderboard</h1>

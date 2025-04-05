@@ -14,6 +14,7 @@ use rocket::tokio::{
     fs, task,
     time::{sleep, Duration},
 };
+use rocket_dyn_templates::tera::Tera;
 use rocket_dyn_templates::{context, Template};
 use std::collections::HashMap;
 

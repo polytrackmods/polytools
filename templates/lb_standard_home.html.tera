@@ -1,3 +1,4 @@
+{% extends "base" %}
 {% block title %}Standard Track Leaderboards{% endblock title %}
 {% block content %}
 <h1>Standard Track Leaderboards</h1>
