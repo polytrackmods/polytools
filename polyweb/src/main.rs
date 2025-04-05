@@ -7,6 +7,7 @@ use polymanager::{
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
+use rocket::form::Context;
 use rocket::fs::FileServer;
 use rocket::serde::{Deserialize, Serialize};
 use rocket::tokio::{
@@ -41,6 +42,11 @@ const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 
 #[get("/")]
 async fn index() -> Template {
+    Template::render("index", Context::default())
+}
+
+#[get("/global")]
+async fn global() -> Template {
     let leaderboard = parse_leaderboard(RANKINGS_FILE).await;
     Template::render("leaderboard", context! { leaderboard })
 }
@@ -123,6 +129,7 @@ async fn main() -> Result<(), rocket::Error> {
             "/",
             routes![
                 index,
+                global,
                 hof,
                 beta,
                 community,

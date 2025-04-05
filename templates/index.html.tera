@@ -1,0 +1,25 @@
+{% extends "base.html.tera" %}
+{% block title%}PolyWeb{% endblock title%}
+{% block content %}
+<h1>Polytrack Leaderboards</h1>
+<div class="button-container">
+	<a href="global"><button class="button">
+			Global
+		</button></a>
+	<a href="beta"><button class="button">
+			Beta
+		</button></a>
+	<a href="community"><button class="button">
+			Community
+		</button></a>
+	<a href="hof"><button class="button">
+			HOF
+		</button></a>
+	<a href="lb-standard"><button class="button">
+			Standard Tracks
+		</button></a>
+	<a href="lb-custom"><button class="button">
+			Custom Tracks
+		</button></a>
+</div>
+{% endblock content %}
