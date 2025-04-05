@@ -1,44 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta name="robots" content="noindex, nofollow">
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>PolyTracker Setup Tutorial</title>
-	<link rel="stylesheet" href="/static/style.css">
-	<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-	<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-	<link rel="manifest" href="/static/site.webmanifest">
-	<style>
-		body {
-			text-align: left;
-		}
-	</style>
-</head>
-<body>
-	<h1>PolyTracker Setup Tutorial</h1>
-	<h2>1. Add the bot to your account</h2>
-	<h4>Click on "Add App" to add the bot to your account.</h4>
-	<img src="/static/tutorial/PolyTrackerTutorial1.png" alt="Adding the app"><br>
+{% block title %}PolyTracker Setup Tutorial{% endblock title %}
+{% block style %}
+<style>
+	body {
+		text-align: left;
+	}
+</style>
+{% endblock style %}
+{% block content %}
+<h1>PolyTracker Setup Tutorial</h1>
+<h2>1. Add the bot to your account</h2>
+<h4>Click on "Add App" to add the bot to your account.</h4>
+<img src="/static/tutorial/PolyTrackerTutorial1.png" alt="Adding the app"><br>
+<br>
+<h2>2. Copy your User ID</h2>
+<h4>Go to "Profile", then click on the profile you want to add, then copy the code in the bottom left corner.</h4>
+<img src="/static/tutorial/PolyTrackerTutorial2.png" alt="Finding the User ID"><br>
+<br>
+<h2>3. Register your user</h2>
+<h4>Go to Discord and type the command "/assign", then choose the correct option.</h4>
+<img src="/static/tutorial/PolyTrackerTutorial3.png" alt="Finding the right command">
+<p>
+<h4>For "user" input your preferred username (does not have to match your in-game name), for "id" paste the User ID
+	you copied earlier.</h4>
+<img src="/static/tutorial/PolyTrackerTutorial4.png" alt="Inputting your name and ID">
+<p>
+<h4>Lastly, send the command. You should get feedback like this:</h4>
+<img src="/static/tutorial/PolyTrackerTutorial5.png" alt="Feedback after adding the user">
+<p>
 	<br>
-	<h2>2. Copy your User ID</h2>
-	<h4>Go to "Profile", then click on the profile you want to add, then copy the code in the bottom left corner.</h4>
-	<img src="/static/tutorial/PolyTrackerTutorial2.png" alt="Finding the User ID"><br>
-	<br>
-	<h2>3. Register your user</h2>
-	<h4>Go to Discord and type the command "/assign", then choose the correct option.</h4>
-	<img src="/static/tutorial/PolyTrackerTutorial3.png" alt="Finding the right command"><p>
-	<h4>For "user" input your preferred username (does not have to match your in-game name), for "id" paste the User ID you copied earlier.</h4>
-	<img src="/static/tutorial/PolyTrackerTutorial4.png" alt="Inputting your name and ID"><p>
-	<h4>Lastly, send the command. You should get feedback like this:</h4>
-	<img src="/static/tutorial/PolyTrackerTutorial5.png" alt="Feedback after adding the user"><p>
-	<br>
-	<h2>4. Use the bot as you please</h2>
-	You should now be able to use a majority of the bot's commands.<br>
-	If you encounter any issues, just message this bot's creator (@ireozar on Discord).
-	<br>
-    <footer>
-        <a href="/policy">Privacy Policy</a>
-    </footer>
-</body>
-</html>
+<h2>4. Use the bot as you please</h2>
+You should now be able to use a majority of the bot's commands.<br>
+If you encounter any issues, just message this bot's creator (@ireozar on Discord).
+<br>
+{% endblock content %}

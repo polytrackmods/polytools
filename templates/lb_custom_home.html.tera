@@ -1,25 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta name="robots" content="noindex, nofollow">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Custom Track Leaderboards</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="manifest" href="/static/site.webmanifest">
-</head>
-<body>
-    <h1>Custom Track Leaderboards</h1>
-    <div class="poly-button-container">
-        {% for track in tracks %}
-            <a href="/lb-custom/{{ track }}" class="poly-button">{{ track }}</a>
-        {% endfor %}
-    </div>
-    <footer>
-        <a href="/policy">Privacy Policy</a>
-    </footer>
-</body>
-</html>
-
+{% block title %}Custom Track Leaderboards{% endblock title %}
+{% block content %}
+<h1>Custom Track Leaderboards</h1>
+<div class="button-container">
+    {% for track in tracks %}
+    <a href="/lb-custom/{{ track }}"><button class="button">{{ track }}</button></a>
+    {% endfor %}
+</div>
+{% endblock content %}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta name="robots" content="noindex, nofollow">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{% block title %}{% endblock title %}</title>
+	<link rel="stylesheet" href="/static/style.css">
+	<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+	<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+	<link rel="manifest" href="/static/site.webmanifest">
+	{% block style %}{% endblock style %}
+</head>
+
+<body>
+	{% block content %}{% endblock content %}
+	<footer>
+		<a href="/policy">Privacy Policy</a>
+	</footer>
+</body>
+
+</html>
