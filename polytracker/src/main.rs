@@ -598,14 +598,20 @@ async fn request(
                 ctx.say("Not an official track!").await?;
                 return Ok(());
             }
-            let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
+            let track_ids: Vec<(String, String)> = fs::read_to_string(TRACK_FILE)
                 .await?
                 .lines()
-                .map(|s| s.to_string())
+                .map(|s| {
+                    let mut parts = s.splitn(2, " ");
+                    (
+                        parts.next().unwrap().to_string(),
+                        parts.next().unwrap().to_string(),
+                    )
+                })
                 .collect();
             let track_id = track_ids.get(track.parse::<usize>().unwrap() - 1).unwrap();
             url = format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
-            track_id,
+            track_id.0,
             id);
         } else {
             url = format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
