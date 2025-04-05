@@ -66,7 +66,6 @@ async fn main() {
                 compare(),
                 update_rankings(),
                 rankings(),
-                hof_rankings(),
                 policy(),
             ],
             prefix_options: PrefixFrameworkOptions {
@@ -1061,7 +1060,7 @@ async fn update_rankings(
 #[poise::command(slash_command, prefix_command, category = "Query")]
 async fn rankings(
     ctx: Context<'_>,
-    #[description = "Beta version"] beta: Option<bool>,
+    #[description = "Leaderboard"] lb: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -1069,80 +1068,51 @@ async fn rankings(
     } else {
         ctx.defer().await?;
     }
-    let beta = beta.unwrap_or(false);
-    if fs::try_exists(if beta {
-        BETA_RANKINGS_FILE
-    } else {
-        RANKINGS_FILE
-    })
-    .await?
-    {
-        let age = fs::metadata(if beta {
-            BETA_RANKINGS_FILE
-        } else {
-            RANKINGS_FILE
-        })
-        .await?
-        .modified()?
-        .elapsed()?;
+    let lb = lb.unwrap_or(LeaderboardChoice::Global);
+    let rankings_file = {
+        use LeaderboardChoice::*;
+        match lb {
+            Global => RANKINGS_FILE,
+            Beta => BETA_RANKINGS_FILE,
+            Community => COMMUNITY_RANKINGS_FILE,
+            Hof => HOF_RANKINGS_FILE,
+        }
+    };
+    if fs::try_exists(rankings_file).await? {
+        let age = fs::metadata(rankings_file).await?.modified()?.elapsed()?;
         if age > MAX_RANKINGS_AGE {
-            global_rankings_update(beta).await?;
+            use LeaderboardChoice::*;
+            match lb {
+                Global => global_rankings_update(false).await?,
+                Beta => global_rankings_update(true).await?,
+                Community => community_update().await?,
+                Hof => hof_update().await?,
+            }
         }
     } else {
-        global_rankings_update(beta).await?;
+        use LeaderboardChoice::*;
+        match lb {
+            Global => global_rankings_update(false).await?,
+            Beta => global_rankings_update(true).await?,
+            Community => community_update().await?,
+            Hof => hof_update().await?,
+        }
     }
-    let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
+    let headers: Vec<&str> = vec![
+        "Ranking",
+        {
+            use LeaderboardChoice::*;
+            match lb {
+                Global => "Time",
+                Beta => "Time",
+                Community => "Points",
+                Hof => "Points",
+            }
+        },
+        "Player",
+    ];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-
-    for line in fs::read_to_string(if beta {
-        BETA_RANKINGS_FILE
-    } else {
-        RANKINGS_FILE
-    })
-    .await?
-    .lines()
-    .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
-    {
-        for i in 0..contents.len() {
-            contents
-                .get_mut(i)
-                .unwrap()
-                .push_str(format!("{}\n", line.get(i).unwrap()).as_str());
-        }
-    }
-    let inlines: Vec<bool> = vec![true, true, true];
-    write_embed(
-        &ctx,
-        if beta {
-            "Beta Leaderboard"
-        } else {
-            "Global Leaderboard"
-        }
-        .to_string(),
-        String::new(),
-        headers,
-        contents,
-        inlines,
-    )
-    .await?;
-    Ok(())
-}
-
-/// HOF leaderboard
-#[poise::command(slash_command, prefix_command, category = "Query")]
-async fn hof_rankings(
-    ctx: Context<'_>,
-    #[description = "Hidden"] hidden: Option<bool>,
-) -> Result<(), Error> {
-    if hidden.is_some_and(|x| x) {
-        ctx.defer_ephemeral().await?;
-    } else {
-        ctx.defer().await?;
-    }
-    let headers: Vec<&str> = vec!["Ranking", "Points", "Player"];
-    let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-
-    for line in fs::read_to_string(HOF_RANKINGS_FILE)
+    for line in fs::read_to_string(rankings_file)
         .await?
         .lines()
         .filter(|s| !s.starts_with("<|-|>"))
@@ -1158,7 +1128,16 @@ async fn hof_rankings(
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         &ctx,
-        "HOF Leaderboard".to_string(),
+        {
+            use LeaderboardChoice::*;
+            match lb {
+                Global => "Global Leaderboard",
+                Beta => "Beta Leaderboard",
+                Community => "Community Leaderboard",
+                Hof => "HOF Leaderboard",
+            }
+        }
+        .to_string(),
         String::new(),
         headers,
         contents,
