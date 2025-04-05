@@ -1,3 +1,4 @@
+{% extends "base" %}
 {% block title %}PolyTracker Setup Tutorial{% endblock title %}
 {% block style %}
 <style>

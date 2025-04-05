@@ -1,3 +1,4 @@
+{% extends "base" %}
 {% block title %}Community Track Leaderboard{% endblock title %}
 {% block content %}
 <h1>Community Track Leaderboard</h1>
