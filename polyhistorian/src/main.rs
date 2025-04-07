@@ -9,7 +9,9 @@ use tokio::{
     time::sleep,
 };
 
-use polymanager::{HISTORY_FILE_LOCATION, TRACK_FILE};
+use filenamify::filenamify;
+
+use polymanager::{COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE};
 
 #[derive(Serialize, Deserialize)]
 struct LeaderBoard {
@@ -83,7 +85,17 @@ impl PartialEq for Record {
 
 impl PartialOrd for Record {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.frames.cmp(&other.frames))
+        if other.frames == 0 {
+            if self.frames == 0 {
+                Some(Ordering::Equal)
+            } else {
+                Some(Ordering::Less)
+            }
+        } else if self.frames == 0 {
+            Some(Ordering::Greater)
+        } else {
+            Some(self.frames.cmp(&other.frames))
+        }
     }
 }
 
@@ -108,13 +120,25 @@ async fn main() {
     let track_ids = fs::read_to_string(TRACK_FILE)
         .await
         .expect("Couldn't read from track file");
-    let tracks: Vec<(&str, &str)> = track_ids
+    let mut tracks: Vec<(&str, &str)> = track_ids
         .lines()
         .map(|l| {
             let mut parts = l.splitn(2, " ");
             (parts.next().unwrap(), parts.next().unwrap())
         })
         .collect();
+    let track_ids = fs::read_to_string(COMMUNITY_TRACK_FILE)
+        .await
+        .expect("Couldn't read from track file");
+    tracks.append(
+        &mut track_ids
+            .lines()
+            .map(|l| {
+                let mut parts = l.splitn(2, " ");
+                (parts.next().unwrap(), parts.next().unwrap())
+            })
+            .collect(),
+    );
     let mut prior_records: HashMap<&str, FileRecord> = HashMap::new();
     if !fs::try_exists(HISTORY_FILE_LOCATION).await.unwrap_or(false) {
         fs::create_dir(HISTORY_FILE_LOCATION)
@@ -122,7 +146,11 @@ async fn main() {
             .expect("Couldn't create directory");
     }
     for (_, name) in tracks.clone() {
-        let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, name);
+        let path = format!(
+            "{}HISTORY_{}.txt",
+            HISTORY_FILE_LOCATION,
+            filenamify(name)
+        );
         if !fs::try_exists(path.clone()).await.unwrap_or(false) {
             fs::write(path, "").await.expect("Couldn't create file");
             prior_records.insert(name, FileRecord::new());
@@ -151,7 +179,7 @@ async fn main() {
                 serde_json::from_str(&response).expect("Error deserializing request body");
             if let Some(new_record) = new_lb.entries.first() {
                 if *new_record < prior_records.get(name).unwrap().clone().to_record() {
-                    let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, name);
+                    let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
                     let mut file = OpenOptions::new()
                         .write(true)
                         .append(true)
