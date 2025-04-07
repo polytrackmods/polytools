@@ -81,7 +81,9 @@ pub async fn global_rankings_update() -> Result<(), Error> {
     for result in results {
         let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
         for res in result {
-            leaderboard.append(&mut serde_json::from_str::<LeaderBoard>(&res)?.entries);
+            if !res.is_empty() {
+                leaderboard.append(&mut serde_json::from_str::<LeaderBoard>(&res)?.entries);
+            }
         }
         leaderboards.push(leaderboard);
     }
@@ -180,9 +182,11 @@ pub async fn hof_update() -> Result<(), Error> {
         .collect();
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
     for result in results {
-        let leaderboard: Vec<LeaderBoardEntry> =
-            serde_json::from_str::<LeaderBoard>(&result)?.entries;
-        leaderboards.push(leaderboard);
+        if !result.is_empty() {
+            let leaderboard: Vec<LeaderBoardEntry> =
+                serde_json::from_str::<LeaderBoard>(&result)?.entries;
+            leaderboards.push(leaderboard);
+        }
     }
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(HOF_BLACKLIST_FILE)
@@ -306,7 +310,8 @@ pub async fn community_update() -> Result<(), Error> {
         let mut urls = Vec::new();
         for i in 0..COMMUNITY_LB_SIZE {
             let url = format!(
-                "https://vps.kodub.com:43274/leaderboard?version={}&trackId={}&skip={}&amount=500",
+                "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
+                43273,
                 VERSION,
                 track_id.split(" ").next().unwrap(),
                 i * 500,
@@ -340,9 +345,11 @@ pub async fn community_update() -> Result<(), Error> {
     for result in results {
         let mut leaderboard = Vec::new();
         for result_part in result {
-            let mut leaderboard_part: Vec<LeaderBoardEntry> =
-                serde_json::from_str::<LeaderBoard>(&result_part)?.entries;
-            leaderboard.append(&mut leaderboard_part);
+            if !result_part.is_empty() {
+                let mut leaderboard_part: Vec<LeaderBoardEntry> =
+                    serde_json::from_str::<LeaderBoard>(&result_part)?.entries;
+                leaderboard.append(&mut leaderboard_part);
+            }
         }
         leaderboards.push(leaderboard);
     }
