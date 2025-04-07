@@ -18,5 +18,8 @@
 	<a href="lb-custom"><button class="button">
 			Custom Tracks
 		</button></a>
+	<a href="history"><button class="button">
+			History
+		</button></a>
 </div>
 {% endblock content %}
