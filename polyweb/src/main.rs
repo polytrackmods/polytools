@@ -1,9 +1,8 @@
 #[macro_use]
 extern crate rocket;
 use polymanager::{
-    community_update, global_rankings_update, hof_update, ALT_ACCOUNT_FILE, BETA_RANKINGS_FILE,
-    BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE,
-    TRACK_FILE,
+    community_update, global_rankings_update, hof_update, ALT_ACCOUNT_FILE, BLACKLIST_FILE,
+    COMMUNITY_RANKINGS_FILE, CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
@@ -48,12 +47,6 @@ async fn index() -> Template {
 #[get("/global")]
 async fn global() -> Template {
     let leaderboard = parse_leaderboard(RANKINGS_FILE).await;
-    Template::render("leaderboard", context! { leaderboard })
-}
-
-#[get("/beta")]
-async fn beta() -> Template {
-    let leaderboard = parse_leaderboard(BETA_RANKINGS_FILE).await;
     Template::render("leaderboard", context! { leaderboard })
 }
 
@@ -131,7 +124,6 @@ async fn main() -> Result<(), rocket::Error> {
                 index,
                 global,
                 hof,
-                beta,
                 community,
                 tutorial,
                 standard_lb_home,
@@ -153,7 +145,7 @@ async fn main() -> Result<(), rocket::Error> {
                 .await
                 .unwrap_or_else(|_| println!("Failed update"));
             sleep(AUTOUPDATE_TIMER / 3).await;
-            global_rankings_update(false)
+            global_rankings_update()
                 .await
                 .unwrap_or_else(|_| println!("Failed update"));
             sleep(AUTOUPDATE_TIMER / 3).await;

@@ -1,0 +1,7 @@
+ALTER TABLE users RENAME TO beta_users;
+CREATE TABLE users (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR NOT NULL,
+    game_id VARCHAR(64) NOT NULL,
+    discord VARCHAR
+);

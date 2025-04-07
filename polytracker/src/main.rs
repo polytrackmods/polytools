@@ -8,12 +8,13 @@ use poise::{
 };
 use polymanager::community_update;
 use polymanager::db::establish_connection;
-use polymanager::db::{Admin, BetaUser, NewBetaUser, NewUser, User};
+use polymanager::db::{Admin, NewUser, User};
 use polymanager::global_rankings_update;
 use polymanager::hof_update;
+use polymanager::VERSION;
 use polymanager::{
-    ALT_ACCOUNT_FILE, BETA_RANKINGS_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE,
-    HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
+    ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, HOF_ALT_ACCOUNT_FILE,
+    HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -28,11 +29,8 @@ use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, time::Duration};
 use tokio::{fs, task};
 
-const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
-const BETA_VERSION: &str = "0.5.0-beta5";
-const VERSION: &str = "0.4.2";
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, BotData, Error>;
@@ -46,7 +44,6 @@ async fn main() {
 
     let bot_data = BotData {
         user_ids: Mutex::new(HashMap::new()),
-        beta_user_ids: Mutex::new(HashMap::new()),
         admins: Mutex::new(HashMap::new()),
         conn,
     };
@@ -201,7 +198,6 @@ impl ChoiceParameter for EditModalChoice {
 // the bot's shared data
 struct BotData {
     user_ids: Mutex<HashMap<String, String>>,
-    beta_user_ids: Mutex<HashMap<String, String>>,
     admins: Mutex<HashMap<String, u32>>,
     conn: Mutex<SqliteConnection>,
 }
@@ -209,7 +205,6 @@ struct BotData {
 impl BotData {
     pub async fn load(&self) {
         use polymanager::schema::admins::dsl::*;
-        use polymanager::schema::beta_users::dsl::*;
         use polymanager::schema::users::dsl::*;
         let connection = &mut *self.conn.lock().unwrap();
         let results = users
@@ -221,17 +216,6 @@ impl BotData {
         for user in results {
             user_ids.insert(user.name, user.game_id);
         }
-        // beta (temporary)
-        let results = beta_users
-            .select(BetaUser::as_select())
-            .load(connection)
-            .expect("Error loading users");
-        let mut beta_user_ids = self.beta_user_ids.lock().unwrap();
-        beta_user_ids.clear();
-        for beta_user in results {
-            beta_user_ids.insert(beta_user.name, beta_user.game_id);
-        }
-        // end of beta
         let results = admins
             .select(Admin::as_select())
             .load(connection)
@@ -256,22 +240,6 @@ impl BotData {
             .get_result(connection)
             .expect("Error saving new user");
     }
-    // beta (temporary)
-    pub async fn beta_add(&self, name: &str, game_id: &str) {
-        use polymanager::schema::beta_users;
-        let connection = &mut *self.conn.lock().unwrap();
-        let new_beta_user = NewBetaUser {
-            name,
-            game_id,
-            discord: None,
-        };
-        diesel::insert_into(beta_users::table)
-            .values(&new_beta_user)
-            .returning(BetaUser::as_returning())
-            .get_result(connection)
-            .expect("Error saving new user");
-    }
-    // end of beta
     pub async fn delete(&self, delete_name: &str) {
         use polymanager::schema::users::dsl::*;
         let connection = &mut *self.conn.lock().unwrap();
@@ -279,22 +247,12 @@ impl BotData {
             .execute(connection)
             .expect("Error deleting user");
     }
-    // beta (temporary)
-    pub async fn beta_delete(&self, delete_name: &str) {
-        use polymanager::schema::beta_users::dsl::*;
-        let connection = &mut *self.conn.lock().unwrap();
-        diesel::delete(beta_users.filter(name.eq(delete_name)))
-            .execute(connection)
-            .expect("Error deleting user");
-    }
-    // end of beta
 }
 
 // argument enum for leaderboard related commands
 #[derive(Clone)]
 enum LeaderboardChoice {
     Global,
-    Beta,
     Community,
     Hof,
 }
@@ -302,7 +260,7 @@ enum LeaderboardChoice {
 impl ChoiceParameter for LeaderboardChoice {
     fn list() -> Vec<CommandParameterChoice> {
         use LeaderboardChoice::*;
-        [Global, Beta, Community, Hof]
+        [Global, Community, Hof]
             .iter()
             .map(|c| CommandParameterChoice {
                 name: c.name().to_string(),
@@ -315,14 +273,13 @@ impl ChoiceParameter for LeaderboardChoice {
         use LeaderboardChoice::*;
         match self {
             Global => "Global",
-            Beta => "Beta",
             Community => "Community",
             Hof => "HOF",
         }
     }
     fn from_index(index: usize) -> Option<Self> {
         use LeaderboardChoice::*;
-        [Global, Beta, Community, Hof].get(index).cloned()
+        [Global, Community, Hof].get(index).cloned()
     }
     fn localized_name(&self, _: &str) -> Option<&'static str> {
         Some(self.name())
@@ -331,7 +288,6 @@ impl ChoiceParameter for LeaderboardChoice {
         use LeaderboardChoice::*;
         match name.to_lowercase().as_str() {
             "global" => Some(Global),
-            "beta" => Some(Beta),
             "community" => Some(Community),
             "hof" => Some(Hof),
             _ => None,
@@ -467,19 +423,13 @@ async fn assign(
     ctx: Context<'_>,
     #[description = "Username"] user: String,
     #[description = "Player ID"] id: String,
-    #[description = "Beta version"] beta: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let beta = beta.unwrap_or(false);
     let mut user_id = id;
     if user_id.starts_with("User ID: ") {
         user_id = user_id.trim_start_matches("User ID: ").to_string();
     }
-    if if beta {
-        ctx.data().beta_user_ids.lock().unwrap().contains_key(&user)
-    } else {
-        ctx.data().user_ids.lock().unwrap().contains_key(&user)
-    } {
+    if ctx.data().user_ids.lock().unwrap().contains_key(&user) {
         let response = format!(
             "`User '{}' is already assigned an ID, to reassign please contact this bot's owner`",
             user
@@ -488,21 +438,12 @@ async fn assign(
         return Ok(());
     }
     let response = format!("`Added user '{}' with ID '{}'`", user, user_id);
-    if beta {
-        ctx.data()
-            .beta_user_ids
-            .lock()
-            .unwrap()
-            .insert(user.clone(), user_id.clone());
-        ctx.data().beta_add(user.as_str(), user_id.as_str()).await;
-    } else {
-        ctx.data()
-            .user_ids
-            .lock()
-            .unwrap()
-            .insert(user.clone(), user_id.clone());
-        ctx.data().add(user.as_str(), user_id.as_str()).await;
-    }
+    ctx.data()
+        .user_ids
+        .lock()
+        .unwrap()
+        .insert(user.clone(), user_id.clone());
+    ctx.data().add(user.as_str(), user_id.as_str()).await;
     write(&ctx, response).await?;
     Ok(())
 }
@@ -515,8 +456,7 @@ async fn delete(
     ctx: Context<'_>,
     #[description = "Username"]
     #[autocomplete = "autocomplete_users"]
-    mut user: String,
-    #[description = "Beta version"] beta: Option<bool>,
+    user: String,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let (is_admin, is_admin_msg) = is_admin(&ctx, 1).await;
@@ -524,38 +464,12 @@ async fn delete(
         write(&ctx, is_admin_msg).await?;
         return Ok(());
     }
-    let beta = beta.unwrap_or(false);
-    if beta {
-        user = user.trim_end_matches(" (BETA)").to_string();
-    }
     let bot_data = ctx.data();
     let response;
-    if if beta {
-        bot_data.beta_user_ids.lock().unwrap().contains_key(&user)
-    } else {
-        bot_data.user_ids.lock().unwrap().contains_key(&user)
-    } {
-        let id = if beta {
-            bot_data
-                .beta_user_ids
-                .lock()
-                .unwrap()
-                .remove(&user)
-                .unwrap()
-        } else {
-            bot_data.user_ids.lock().unwrap().remove(&user).unwrap()
-        };
-        if beta {
-            ctx.data().beta_delete(user.as_str()).await;
-        } else {
-            ctx.data().delete(user.as_str()).await;
-        }
-        response = format!(
-            "`Removed user '{}' with ID '{}'{}`",
-            user,
-            id,
-            if beta { " from beta users" } else { "" }
-        );
+    if bot_data.user_ids.lock().unwrap().contains_key(&user) {
+        let id = bot_data.user_ids.lock().unwrap().remove(&user).unwrap();
+        ctx.data().delete(user.as_str()).await;
+        response = format!("`Removed user '{}' with ID '{}'`", user, id,);
     } else {
         response = "`User not found!`".to_string();
     }
@@ -610,11 +524,11 @@ async fn request(
                 })
                 .collect();
             let track_id = track_ids.get(track.parse::<usize>().unwrap() - 1).unwrap();
-            url = format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
+            url = format!("https://vps.kodub.com:43273/leaderboard?version=0.5.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
             track_id.0,
             id);
         } else {
-            url = format!("https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
+            url = format!("https://vps.kodub.com:43273/leaderboard?version=0.5.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
             track,
             id);
         }
@@ -692,8 +606,7 @@ async fn list(
     ctx: Context<'_>,
     #[description = "User"]
     #[autocomplete = "autocomplete_users"]
-    mut user: String,
-    #[description = "Beta version"] beta: Option<bool>,
+    user: String,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -701,16 +614,8 @@ async fn list(
     } else {
         ctx.defer().await?;
     }
-    let beta = beta.unwrap_or(false);
-    if beta {
-        user = user.trim_end_matches(" (BETA)").to_string();
-    }
     let mut id = String::new();
-    if beta {
-        if let Some(id_test) = ctx.data().beta_user_ids.lock().unwrap().get(&user) {
-            id = id_test.clone();
-        }
-    } else if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
+    if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
         id = id_test.clone();
     }
     if !id.is_empty() {
@@ -718,23 +623,22 @@ async fn list(
         let mut line_num: u32 = 0;
         let mut total_time = 0.0;
         let mut display_total = true;
-        let track_ids: Vec<(String, String)> =
-            fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
-                .await?
-                .lines()
-                .map(|s| {
-                    let mut parts = s.splitn(2, " ");
-                    (
-                        parts.next().unwrap().to_string(),
-                        parts.next().unwrap().to_string(),
-                    )
-                })
-                .collect();
+        let track_ids: Vec<(String, String)> = fs::read_to_string(TRACK_FILE)
+            .await?
+            .lines()
+            .map(|s| {
+                let mut parts = s.splitn(2, " ");
+                (
+                    parts.next().unwrap().to_string(),
+                    parts.next().unwrap().to_string(),
+                )
+            })
+            .collect();
         let futures = track_ids.clone().into_iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
             let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
-            if beta {43274} else {43273},
-            if beta {BETA_VERSION} else {VERSION},
+            43273,
+            VERSION,
             track_id.0,
             id);
             task::spawn(
@@ -768,16 +672,7 @@ async fn list(
                             if i == position {
                                 break;
                             }
-                            if beta {
-                                if let Some(VerifiedState::U8(verified_state)) =
-                                    entry.verified_state
-                                {
-                                    if !found.contains(&entry.name) && verified_state == 1 {
-                                        found.push(entry.name);
-                                    }
-                                }
-                            } else if let Some(VerifiedState::Bool(verified_state)) =
-                                entry.verified_state
+                            if let Some(VerifiedState::Bool(verified_state)) = entry.verified_state
                             {
                                 if !found.contains(&entry.name) && verified_state {
                                     found.push(entry.name);
@@ -827,19 +722,7 @@ async fn list(
             headers.push("Total");
             inlines.push(false);
         }
-        write_embed(
-            &ctx,
-            if beta {
-                format!("{} (Beta)", user)
-            } else {
-                user
-            },
-            String::new(),
-            headers,
-            contents,
-            inlines,
-        )
-        .await?;
+        write_embed(&ctx, user, String::new(), headers, contents, inlines).await?;
     } else {
         write(&ctx, "`User ID not found`".to_string()).await?;
     }
@@ -852,11 +735,10 @@ async fn compare(
     ctx: Context<'_>,
     #[description = "User 1"]
     #[autocomplete = "autocomplete_users"]
-    mut user1: String,
+    user1: String,
     #[description = "User 2"]
     #[autocomplete = "autocomplete_users"]
-    mut user2: String,
-    #[description = "Beta version"] beta: Option<bool>,
+    user2: String,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -864,32 +746,22 @@ async fn compare(
     } else {
         ctx.defer().await?;
     }
-    let beta = beta.unwrap_or(false);
-    if beta {
-        user1 = user1.trim_end_matches(" (BETA)").to_string();
-        user2 = user2.trim_end_matches(" (BETA)").to_string();
-    }
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
-    let track_ids: Vec<(String, String)> =
-        fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
-            .await?
-            .lines()
-            .map(|s| {
-                let mut parts = s.splitn(2, " ");
-                (
-                    parts.next().unwrap().to_string(),
-                    parts.next().unwrap().to_string(),
-                )
-            })
-            .collect();
+    let track_ids: Vec<(String, String)> = fs::read_to_string(TRACK_FILE)
+        .await?
+        .lines()
+        .map(|s| {
+            let mut parts = s.splitn(2, " ");
+            (
+                parts.next().unwrap().to_string(),
+                parts.next().unwrap().to_string(),
+            )
+        })
+        .collect();
     for user in [user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
         let mut id = String::new();
-        if beta {
-            if let Some(id_test) = ctx.data().beta_user_ids.lock().unwrap().get(&user) {
-                id = id_test.clone();
-            }
-        } else if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
+        if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
             id = id_test.clone();
         }
         if !id.is_empty() {
@@ -899,8 +771,8 @@ async fn compare(
             let futures = track_ids.clone().into_iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
             let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
-            if beta {43274} else {43273},
-            if beta {BETA_VERSION} else {VERSION},
+            43273,
+            VERSION,
             track_id.0,
             id);
             task::spawn(
@@ -1024,8 +896,7 @@ async fn update_rankings(
     }
     use LeaderboardChoice::*;
     match leaderboard {
-        Global => global_rankings_update(false).await,
-        Beta => global_rankings_update(true).await,
+        Global => global_rankings_update().await,
         Community => community_update().await,
         Hof => hof_update().await,
     }?;
@@ -1033,7 +904,6 @@ async fn update_rankings(
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
     for line in fs::read_to_string(match leaderboard {
         Global => RANKINGS_FILE,
-        Beta => BETA_RANKINGS_FILE,
         Community => COMMUNITY_RANKINGS_FILE,
         Hof => HOF_RANKINGS_FILE,
     })
@@ -1079,7 +949,6 @@ async fn rankings(
         use LeaderboardChoice::*;
         match lb {
             Global => RANKINGS_FILE,
-            Beta => BETA_RANKINGS_FILE,
             Community => COMMUNITY_RANKINGS_FILE,
             Hof => HOF_RANKINGS_FILE,
         }
@@ -1089,8 +958,7 @@ async fn rankings(
         if age > MAX_RANKINGS_AGE {
             use LeaderboardChoice::*;
             match lb {
-                Global => global_rankings_update(false).await?,
-                Beta => global_rankings_update(true).await?,
+                Global => global_rankings_update().await?,
                 Community => community_update().await?,
                 Hof => hof_update().await?,
             }
@@ -1098,8 +966,7 @@ async fn rankings(
     } else {
         use LeaderboardChoice::*;
         match lb {
-            Global => global_rankings_update(false).await?,
-            Beta => global_rankings_update(true).await?,
+            Global => global_rankings_update().await?,
             Community => community_update().await?,
             Hof => hof_update().await?,
         }
@@ -1110,7 +977,6 @@ async fn rankings(
             use LeaderboardChoice::*;
             match lb {
                 Global => "Time",
-                Beta => "Time",
                 Community => "Points",
                 Hof => "Points",
             }
@@ -1138,7 +1004,6 @@ async fn rankings(
             use LeaderboardChoice::*;
             match lb {
                 Global => "Global Leaderboard",
-                Beta => "Beta Leaderboard",
                 Community => "Community Leaderboard",
                 Hof => "HOF Leaderboard",
             }
@@ -1184,21 +1049,11 @@ async fn edit_lists(
 
 /// Lists currently registered users and their IDs
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
-async fn users(
-    ctx: Context<'_>,
-    #[description = "Beta version"] beta: Option<bool>,
-) -> Result<(), Error> {
-    let beta = beta.unwrap_or(false);
+async fn users(ctx: Context<'_>) -> Result<(), Error> {
     let bot_data = ctx.data();
     let mut users = String::new();
-    if beta {
-        for (user, id) in bot_data.beta_user_ids.lock().unwrap().iter() {
-            users.push_str(format!("{}: {}\n", user, id).as_str());
-        }
-    } else {
-        for (user, id) in bot_data.user_ids.lock().unwrap().iter() {
-            users.push_str(format!("{}: {}\n", user, id).as_str());
-        }
+    for (user, id) in bot_data.user_ids.lock().unwrap().iter() {
+        users.push_str(format!("{}: {}\n", user, id).as_str());
     }
     write(&ctx, format!("```{}```", users)).await?;
     Ok(())
@@ -1206,27 +1061,22 @@ async fn users(
 
 /// Displays player numbers
 #[poise::command(slash_command, prefix_command, category = "Info")]
-async fn players(
-    ctx: Context<'_>,
-    #[description = "Beta version"] beta: Option<bool>,
-) -> Result<(), Error> {
-    let beta = beta.unwrap_or(false);
-    let track_ids: Vec<(String, String)> =
-        fs::read_to_string(if beta { BETA_TRACK_FILE } else { TRACK_FILE })
-            .await
-            .unwrap()
-            .lines()
-            .map(|s| {
-                let mut parts = s.splitn(2, " ").map(|s| s.to_string());
-                (parts.next().unwrap(), parts.next().unwrap())
-            })
-            .collect();
+async fn players(ctx: Context<'_>) -> Result<(), Error> {
+    let track_ids: Vec<(String, String)> = fs::read_to_string(TRACK_FILE)
+        .await
+        .unwrap()
+        .lines()
+        .map(|s| {
+            let mut parts = s.splitn(2, " ").map(|s| s.to_string());
+            (parts.next().unwrap(), parts.next().unwrap())
+        })
+        .collect();
     let mut contents = vec![String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
         let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false",
-            if beta {43274} else {43273},
-            if beta {BETA_VERSION} else {VERSION},
+            43273,
+            VERSION,
             id);
         let number =
             serde_json::from_str::<LeaderBoard>(&client.get(&url).send().await?.text().await?)?
@@ -1296,7 +1146,7 @@ async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
 
 // autocompletion function for registered users
 async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
-    let mut user_ids: Vec<String> = ctx
+    let user_ids: Vec<String> = ctx
         .data()
         .user_ids
         .lock()
@@ -1304,17 +1154,6 @@ async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
         .keys()
         .cloned()
         .collect();
-    user_ids.append(
-        &mut ctx
-            .data()
-            .beta_user_ids
-            .lock()
-            .unwrap()
-            .keys()
-            .cloned()
-            .map(|k| format!("{} (BETA)", k))
-            .collect(),
-    );
     let user_ids = user_ids.into_iter();
     if user_ids.clone().filter(|k| k.starts_with(partial)).count() > 0 {
         user_ids.filter(|k| k.starts_with(partial)).collect()
