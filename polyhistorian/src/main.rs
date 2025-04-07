@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{cmp::Ordering, collections::HashMap, time::Duration};
 
 use chrono::{DateTime, Utc};
 use reqwest::Client;
@@ -81,6 +81,12 @@ impl PartialEq for Record {
     }
 }
 
+impl PartialOrd for Record {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.frames.cmp(&other.frames))
+    }
+}
+
 impl Record {
     fn to_file(&self) -> FileRecord {
         let now = Utc::now();
@@ -144,7 +150,7 @@ async fn main() {
             let new_lb: LeaderBoard =
                 serde_json::from_str(&response).expect("Error deserializing request body");
             if let Some(new_record) = new_lb.entries.first() {
-                if *new_record != prior_records.get(name).unwrap().clone().to_record() {
+                if *new_record < prior_records.get(name).unwrap().clone().to_record() {
                     let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, name);
                     let mut file = OpenOptions::new()
                         .write(true)
