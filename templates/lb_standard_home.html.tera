@@ -3,8 +3,8 @@
 {% block content %}
 <h1>Standard Track Leaderboards</h1>
 <div class="button-container">
-    {% for num in numbers %}
-    <a href="/lb-standard/{{ num }}"><button class="button">Track {{ num }}</button></a>
+    {% for track_name in track_names %}
+    <a href="/lb-standard/{{ track_name }}"><button class="button">{{ track_name }}</button></a>
     {% endfor %}
 </div>
 {% endblock content %}

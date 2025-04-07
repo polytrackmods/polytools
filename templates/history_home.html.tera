@@ -1,0 +1,10 @@
+{% extends "base" %}
+{% block title %}Standard Track Record Histories{% endblock title %}
+{% block content %}
+<h1>Standard Track Record Histories</h1>
+<div class="button-container">
+    {% for track_name in track_names %}
+    <a href="/history/{{ track_name }}"><button class="button">{{ track_name }}</button></a>
+    {% endfor %}
+</div>
+{% endblock content %}

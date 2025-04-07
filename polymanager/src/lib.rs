@@ -23,8 +23,10 @@ pub const COMMUNITY_RANKINGS_FILE: &str = "data/community_rankings.txt";
 const COMMUNITY_LB_SIZE: u32 = 2;
 pub const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 pub const VERSION: &str = "0.5.0";
+pub const HISTORY_FILE_LOCATION: &str = "histories/";
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
+
 #[derive(Deserialize, Serialize)]
 struct LeaderBoardEntry {
     name: String,

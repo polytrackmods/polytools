@@ -10,3 +10,5 @@
 /templates/privacy_policy.html.tera
 
 !*/.keep
+
+/histories/*
