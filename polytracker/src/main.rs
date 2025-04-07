@@ -355,7 +355,8 @@ async fn write_embed(
             .title(title.clone())
             .description(description.clone())
             .fields(fields.clone())
-            .color(Color::BLITZ_BLUE);
+            .color(Color::from_rgb(0, 128, 128))
+            .url("https://polyweb.ireo.xyz");
         let reply = {
             let components = CreateActionRow::Buttons(vec![
                 CreateButton::new(&prev_id).emoji('◀'),
