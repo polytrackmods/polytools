@@ -1967,6 +1967,7 @@ name = "polyweb"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "filenamify",
  "polymanager",
  "reqwest 0.12.15",
  "rocket",

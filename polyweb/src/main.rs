@@ -3,13 +3,14 @@ extern crate rocket;
 
 pub mod parsers;
 
+use filenamify::filenamify;
 use parsers::{
     get_custom_leaderboard, get_standard_leaderboard, parse_community_leaderboard, parse_history,
     parse_hof_leaderboard, parse_leaderboard,
 };
 use polymanager::{
     community_update, global_rankings_update, hof_update, COMMUNITY_RANKINGS_FILE,
-    CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
+    COMMUNITY_TRACK_FILE, CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
 };
 use rocket::form::Context;
 use rocket::fs::FileServer;
@@ -100,12 +101,20 @@ async fn tutorial() -> Template {
 
 #[get("/history")]
 async fn history_home() -> Template {
-    let track_names: Vec<String> = fs::read_to_string(TRACK_FILE)
+    let mut track_names: Vec<String> = fs::read_to_string(TRACK_FILE)
         .await
         .unwrap()
         .lines()
         .map(|s| s.split_once(" ").unwrap().1.to_string())
         .collect();
+    track_names.append(
+        &mut fs::read_to_string(COMMUNITY_TRACK_FILE)
+            .await
+            .unwrap()
+            .lines()
+            .map(|s| filenamify(s.split_once(" ").unwrap().1))
+            .collect(),
+    );
     Template::render("history_home", context! { track_names })
 }
 
