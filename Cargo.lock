@@ -626,6 +626,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "filenamify"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbc3ee3cc020bf3d428d14f0d9e4d4cb2c72df564d6a8e8b06b472b5c5d00671"
+dependencies = [
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1917,6 +1927,7 @@ name = "polyhistorian"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "filenamify",
  "polymanager",
  "reqwest 0.12.15",
  "serde",
