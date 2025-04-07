@@ -3,5 +3,6 @@ members = [
     "polymanager",
     "polytracker",
     "polyweb",
+    "polyhistorian",
 ]
 resolver = "2"
