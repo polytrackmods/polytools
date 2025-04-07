@@ -6,9 +6,6 @@
 	<a href="global"><button class="button">
 			Global
 		</button></a>
-	<a href="beta"><button class="button">
-			Beta
-		</button></a>
 	<a href="community"><button class="button">
 			Community
 		</button></a>

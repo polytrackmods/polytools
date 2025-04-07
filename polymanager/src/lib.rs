@@ -13,8 +13,6 @@ pub const BLACKLIST_FILE: &str = "data/blacklist.txt";
 pub const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
 pub const RANKINGS_FILE: &str = "data/poly_rankings.txt";
 pub const TRACK_FILE: &str = "lists/official_tracks.txt";
-pub const BETA_RANKINGS_FILE: &str = "data/0.5_poly_rankings.txt";
-const BETA_TRACK_FILE: &str = "lists/0.5_official_tracks.txt";
 pub const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
 pub const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
 pub const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
@@ -24,6 +22,7 @@ pub const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
 pub const COMMUNITY_RANKINGS_FILE: &str = "data/community_rankings.txt";
 const COMMUNITY_LB_SIZE: u32 = 2;
 pub const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
+pub const VERSION: &str = "0.5.0";
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 #[derive(Deserialize, Serialize)]
@@ -37,17 +36,14 @@ struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
 
-pub async fn global_rankings_update(beta: bool) -> Result<(), Error> {
+pub async fn global_rankings_update() -> Result<(), Error> {
     dotenv().ok();
-    let mut lb_size = env::var("LEADERBOARD_SIZE")
+    let lb_size = env::var("LEADERBOARD_SIZE")
         .expect("Expected LEADERBOARD_SIZE in env!")
         .parse()
         .expect("LEADERBOARD_SIZE not a valid integer!");
-    if beta {
-        lb_size = 5;
-    }
     let client = Client::new();
-    let official_tracks_file = if beta { BETA_TRACK_FILE } else { TRACK_FILE };
+    let official_tracks_file = TRACK_FILE;
     let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
         .await?
         .lines()
@@ -60,8 +56,8 @@ pub async fn global_rankings_update(beta: bool) -> Result<(), Error> {
         for i in 0..lb_size {
             urls.push(format!(
                 "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
-                if beta { 43274 } else { 43273 },
-                if beta { "0.5.0-beta5" } else { "0.4.2" },
+                43273,
+                VERSION,
                 track_id,
                 i * 500,
             ));
@@ -152,11 +148,7 @@ pub async fn global_rankings_update(beta: bool) -> Result<(), Error> {
             .as_str(),
         );
     }
-    if beta {
-        fs::write(BETA_RANKINGS_FILE, output.clone()).await?
-    } else {
-        fs::write(RANKINGS_FILE, output.clone()).await?;
-    }
+    fs::write(RANKINGS_FILE, output.clone()).await?;
     Ok(())
 }
 
@@ -171,7 +163,8 @@ pub async fn hof_update() -> Result<(), Error> {
     let futures = track_ids.into_iter().map(|track_id| {
         let client = client.clone();
         let url = format!(
-            "https://vps.kodub.com:43273/leaderboard?version=0.4.0&trackId={}&skip=0&amount=100",
+            "https://vps.kodub.com:43273/leaderboard?version={}&trackId={}&skip=0&amount=100",
+            VERSION,
             track_id.split(" ").next().unwrap()
         );
         task::spawn(async move {
@@ -312,16 +305,27 @@ pub async fn community_update() -> Result<(), Error> {
         let client = client.clone();
         let mut urls = Vec::new();
         for i in 0..COMMUNITY_LB_SIZE {
-        let url = format!(
-            "https://vps.kodub.com:43274/leaderboard?version=0.5.0-beta5&trackId={}&skip={}&amount=500",
-            track_id.split(" ").next().unwrap(), i * 500,
-        );
-        urls.push(url);
+            let url = format!(
+                "https://vps.kodub.com:43274/leaderboard?version={}&trackId={}&skip={}&amount=500",
+                VERSION,
+                track_id.split(" ").next().unwrap(),
+                i * 500,
+            );
+            urls.push(url);
         }
         task::spawn(async move {
             let mut res = Vec::new();
             for i in 0..COMMUNITY_LB_SIZE as usize {
-                res.push(client.get(urls.get(i).unwrap()).send().await.unwrap().text().await.unwrap());
+                res.push(
+                    client
+                        .get(urls.get(i).unwrap())
+                        .send()
+                        .await
+                        .unwrap()
+                        .text()
+                        .await
+                        .unwrap(),
+                );
             }
             Ok::<Vec<String>, reqwest::Error>(res)
         })
