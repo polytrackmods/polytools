@@ -28,6 +28,7 @@ struct FileRecord {
     car_colors: String,
     frames: u32,
     timestamp: String,
+    recording: String,
 }
 impl FileRecord {
     fn new() -> Self {
@@ -38,6 +39,7 @@ impl FileRecord {
             car_colors: String::new(),
             frames: 0,
             timestamp: String::new(),
+            recording: String::new(),
         }
     }
     fn to_record(&self) -> Record {
@@ -100,9 +102,10 @@ impl PartialOrd for Record {
 }
 
 impl Record {
-    fn to_file(&self) -> FileRecord {
+    async fn to_file(&self) -> FileRecord {
         let now = Utc::now();
         let timestamp = now.timestamp().to_string();
+        let recording = self.get_recording().await;
         FileRecord {
             id: self.id,
             user_id: self.user_id.clone(),
@@ -110,8 +113,36 @@ impl Record {
             car_colors: self.car_colors.clone(),
             frames: self.frames,
             timestamp,
+            recording,
         }
     }
+    async fn get_recording(&self) -> String {
+        let client = Client::new();
+        let response = client
+            .get(format!(
+                "https://vps.kodub.com:43273/recordings?version=0.5.0&recordingIds={}",
+                self.id
+            ))
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        let recordings: Vec<Recording> =
+            serde_json::from_str(&response).expect("Failed to read recording");
+        recordings
+            .get(0)
+            .unwrap()
+            .recording
+            .trim_matches('"')
+            .to_string()
+    }
+}
+
+#[derive(Deserialize)]
+struct Recording {
+    recording: String,
 }
 
 #[tokio::main]
@@ -146,11 +177,7 @@ async fn main() {
             .expect("Couldn't create directory");
     }
     for (_, name) in tracks.clone() {
-        let path = format!(
-            "{}HISTORY_{}.txt",
-            HISTORY_FILE_LOCATION,
-            filenamify(name)
-        );
+        let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
         if !fs::try_exists(path.clone()).await.unwrap_or(false) {
             fs::write(path, "").await.expect("Couldn't create file");
             prior_records.insert(name, FileRecord::new());
@@ -186,7 +213,7 @@ async fn main() {
                         .open(path)
                         .await
                         .unwrap();
-                    let new_record = new_record.clone().to_file();
+                    let new_record = new_record.clone().to_file().await;
                     file.write_all(
                         format!("{}\n", serde_json::to_string(&new_record).unwrap()).as_bytes(),
                     )
