@@ -195,6 +195,7 @@ async fn main() {
         }
     }
     loop {
+        println!("Checking records!");
         for (id, name) in tracks.clone() {
             let url = format!(
                 "https://vps.kodub.com:43273/leaderboard?version=0.5.0&skip=0&onlyVerified=true&amount=5&trackId={}",
@@ -231,6 +232,6 @@ async fn main() {
                 }
             }
         }
-        sleep(Duration::from_secs(60 * 10)).await;
+        sleep(Duration::from_secs(60 * 5)).await;
     }
 }
