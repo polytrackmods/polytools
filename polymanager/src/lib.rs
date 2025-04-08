@@ -20,7 +20,7 @@ const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
 pub const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
 pub const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
 pub const COMMUNITY_RANKINGS_FILE: &str = "data/community_rankings.txt";
-const COMMUNITY_LB_SIZE: u32 = 2;
+const COMMUNITY_LB_SIZE: u32 = 20;
 pub const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 pub const VERSION: &str = "0.5.0";
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
@@ -322,17 +322,9 @@ pub async fn community_update() -> Result<(), Error> {
         }
         task::spawn(async move {
             let mut res = Vec::new();
-            for i in 0..COMMUNITY_LB_SIZE as usize {
-                res.push(
-                    client
-                        .get(urls.get(i).unwrap())
-                        .send()
-                        .await
-                        .unwrap()
-                        .text()
-                        .await
-                        .unwrap(),
-                );
+            for url in urls {
+                sleep(Duration::from_millis(500)).await;
+                res.push(client.get(url).send().await.unwrap().text().await.unwrap());
             }
             Ok::<Vec<String>, reqwest::Error>(res)
         })
