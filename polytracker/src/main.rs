@@ -113,7 +113,7 @@ async fn main() {
 struct LeaderBoardEntry {
     name: String,
     frames: f64,
-    verified_state: Option<VerifiedState>,
+    verified_state: u8,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -129,13 +129,6 @@ struct UserEntry {
     position: u32,
     frames: f64,
     id: u64,
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(untagged)]
-enum VerifiedState {
-    Bool(bool),
-    U8(u8),
 }
 
 // used by edit_lists() for the modal
@@ -552,7 +545,7 @@ async fn request(
                                     break;
                                 }
                                 if !found.contains(&entry.name) {
-                                    if let Some(VerifiedState::Bool(true)) = entry.verified_state {
+                                    if entry.verified_state == 1 {
                                         found.push(entry.name);
                                     }
                                 }
@@ -675,11 +668,8 @@ async fn list(
                             if i == position {
                                 break;
                             }
-                            if let Some(VerifiedState::Bool(verified_state)) = entry.verified_state
-                            {
-                                if !found.contains(&entry.name) && verified_state {
-                                    found.push(entry.name);
-                                }
+                            if entry.verified_state == 1 && !found.contains(&entry.name) {
+                                found.push(entry.name);
                             }
                         }
                         let time = frames / 1000.0;
