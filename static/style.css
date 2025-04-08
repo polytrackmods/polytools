@@ -140,3 +140,38 @@ a {
 a:hover {
     color: var(--hover-teal);
 }
+
+.nav-buttons {
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    z-index: 999;
+    background-color: var(--surface-color);
+    padding: 5px 10px;
+    border: 2px solid var(--primary-teal);
+}
+
+.text-field {
+    padding: 12px 24px;
+    margin: 10px;
+    border: 2px solid var(--primary-teal);
+    background-color: var(--surface-tertiary-color);
+    color: var(--text-color);
+    font-family: Arial, sans-serif;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    width: 300px;
+    max-width: 90%;
+}
+
+.text-field:focus {
+    outline: none;
+    border-color: var(--hover-teal);
+    background-color: var(--surface-secondary-color);
+}
+
+.text-field::placeholder {
+    color: var(--text-disabled-color);
+}
