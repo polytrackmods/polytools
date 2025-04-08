@@ -118,25 +118,31 @@ impl Record {
     }
     async fn get_recording(&self) -> String {
         let client = Client::new();
-        let response = client
+        if let Ok(send_result) = client
             .get(format!(
                 "https://vps.kodub.com:43273/recordings?version=0.5.0&recordingIds={}",
                 self.id
             ))
             .send()
             .await
-            .unwrap()
-            .text()
-            .await
-            .unwrap();
-        let recordings: Vec<Recording> =
-            serde_json::from_str(&response).expect("Failed to read recording");
-        recordings
-            .get(0)
-            .unwrap()
-            .recording
-            .trim_matches('"')
-            .to_string()
+        {
+            if let Ok(response) = send_result.text().await {
+                if let Ok(recordings) = serde_json::from_str::<Vec<Recording>>(&response) {
+                    recordings
+                        .first()
+                        .unwrap()
+                        .recording
+                        .trim_matches('"')
+                        .to_string()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
     }
 }
 
@@ -194,33 +200,34 @@ async fn main() {
                 "https://vps.kodub.com:43273/leaderboard?version=0.5.0&skip=0&onlyVerified=true&amount=5&trackId={}",
                 id
             );
-            let response = client
-                .get(&url)
-                .send()
-                .await
-                .expect("Error sending request")
-                .text()
-                .await
-                .unwrap();
-            let new_lb: LeaderBoard =
-                serde_json::from_str(&response).expect("Error deserializing request body");
-            if let Some(new_record) = new_lb.entries.first() {
-                if *new_record < prior_records.get(name).unwrap().clone().to_record() {
-                    let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
-                    let mut file = OpenOptions::new()
-                        .write(true)
-                        .append(true)
-                        .open(path)
-                        .await
-                        .unwrap();
-                    let new_record = new_record.clone().to_file().await;
-                    file.write_all(
-                        format!("{}\n", serde_json::to_string(&new_record).unwrap()).as_bytes(),
-                    )
-                    .await
-                    .expect("Failed writing to file");
-                    new_record.print(name, prior_records.get(name).unwrap().frames);
-                    prior_records.entry(name).and_modify(|r| *r = new_record);
+            if let Ok(send_result) = client.get(&url).send().await {
+                if let Ok(response) = send_result.text().await {
+                    if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response) {
+                        if let Some(new_record) = new_lb.entries.first() {
+                            if *new_record < prior_records.get(name).unwrap().clone().to_record() {
+                                let path = format!(
+                                    "{}HISTORY_{}.txt",
+                                    HISTORY_FILE_LOCATION,
+                                    filenamify(name)
+                                );
+                                let mut file = OpenOptions::new()
+                                    .write(true)
+                                    .append(true)
+                                    .open(path)
+                                    .await
+                                    .unwrap();
+                                let new_record = new_record.clone().to_file().await;
+                                file.write_all(
+                                    format!("{}\n", serde_json::to_string(&new_record).unwrap())
+                                        .as_bytes(),
+                                )
+                                .await
+                                .expect("Failed writing to file");
+                                new_record.print(name, prior_records.get(name).unwrap().frames);
+                                prior_records.entry(name).and_modify(|r| *r = new_record);
+                            }
+                        }
+                    }
                 }
             }
         }
