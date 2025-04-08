@@ -150,13 +150,13 @@ a:hover {
     z-index: 999;
     background-color: var(--surface-color);
     padding: 5px 10px;
-    border: 2px solid var(--primary-teal);
+    border: 1px solid var(--primary-teal);
 }
 
 .text-field {
     padding: 12px 24px;
     margin: 10px;
-    border: 2px solid var(--primary-teal);
+    border: 1px solid var(--primary-teal);
     background-color: var(--surface-tertiary-color);
     color: var(--text-color);
     font-family: Arial, sans-serif;
