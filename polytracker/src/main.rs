@@ -11,6 +11,8 @@ use polymanager::db::establish_connection;
 use polymanager::db::{Admin, NewUser, User};
 use polymanager::global_rankings_update;
 use polymanager::hof_update;
+use polymanager::COMMUNITY_TRACK_FILE;
+use polymanager::HOF_TRACK_FILE;
 use polymanager::VERSION;
 use polymanager::{
     ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, HOF_ALT_ACCOUNT_FILE,
@@ -1062,16 +1064,27 @@ async fn users(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Displays player numbers
 #[poise::command(slash_command, prefix_command, category = "Info")]
-async fn players(ctx: Context<'_>) -> Result<(), Error> {
-    let track_ids: Vec<(String, String)> = fs::read_to_string(TRACK_FILE)
-        .await
-        .unwrap()
-        .lines()
-        .map(|s| {
-            let mut parts = s.splitn(2, " ").map(|s| s.to_string());
-            (parts.next().unwrap(), parts.next().unwrap())
-        })
-        .collect();
+async fn players(
+    ctx: Context<'_>,
+    #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
+) -> Result<(), Error> {
+    let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
+    let track_ids: Vec<(String, String)> = fs::read_to_string({
+        use LeaderboardChoice::*;
+        match tracks {
+            Global => TRACK_FILE,
+            Community => COMMUNITY_TRACK_FILE,
+            Hof => HOF_TRACK_FILE,
+        }
+    })
+    .await
+    .unwrap()
+    .lines()
+    .map(|s| {
+        let mut parts = s.splitn(2, " ").map(|s| s.to_string());
+        (parts.next().unwrap(), parts.next().unwrap())
+    })
+    .collect();
     let mut contents = vec![String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
