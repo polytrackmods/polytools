@@ -3,6 +3,7 @@ pub mod schema;
 
 use std::{collections::HashMap, env, time::Duration};
 
+use chrono::{DateTime, Utc};
 use dotenvy::dotenv;
 use futures::future::join_all;
 use reqwest::Client;
@@ -447,4 +448,13 @@ pub async fn community_update() -> Result<(), Error> {
     }
     fs::write(COMMUNITY_RANKINGS_FILE, output.clone()).await?;
     Ok(())
+}
+
+pub fn get_datetime() -> String {
+    let now = Utc::now();
+    let timestamp = now.timestamp();
+    DateTime::from_timestamp_millis(timestamp)
+        .unwrap()
+        .format("%Y/%m/%d %H:%M:%S")
+        .to_string()
 }
