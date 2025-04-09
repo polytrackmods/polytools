@@ -9,6 +9,7 @@ use poise::{
 use polymanager::community_update;
 use polymanager::db::establish_connection;
 use polymanager::db::{Admin, NewUser, User};
+use polymanager::get_datetime;
 use polymanager::global_rankings_update;
 use polymanager::hof_update;
 use polymanager::COMMUNITY_TRACK_FILE;
@@ -76,18 +77,20 @@ async fn main() {
             pre_command: |ctx| {
                 Box::pin(async move {
                     println!(
-                        "Executing command {} issued by {}...",
+                        "Executing command {} issued by {} at {}",
                         ctx.command().qualified_name,
-                        ctx.author().display_name()
+                        ctx.author().display_name(),
+                        get_datetime()
                     );
                 })
             },
             post_command: |ctx| {
                 Box::pin(async move {
                     println!(
-                        "Executed command {} issued by {}!",
+                        "Executed command {} issued by {} at {}!",
                         ctx.command().qualified_name,
-                        ctx.author().display_name()
+                        ctx.author().display_name(),
+                        get_datetime()
                     );
                 })
             },
@@ -544,10 +547,8 @@ async fn request(
                                 if i == position {
                                     break;
                                 }
-                                if !found.contains(&entry.name) {
-                                    if entry.verified_state == 1 {
-                                        found.push(entry.name);
-                                    }
+                                if !found.contains(&entry.name) && entry.verified_state == 1 {
+                                    found.push(entry.name);
                                 }
                             }
                             let mut time = (frames / 1000.0).to_string();

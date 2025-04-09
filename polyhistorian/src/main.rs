@@ -11,7 +11,7 @@ use tokio::{
 
 use filenamify::filenamify;
 
-use polymanager::{COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE};
+use polymanager::{COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, get_datetime};
 
 #[derive(Serialize, Deserialize)]
 struct LeaderBoard {
@@ -195,7 +195,7 @@ async fn main() {
         }
     }
     loop {
-        println!("Checking records!");
+        println!("Checking records! ({})", get_datetime());
         for (id, name) in tracks.clone() {
             let url = format!(
                 "https://vps.kodub.com:43273/leaderboard?version=0.5.0&skip=0&onlyVerified=true&amount=5&trackId={}",
