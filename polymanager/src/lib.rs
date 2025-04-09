@@ -3,7 +3,7 @@ pub mod schema;
 
 use std::{collections::HashMap, env, time::Duration};
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use dotenvy::dotenv;
 use futures::future::join_all;
 use reqwest::Client;
