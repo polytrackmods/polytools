@@ -452,9 +452,5 @@ pub async fn community_update() -> Result<(), Error> {
 
 pub fn get_datetime() -> String {
     let now = Utc::now();
-    let timestamp = now.timestamp();
-    DateTime::from_timestamp(timestamp, 0)
-        .unwrap()
-        .format("%Y/%m/%d %H:%M:%S")
-        .to_string()
+    now.format("%Y/%m/%d %H:%M:%S").to_string()
 }
