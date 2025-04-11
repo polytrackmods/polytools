@@ -161,7 +161,7 @@ pub async fn write_embed(
             .fields(fields.clone())
             .color(Color::from_rgb(0, 128, 128))
             .url("https://polyweb.ireo.xyz");
-        let reply = {
+        let reply = if pages.get(0).unwrap().len() > 1 {
             let components = CreateActionRow::Buttons(vec![
                 CreateButton::new(&prev_id).emoji('◀'),
                 CreateButton::new(&next_id).emoji('▶'),
@@ -171,47 +171,51 @@ pub async fn write_embed(
             CreateReply::default()
                 .embed(embed)
                 .components(vec![components])
+        } else {
+            CreateReply::default().embed(embed)
         };
         ctx.send(reply.clone()).await?;
-        let mut current_page = 0;
-        while let Some(press) = ComponentInteractionCollector::new(ctx)
-            .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
-            .timeout(MAX_MSG_AGE)
-            .await
-        {
-            if press.data.custom_id == next_id {
-                current_page += 1;
-                if current_page >= pages[0].len() {
+        if pages.get(0).unwrap().len() > 1 {
+            let mut current_page = 0;
+            while let Some(press) = ComponentInteractionCollector::new(ctx)
+                .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+                .timeout(MAX_MSG_AGE)
+                .await
+            {
+                if press.data.custom_id == next_id {
+                    current_page += 1;
+                    if current_page >= pages[0].len() {
+                        current_page = 0;
+                    }
+                } else if press.data.custom_id == prev_id {
+                    current_page = current_page.checked_sub(1).unwrap_or(pages[0].len() - 1);
+                } else if press.data.custom_id == start_id {
                     current_page = 0;
+                } else {
+                    continue;
                 }
-            } else if press.data.custom_id == prev_id {
-                current_page = current_page.checked_sub(1).unwrap_or(pages[0].len() - 1);
-            } else if press.data.custom_id == start_id {
-                current_page = 0;
-            } else {
-                continue;
-            }
-            let fields = headers.clone().into_iter().enumerate().map(|(i, h)| {
-                (
-                    h,
-                    pages.get(i).unwrap().get(current_page).unwrap().clone(),
-                    inlines[i],
-                )
-            });
-            let embed = CreateEmbed::default()
-                .title(&title)
-                .description(&description)
-                .fields(fields)
-                .color(Color::BLITZ_BLUE);
+                let fields = headers.clone().into_iter().enumerate().map(|(i, h)| {
+                    (
+                        h,
+                        pages.get(i).unwrap().get(current_page).unwrap().clone(),
+                        inlines[i],
+                    )
+                });
+                let embed = CreateEmbed::default()
+                    .title(&title)
+                    .description(&description)
+                    .fields(fields)
+                    .color(Color::BLITZ_BLUE);
 
-            press
-                .create_response(
-                    ctx.serenity_context(),
-                    CreateInteractionResponse::UpdateMessage(
-                        CreateInteractionResponseMessage::new().embed(embed),
-                    ),
-                )
-                .await?;
+                press
+                    .create_response(
+                        ctx.serenity_context(),
+                        CreateInteractionResponse::UpdateMessage(
+                            CreateInteractionResponseMessage::new().embed(embed),
+                        ),
+                    )
+                    .await?;
+            }
         }
     } else {
         panic!("Different amounts of columns for write_embed!");
