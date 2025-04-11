@@ -302,6 +302,7 @@ pub async fn list(
     #[description = "User"]
     #[autocomplete = "autocomplete_users"]
     user: String,
+    #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -309,6 +310,15 @@ pub async fn list(
     } else {
         ctx.defer().await?;
     }
+    let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
+    let track_file = {
+        use LeaderboardChoice::*;
+        match tracks {
+            Global => TRACK_FILE,
+            Community => COMMUNITY_TRACK_FILE,
+            Hof => HOF_TRACK_FILE,
+        }
+    };
     let mut id = String::new();
     if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
         id = id_test.clone();
@@ -318,7 +328,7 @@ pub async fn list(
         let mut line_num: u32 = 0;
         let mut total_time = 0.0;
         let mut display_total = true;
-        let track_ids: Vec<(String, String)> = fs::read_to_string(TRACK_FILE)
+        let track_ids: Vec<(String, String)> = fs::read_to_string(track_file)
             .await?
             .lines()
             .map(|s| {
@@ -403,7 +413,7 @@ pub async fn list(
             }
             line_num += 1;
         }
-        if display_total {
+        if display_total && matches!(tracks, LeaderboardChoice::Global) {
             let total_time = (total_time * 1000.0) as u32;
             contents.push(format!(
                 "{:>2}:{:0>2}.{:0>3}",
