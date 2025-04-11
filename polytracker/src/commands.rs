@@ -72,7 +72,7 @@ pub enum EditModalChoice {
 
 impl ChoiceParameter for EditModalChoice {
     fn list() -> Vec<CommandParameterChoice> {
-        let names = vec!["Black List", "Alt List", "HOF Black List", "HOF Alt List"];
+        let names = ["Black List", "Alt List", "HOF Black List", "HOF Alt List"];
         names
             .iter()
             .map(|n| CommandParameterChoice {
@@ -579,7 +579,7 @@ pub async fn compare(
                 .as_str(),
             );
         } else {
-            output.push_str(format!("{}Tracks not done", " ".repeat(1)).as_str());
+            output.push_str(" Tracks not done");
             display_total_diff = false
         }
     }

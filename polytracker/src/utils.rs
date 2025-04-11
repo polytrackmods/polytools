@@ -161,7 +161,7 @@ pub async fn write_embed(
             .fields(fields.clone())
             .color(Color::from_rgb(0, 128, 128))
             .url("https://polyweb.ireo.xyz");
-        let reply = if pages.get(0).unwrap().len() > 1 {
+        let reply = if pages.first().unwrap().len() > 1 {
             let components = CreateActionRow::Buttons(vec![
                 CreateButton::new(&prev_id).emoji('◀'),
                 CreateButton::new(&next_id).emoji('▶'),
@@ -175,7 +175,7 @@ pub async fn write_embed(
             CreateReply::default().embed(embed)
         };
         ctx.send(reply.clone()).await?;
-        if pages.get(0).unwrap().len() > 1 {
+        if pages.first().unwrap().len() > 1 {
             let mut current_page = 0;
             while let Some(press) = ComponentInteractionCollector::new(ctx)
                 .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
