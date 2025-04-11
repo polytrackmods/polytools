@@ -53,7 +53,7 @@ pub async fn global_rankings_update() -> Result<(), Error> {
         .map(|s| s.split(" ").next().unwrap().to_string())
         .collect();
     let track_num = track_ids.len();
-    let futures = track_ids.clone().into_iter().map(|track_id| {
+    let futures = track_ids.iter().map(|track_id| {
         let client = client.clone();
         let mut urls = Vec::new();
         for i in 0..lb_size {
@@ -165,7 +165,7 @@ pub async fn hof_update() -> Result<(), Error> {
         .map(|s| s.to_string())
         .collect();
     let track_num = track_ids.len() as u32;
-    let futures = track_ids.into_iter().map(|track_id| {
+    let futures = track_ids.iter().map(|track_id| {
         let client = client.clone();
         let url = format!(
             "https://vps.kodub.com:43273/leaderboard?version={}&trackId={}&skip=0&amount=100",
@@ -237,18 +237,17 @@ pub async fn hof_update() -> Result<(), Error> {
         }
     }
     let mut sorted_leaderboard: Vec<(String, u32, Vec<u32>)> = player_rankings
-        .clone()
-        .into_iter()
+        .iter()
         .map(|(name, rankings)| {
             let mut tiebreakers = vec![0; point_values.len()];
             let mut points = 0;
             for ranking in rankings {
-                if ranking < point_values.len() {
-                    points += point_values.get(ranking).unwrap();
-                    *tiebreakers.get_mut(ranking).unwrap() += 1;
+                if *ranking < point_values.len() {
+                    points += point_values.get(*ranking).unwrap();
+                    *tiebreakers.get_mut(*ranking).unwrap() += 1;
                 }
             }
-            (name, points, tiebreakers)
+            (name.to_string(), points, tiebreakers)
         })
         .collect();
     sorted_leaderboard.sort_by(|a, b| {
@@ -308,7 +307,7 @@ pub async fn community_update() -> Result<(), Error> {
         .map(|s| s.to_string())
         .collect();
     let track_num = track_ids.len() as u32;
-    let futures = track_ids.into_iter().map(|track_id| {
+    let futures = track_ids.iter().map(|track_id| {
         let client = client.clone();
         let mut urls = Vec::new();
         for i in 0..COMMUNITY_LB_SIZE {
@@ -389,16 +388,15 @@ pub async fn community_update() -> Result<(), Error> {
         }
     }
     let mut sorted_leaderboard: Vec<(String, u32, Vec<u32>)> = player_rankings
-        .clone()
-        .into_iter()
+        .iter()
         .map(|(name, rankings)| {
             let mut tiebreakers = vec![0; COMMUNITY_LB_SIZE as usize * 500];
             let mut points = 0;
             for ranking in rankings {
-                points += (100.0 / (ranking as f64 + 1.0).sqrt()) as u32;
-                *tiebreakers.get_mut(ranking).unwrap_or(&mut 0) += 1;
+                points += (100.0 / (*ranking as f64 + 1.0).sqrt()) as u32;
+                *tiebreakers.get_mut(*ranking).unwrap_or(&mut 0) += 1;
             }
-            (name, points, tiebreakers)
+            (name.to_string(), points, tiebreakers)
         })
         .collect();
     sorted_leaderboard.sort_by(|a, b| {
