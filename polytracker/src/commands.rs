@@ -74,7 +74,7 @@ impl ChoiceParameter for EditModalChoice {
     fn list() -> Vec<CommandParameterChoice> {
         let names = vec!["Black List", "Alt List", "HOF Black List", "HOF Alt List"];
         names
-            .into_iter()
+            .iter()
             .map(|n| CommandParameterChoice {
                 name: n.to_string(),
                 localizations: HashMap::new(),
@@ -339,7 +339,7 @@ pub async fn list(
                 )
             })
             .collect();
-        let futures = track_ids.clone().into_iter().enumerate().map(|(i, track_id)| {
+        let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
             let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
             43273,
@@ -479,7 +479,7 @@ pub async fn compare(
             let client = Client::new();
             let mut total_time = 0.0;
             let mut display_total = true;
-            let futures = track_ids.clone().into_iter().enumerate().map(|(i, track_id)| {
+            let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
             let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
             43273,

@@ -148,9 +148,9 @@ pub async fn write_embed(
                     .collect(),
             );
         }
-        let fields = headers.clone().into_iter().enumerate().map(|(i, h)| {
+        let fields = headers.iter().enumerate().map(|(i, h)| {
             (
-                h,
+                h.to_string(),
                 pages.get(i).unwrap().first().unwrap().clone(),
                 inlines[i],
             )
@@ -194,9 +194,9 @@ pub async fn write_embed(
                 } else {
                     continue;
                 }
-                let fields = headers.clone().into_iter().enumerate().map(|(i, h)| {
+                let fields = headers.iter().enumerate().map(|(i, h)| {
                     (
-                        h,
+                        h.to_string(),
                         pages.get(i).unwrap().get(current_page).unwrap().clone(),
                         inlines[i],
                     )
