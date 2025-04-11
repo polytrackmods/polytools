@@ -441,6 +441,7 @@ pub async fn compare(
     #[description = "User 2"]
     #[autocomplete = "autocomplete_users"]
     user2: String,
+    #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -448,18 +449,26 @@ pub async fn compare(
     } else {
         ctx.defer().await?;
     }
+    let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
-    let track_ids: Vec<(String, String)> = fs::read_to_string(TRACK_FILE)
-        .await?
-        .lines()
-        .map(|s| {
-            let mut parts = s.splitn(2, " ");
-            (
-                parts.next().unwrap().to_string(),
-                parts.next().unwrap().to_string(),
-            )
-        })
-        .collect();
+    let track_ids: Vec<(String, String)> = fs::read_to_string({
+        use LeaderboardChoice::*;
+        match tracks {
+            Global => TRACK_FILE,
+            Community => COMMUNITY_TRACK_FILE,
+            Hof => HOF_TRACK_FILE,
+        }
+    })
+    .await?
+    .lines()
+    .map(|s| {
+        let mut parts = s.splitn(2, " ");
+        (
+            parts.next().unwrap().to_string(),
+            parts.next().unwrap().to_string(),
+        )
+    })
+    .collect();
     for user in [user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
         let mut id = String::new();
@@ -525,21 +534,27 @@ pub async fn compare(
     }
     let mut output = String::new();
     let mut display_total_diff = true;
-    output.push_str("```\n    ");
+    output.push_str(format!("```\n{}", " ".repeat(24)).as_str());
     for user in [user1.clone(), user2.clone()] {
         output.push_str(format!("{:<21}", user).as_str());
     }
     output.push_str("Difference\n");
     for i in 0..results[0].len() - 1 {
         let mut display_diff = true;
-        output.push_str(format!("{}: ", track_ids[i].1).as_str());
+        output.push_str(
+            format!(
+                "{:>20}: ",
+                track_ids[i].1.chars().take(20).collect::<String>()
+            )
+            .as_str(),
+        );
         for track in &results {
             if track[i].1 != 0.0 {
                 output.push_str(
-                    format!("{:>6}. - {:3.3}s{}", track[i].0, track[i].1, " ".repeat(4)).as_str(),
+                    format!("{:>6}. - {:>7.3}s{}", track[i].0, track[i].1, " ".repeat(4)).as_str(),
                 );
             } else {
-                output.push_str(format!("{:>17}{}", "Record not found", " ".repeat(4)).as_str());
+                output.push_str(format!("{:>18}{}", "Record not found", " ".repeat(4)).as_str());
                 display_diff = false;
             }
         }
@@ -548,14 +563,14 @@ pub async fn compare(
         }
         output.push('\n');
     }
-    output.push_str("\nTotal:");
+    output.push_str(format!("\n{}Total:   ", " ".repeat(15)).as_str());
     for track in &results {
         let total = track.last().unwrap().1 as u32;
         if total != 0 {
             output.push_str(
                 format!(
                     "{}{:>2}:{:0>2}.{:0>3}{}",
-                    " ".repeat(6),
+                    " ".repeat(7),
                     total / 60000,
                     total % 60000 / 1000,
                     total % 1000,
@@ -564,7 +579,7 @@ pub async fn compare(
                 .as_str(),
             );
         } else {
-            output.push_str(format!("{}Tracks not done", " ".repeat(0)).as_str());
+            output.push_str(format!("{}Tracks not done", " ".repeat(1)).as_str());
             display_total_diff = false
         }
     }
