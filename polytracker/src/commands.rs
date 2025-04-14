@@ -498,7 +498,15 @@ pub async fn compare(
             id);
             task::spawn(
             async move {
-                let res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                loop {
+                    if res.is_empty() {
+                        sleep(Duration::from_millis(500)).await;
+                        res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                    } else {
+                        break;
+                    }
+                }
                 Ok::<(usize, String), reqwest::Error>((i, res))
             })
         });
