@@ -69,7 +69,16 @@ pub async fn global_rankings_update() -> Result<(), Error> {
             let mut res = Vec::new();
             for url in urls {
                 sleep(Duration::from_millis(500)).await;
-                res.push(client.get(url).send().await.unwrap().text().await.unwrap());
+                let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                loop {
+                    if response.is_empty() {
+                        sleep(Duration::from_millis(500)).await;
+                        response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                    } else {
+                        res.push(response);
+                        break;
+                    }
+                }
             }
             Ok::<Vec<String>, reqwest::Error>(res)
         })
@@ -84,9 +93,7 @@ pub async fn global_rankings_update() -> Result<(), Error> {
     for result in results {
         let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
         for res in result {
-            if !res.is_empty() {
-                leaderboard.append(&mut serde_json::from_str::<LeaderBoard>(&res)?.entries);
-            }
+            leaderboard.append(&mut serde_json::from_str::<LeaderBoard>(&res)?.entries);
         }
         leaderboards.push(leaderboard);
     }

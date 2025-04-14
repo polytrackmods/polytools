@@ -12,7 +12,9 @@ use polymanager::{
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
+use std::time::Duration;
 use std::{collections::HashMap, env};
+use tokio::time::sleep;
 use tokio::{fs, task};
 
 // argument enum for leaderboard related commands
@@ -348,7 +350,15 @@ pub async fn list(
             id);
             task::spawn(
             async move {
-                let res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                loop {
+                    if res.is_empty() {
+                        sleep(Duration::from_millis(500)).await;
+                        res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                    } else {
+                        break;
+                    }
+                }
                 Ok::<(usize, String), reqwest::Error>((i, res))
             })
         });
