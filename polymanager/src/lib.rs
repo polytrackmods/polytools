@@ -72,7 +72,7 @@ pub async fn global_rankings_update() -> Result<(), Error> {
                 let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
                 loop {
                     if response.is_empty() {
-                        sleep(Duration::from_millis(500)).await;
+                        sleep(Duration::from_millis(1500)).await;
                         response = client.get(&url).send().await.unwrap().text().await.unwrap();
                     } else {
                         res.push(response);
@@ -331,7 +331,16 @@ pub async fn community_update() -> Result<(), Error> {
             let mut res = Vec::new();
             for url in urls {
                 sleep(Duration::from_millis(500)).await;
-                res.push(client.get(url).send().await.unwrap().text().await.unwrap());
+                let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                loop {
+                    if response.is_empty() {
+                        sleep(Duration::from_millis(1500)).await;
+                        response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                    } else {
+                        res.push(response);
+                        break;
+                    }
+                }
             }
             Ok::<Vec<String>, reqwest::Error>(res)
         })
