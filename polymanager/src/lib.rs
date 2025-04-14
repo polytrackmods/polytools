@@ -72,7 +72,7 @@ pub async fn global_rankings_update() -> Result<(), Error> {
                 let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
                 loop {
                     if response.is_empty() {
-                        sleep(Duration::from_millis(1500)).await;
+                        sleep(Duration::from_millis(1000)).await;
                         response = client.get(&url).send().await.unwrap().text().await.unwrap();
                     } else {
                         res.push(response);
@@ -334,7 +334,7 @@ pub async fn community_update() -> Result<(), Error> {
                 let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
                 loop {
                     if response.is_empty() {
-                        sleep(Duration::from_millis(1500)).await;
+                        sleep(Duration::from_millis(1000)).await;
                         response = client.get(&url).send().await.unwrap().text().await.unwrap();
                     } else {
                         res.push(response);
