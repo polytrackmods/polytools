@@ -5,7 +5,7 @@ use std::{collections::HashMap, env, time::Duration};
 
 use chrono::Utc;
 use dotenvy::dotenv;
-use futures::future::join_all;
+use futures::{TryFutureExt, future::join_all};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, task, time::sleep};
@@ -180,7 +180,11 @@ pub async fn hof_update() -> Result<(), Error> {
             track_id.split(" ").next().unwrap()
         );
         task::spawn(async move {
-            let res = client.get(url).send().await.unwrap().text().await.unwrap();
+            let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
+            while res.is_empty() {
+                sleep(Duration::from_millis(1000)).await;
+                res = client.get(&url).send().await.unwrap().text().await.unwrap();
+            }
             Ok::<String, reqwest::Error>(res)
         })
     });
