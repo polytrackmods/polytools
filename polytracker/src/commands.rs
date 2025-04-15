@@ -824,9 +824,12 @@ pub async fn players(
             43273,
             VERSION,
             id);
-        let number =
-            serde_json::from_str::<LeaderBoard>(&client.get(&url).send().await?.text().await?)?
-                .total;
+        let mut res = client.get(&url).send().await?.text().await?;
+        while res.is_empty() {
+            sleep(Duration::from_millis(500)).await;
+            res = client.get(&url).send().await?.text().await?;
+        }
+        let number = serde_json::from_str::<LeaderBoard>(&res)?.total;
         contents
             .get_mut(0)
             .unwrap()
