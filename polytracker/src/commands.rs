@@ -850,6 +850,93 @@ pub async fn players(
     .await?;
     Ok(())
 }
+#[poise::command(slash_command, prefix_command, category = "Info")]
+pub async fn records(
+    ctx: Context<'_>,
+    #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
+) -> Result<(), Error> {
+    let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
+    let track_ids: Vec<(String, String)> = fs::read_to_string({
+        use LeaderboardChoice::*;
+        match tracks {
+            Global => TRACK_FILE,
+            Community => COMMUNITY_TRACK_FILE,
+            Hof => HOF_TRACK_FILE,
+        }
+    })
+    .await
+    .unwrap()
+    .lines()
+    .map(|s| {
+        let mut parts = s.splitn(2, " ").map(|s| s.to_string());
+        (parts.next().unwrap(), parts.next().unwrap())
+    })
+    .collect();
+    let mut contents = vec![String::new(), String::new(), String::new()];
+    let client = Client::new();
+    let mut wr_amounts: HashMap<String, u32> = HashMap::new();
+    for (id, name) in track_ids {
+        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=true",
+            43273,
+            VERSION,
+            id,
+        );
+        let mut res = client.get(&url).send().await?.text().await?;
+        while res.is_empty() {
+            sleep(Duration::from_millis(599)).await;
+            res = client.get(&url).send().await?.text().await?;
+        }
+        let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
+        let winner = leaderboard.entries.get(0).unwrap();
+        let winner_name = winner.name.clone();
+        let winner_time = winner.frames / 1000.0;
+        *wr_amounts.entry(winner_name.clone()).or_default() += 1;
+        contents
+            .get_mut(0)
+            .unwrap()
+            .push_str(&format!("{}\n", name));
+        contents
+            .get_mut(1)
+            .unwrap()
+            .push_str(&format!("{}\n", winner_name));
+        contents
+            .get_mut(2)
+            .unwrap()
+            .push_str(&format!("{}s\n", winner_time));
+    }
+    write_embed(
+        &ctx,
+        "World Records".to_string(),
+        String::new(),
+        vec!["Track", "Player", "Time"],
+        contents,
+        vec![true, true, true],
+    )
+    .await?;
+    let mut wr_amounts: Vec<(String, u32)> = wr_amounts.into_iter().collect();
+    wr_amounts.sort_by_key(|(_, k)| *k as i32 * -1);
+    let mut contents = vec![String::new(), String::new()];
+    for (name, amount) in wr_amounts {
+        contents
+            .get_mut(0)
+            .unwrap()
+            .push_str(&format!("{}\n", name));
+        contents
+            .get_mut(1)
+            .unwrap()
+            .push_str(&format!("{}\n", amount));
+    }
+    write_embed(
+        &ctx,
+        "WR Amounts".to_string(),
+        String::new(),
+        vec!["Player", "Amount"],
+        contents,
+        vec![true, true],
+    )
+    .await?;
+    Ok(())
+}
 
 /// Links the privacy policy
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]

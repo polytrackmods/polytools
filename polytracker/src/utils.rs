@@ -205,7 +205,8 @@ pub async fn write_embed(
                     .title(&title)
                     .description(&description)
                     .fields(fields)
-                    .color(Color::BLITZ_BLUE);
+                    .color(Color::from_rgb(0, 128, 128))
+                    .url("https://polyweb.ireo.xyz");
 
                 press
                     .create_response(
