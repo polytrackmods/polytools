@@ -201,33 +201,30 @@ async fn main() {
                 "https://vps.kodub.com:43273/leaderboard?version=0.5.0&skip=0&onlyVerified=true&amount=5&trackId={}",
                 id
             );
-            if let Ok(send_result) = client.get(&url).send().await {
-                if let Ok(response) = send_result.text().await {
-                    if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response) {
-                        if let Some(new_record) = new_lb.entries.first() {
-                            if *new_record < prior_records.get(name).unwrap().clone().to_record() {
-                                let path = format!(
-                                    "{}HISTORY_{}.txt",
-                                    HISTORY_FILE_LOCATION,
-                                    filenamify(name)
-                                );
-                                let mut file = OpenOptions::new()
-                                    .write(true)
-                                    .append(true)
-                                    .open(path)
-                                    .await
-                                    .unwrap();
-                                let new_record = new_record.clone().to_file().await;
-                                file.write_all(
-                                    format!("{}\n", serde_json::to_string(&new_record).unwrap())
-                                        .as_bytes(),
-                                )
-                                .await
-                                .expect("Failed writing to file");
-                                new_record.print(name, prior_records.get(name).unwrap().frames);
-                                prior_records.entry(name).and_modify(|r| *r = new_record);
-                            }
-                        }
+            let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
+            while response.is_empty() {
+                sleep(Duration::from_millis(500)).await;
+                response = client.get(&url).send().await.unwrap().text().await.unwrap();
+            }
+            if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response) {
+                if let Some(new_record) = new_lb.entries.first() {
+                    if *new_record < prior_records.get(name).unwrap().clone().to_record() {
+                        let path =
+                            format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
+                        let mut file = OpenOptions::new()
+                            .write(true)
+                            .append(true)
+                            .open(path)
+                            .await
+                            .unwrap();
+                        let new_record = new_record.clone().to_file().await;
+                        file.write_all(
+                            format!("{}\n", serde_json::to_string(&new_record).unwrap()).as_bytes(),
+                        )
+                        .await
+                        .expect("Failed writing to file");
+                        new_record.print(name, prior_records.get(name).unwrap().frames);
+                        prior_records.entry(name).and_modify(|r| *r = new_record);
                     }
                 }
             }
