@@ -887,7 +887,7 @@ pub async fn records(
             res = client.get(&url).send().await?.text().await?;
         }
         let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
-        let winner = leaderboard.entries.get(0).unwrap();
+        let winner = leaderboard.entries.first().unwrap();
         let winner_name = winner.name.clone();
         let winner_time = winner.frames / 1000.0;
         *wr_amounts.entry(winner_name.clone()).or_default() += 1;
@@ -914,7 +914,7 @@ pub async fn records(
     )
     .await?;
     let mut wr_amounts: Vec<(String, u32)> = wr_amounts.into_iter().collect();
-    wr_amounts.sort_by_key(|(_, k)| *k as i32 * -1);
+    wr_amounts.sort_by_key(|(_, k)| -(*k as i32));
     let mut contents = vec![String::new(), String::new()];
     for (name, amount) in wr_amounts {
         contents

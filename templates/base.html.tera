@@ -15,6 +15,7 @@
 
 <body>
 	{% block content %}{% endblock content %}
+	<br><br><br><br><br>
 	<div class="nav-buttons">
 		<a href="./"><button class="button">Prev</button></a>
 		<a href="/"><button class="button">Home</button></a>
