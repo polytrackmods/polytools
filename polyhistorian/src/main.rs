@@ -13,6 +13,8 @@ use filenamify::filenamify;
 
 use polymanager::{COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, get_datetime};
 
+type Error = Box<dyn std::error::Error + Send + Sync>;
+
 #[derive(Serialize, Deserialize)]
 struct LeaderBoard {
     total: u32,
@@ -152,7 +154,7 @@ struct Recording {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Error> {
     let client = Client::new();
     let track_ids = fs::read_to_string(TRACK_FILE)
         .await
@@ -201,10 +203,10 @@ async fn main() {
                 "https://vps.kodub.com:43273/leaderboard?version=0.5.0&skip=0&onlyVerified=true&amount=5&trackId={}",
                 id
             );
-            let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
+            let mut response = client.get(&url).send().await?.text().await?;
             while response.is_empty() {
                 sleep(Duration::from_millis(500)).await;
-                response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                response = client.get(&url).send().await?.text().await?;
             }
             if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response) {
                 if let Some(new_record) = new_lb.entries.first() {
