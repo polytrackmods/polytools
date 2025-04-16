@@ -5,7 +5,7 @@ use std::{collections::HashMap, env, time::Duration};
 
 use chrono::Utc;
 use dotenvy::dotenv;
-use futures::{TryFutureExt, future::join_all};
+use futures::future::join_all;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, task, time::sleep};

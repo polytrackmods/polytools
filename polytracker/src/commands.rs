@@ -1,5 +1,6 @@
 use crate::utils::{
     autocomplete_users, is_admin, write, write_embed, BotData, EditModal, LeaderBoard,
+    LeaderBoardEntry,
 };
 use crate::{Context, Error, MAX_RANKINGS_AGE};
 use dotenvy::dotenv;
@@ -883,11 +884,16 @@ pub async fn records(
         );
         let mut res = client.get(&url).send().await?.text().await?;
         while res.is_empty() {
-            sleep(Duration::from_millis(599)).await;
+            sleep(Duration::from_millis(1000)).await;
             res = client.get(&url).send().await?.text().await?;
         }
         let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
-        let winner = leaderboard.entries.first().unwrap();
+        let def_winner = LeaderBoardEntry {
+            name: "unknown".to_string(),
+            frames: 69420.0,
+            verified_state: 1,
+        };
+        let winner = leaderboard.entries.first().unwrap_or(&def_winner);
         let winner_name = winner.name.clone();
         let winner_time = winner.frames / 1000.0;
         *wr_amounts.entry(winner_name.clone()).or_default() += 1;
