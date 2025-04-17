@@ -15,6 +15,7 @@ pub const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
 pub const RANKINGS_FILE: &str = "data/poly_rankings.txt";
 pub const TRACK_FILE: &str = "lists/official_tracks.txt";
 pub const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
+pub const HOF_ALL_TRACK_FILE: &str = "lists/hof_tracks_all.txt";
 pub const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
 pub const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
 const HOF_POINTS_FILE: &str = "lists/hof_points.txt";

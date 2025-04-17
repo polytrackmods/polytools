@@ -8,8 +8,8 @@ use poise::serenity_prelude as serenity;
 use poise::{builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, Modal};
 use polymanager::{
     community_update, global_rankings_update, hof_update, ALT_ACCOUNT_FILE, BLACKLIST_FILE,
-    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE,
-    HOF_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, TRACK_FILE, VERSION,
+    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE,
+    HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, TRACK_FILE, VERSION,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -257,7 +257,7 @@ pub async fn request(
                             contents =
                                 vec![position.to_string(), time, (found.len() + 1).to_string()];
                             write_embed(
-                                &ctx,
+                                ctx,
                                 "Leaderboard".to_string(),
                                 String::new(),
                                 vec!["Ranking", "Time", "Unique"],
@@ -270,7 +270,7 @@ pub async fn request(
                             time.push('s');
                             contents = vec![position.to_string(), time];
                             write_embed(
-                                &ctx,
+                                ctx,
                                 "Leaderboard".to_string(),
                                 String::new(),
                                 vec!["Ranking", "Time"],
@@ -435,7 +435,7 @@ pub async fn list(
             headers.push("Total");
             inlines.push(false);
         }
-        write_embed(&ctx, user, String::new(), headers, contents, inlines).await?;
+        write_embed(ctx, user, String::new(), headers, contents, inlines).await?;
     } else {
         write(&ctx, "`User ID not found`".to_string()).await?;
     }
@@ -657,7 +657,7 @@ pub async fn update_rankings(
     }
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
-        &ctx,
+        ctx,
         format!("{} Leaderboard", leaderboard.name()),
         String::new(),
         headers,
@@ -735,7 +735,7 @@ pub async fn rankings(
     }
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
-        &ctx,
+        ctx,
         {
             use LeaderboardChoice::*;
             match lb {
@@ -841,7 +841,7 @@ pub async fn players(
             .push_str(&format!("{}\n", number));
     }
     write_embed(
-        &ctx,
+        ctx,
         "Player numbers".to_string(),
         String::new(),
         vec!["Track", "Players"],
@@ -851,6 +851,7 @@ pub async fn players(
     .await?;
     Ok(())
 }
+
 #[poise::command(slash_command, prefix_command, category = "Info")]
 pub async fn records(
     ctx: Context<'_>,
@@ -862,7 +863,7 @@ pub async fn records(
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
-            Hof => HOF_TRACK_FILE,
+            Hof => HOF_ALL_TRACK_FILE,
         }
     })
     .await
@@ -911,7 +912,7 @@ pub async fn records(
             .push_str(&format!("{}s\n", winner_time));
     }
     write_embed(
-        &ctx,
+        ctx,
         "World Records".to_string(),
         String::new(),
         vec!["Track", "Player", "Time"],
@@ -933,7 +934,7 @@ pub async fn records(
             .push_str(&format!("{}\n", amount));
     }
     write_embed(
-        &ctx,
+        ctx,
         "WR Amounts".to_string(),
         String::new(),
         vec!["Player", "Amount"],
