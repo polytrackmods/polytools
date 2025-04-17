@@ -124,7 +124,7 @@ pub async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
 
 // output function using embeds
 pub async fn write_embed(
-    ctx: &Context<'_>,
+    ctx: Context<'_>,
     title: String,
     description: String,
     headers: Vec<&str>,
