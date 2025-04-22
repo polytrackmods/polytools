@@ -26,6 +26,7 @@ const COMMUNITY_LB_SIZE: u32 = 20;
 pub const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 pub const VERSION: &str = "0.5.0";
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
+pub const REQUEST_RETRY_COUNT: u32 = 10;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
@@ -69,17 +70,15 @@ pub async fn global_rankings_update() -> Result<(), Error> {
         task::spawn(async move {
             let mut res = Vec::new();
             for url in urls {
+                let mut att = 0;
                 sleep(Duration::from_millis(200)).await;
                 let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
-                loop {
-                    if response.is_empty() {
-                        sleep(Duration::from_millis(1000)).await;
-                        response = client.get(&url).send().await.unwrap().text().await.unwrap();
-                    } else {
-                        res.push(response);
-                        break;
-                    }
+                while response.is_empty() && att < REQUEST_RETRY_COUNT {
+                    att += 1;
+                    sleep(Duration::from_millis(1000)).await;
+                    response = client.get(&url).send().await.unwrap().text().await.unwrap();
                 }
+                res.push(response);
             }
             Ok::<Vec<String>, reqwest::Error>(res)
         })
@@ -181,8 +180,10 @@ pub async fn hof_update() -> Result<(), Error> {
             track_id.split(" ").next().unwrap()
         );
         task::spawn(async move {
+            let mut att = 0;
             let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
-            while res.is_empty() {
+            while res.is_empty() && att < REQUEST_RETRY_COUNT {
+                att += 1;
                 sleep(Duration::from_millis(1000)).await;
                 res = client.get(&url).send().await.unwrap().text().await.unwrap();
             }
@@ -335,17 +336,15 @@ pub async fn community_update() -> Result<(), Error> {
         task::spawn(async move {
             let mut res = Vec::new();
             for url in urls {
+                let mut att = 0;
                 sleep(Duration::from_millis(500)).await;
                 let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
-                loop {
-                    if response.is_empty() {
-                        sleep(Duration::from_millis(1000)).await;
-                        response = client.get(&url).send().await.unwrap().text().await.unwrap();
-                    } else {
-                        res.push(response);
-                        break;
-                    }
+                while response.is_empty() && att < REQUEST_RETRY_COUNT {
+                    att += 1;
+                    sleep(Duration::from_millis(1000)).await;
+                    response = client.get(&url).send().await.unwrap().text().await.unwrap();
                 }
+                res.push(response);
             }
             Ok::<Vec<String>, reqwest::Error>(res)
         })

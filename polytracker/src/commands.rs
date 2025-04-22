@@ -9,7 +9,8 @@ use poise::{builtins, ApplicationContext, ChoiceParameter, CommandParameterChoic
 use polymanager::{
     community_update, global_rankings_update, hof_update, ALT_ACCOUNT_FILE, BLACKLIST_FILE,
     COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE,
-    HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, TRACK_FILE, VERSION,
+    HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT,
+    TRACK_FILE, VERSION,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -351,15 +352,13 @@ pub async fn list(
             id);
             task::spawn(
             async move {
+                let mut att = 0;
                 let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
-                loop {
-                    if res.is_empty() {
+                    while res.is_empty() && att < REQUEST_RETRY_COUNT {
+                        att += 1;
                         sleep(Duration::from_millis(500)).await;
                         res = client.get(&url).send().await.unwrap().text().await.unwrap();
-                    } else {
-                        break;
                     }
-                }
                 Ok::<(usize, String), reqwest::Error>((i, res))
             })
         });
@@ -499,15 +498,13 @@ pub async fn compare(
             id);
             task::spawn(
             async move {
+                let mut att = 0;
                 let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
-                loop {
-                    if res.is_empty() {
+                    while res.is_empty() && att < REQUEST_RETRY_COUNT {
+                        att += 1;
                         sleep(Duration::from_millis(500)).await;
                         res = client.get(&url).send().await.unwrap().text().await.unwrap();
-                    } else {
-                        break;
                     }
-                }
                 Ok::<(usize, String), reqwest::Error>((i, res))
             })
         });
@@ -825,8 +822,10 @@ pub async fn players(
             43273,
             VERSION,
             id);
+        let mut att = 0;
         let mut res = client.get(&url).send().await?.text().await?;
-        while res.is_empty() {
+        while res.is_empty() && att < REQUEST_RETRY_COUNT {
+            att += 1;
             sleep(Duration::from_millis(500)).await;
             res = client.get(&url).send().await?.text().await?;
         }
@@ -883,18 +882,20 @@ pub async fn records(
             VERSION,
             id,
         );
+        let mut att = 0;
         let mut res = client.get(&url).send().await?.text().await?;
-        while res.is_empty() {
+        while res.is_empty() && att < REQUEST_RETRY_COUNT {
+            att += 1;
             sleep(Duration::from_millis(1000)).await;
             res = client.get(&url).send().await?.text().await?;
         }
         let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
-        let def_winner = LeaderBoardEntry {
+        let default_winner = LeaderBoardEntry {
             name: "unknown".to_string(),
             frames: 69420.0,
             verified_state: 1,
         };
-        let winner = leaderboard.entries.first().unwrap_or(&def_winner);
+        let winner = leaderboard.entries.first().unwrap_or(&default_winner);
         let winner_name = winner.name.clone();
         let winner_time = winner.frames / 1000.0;
         *wr_amounts.entry(winner_name.clone()).or_default() += 1;
@@ -940,6 +941,79 @@ pub async fn records(
         vec!["Player", "Amount"],
         contents,
         vec![true, true],
+    )
+    .await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, category = "Info")]
+pub async fn top(
+    ctx: Context<'_>,
+    #[description = "Position"] position: u32,
+    #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
+) -> Result<(), Error> {
+    let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
+    let track_ids: Vec<(String, String)> = fs::read_to_string({
+        use LeaderboardChoice::*;
+        match tracks {
+            Global => TRACK_FILE,
+            Community => COMMUNITY_TRACK_FILE,
+            Hof => HOF_ALL_TRACK_FILE,
+        }
+    })
+    .await
+    .unwrap()
+    .lines()
+    .map(|s| {
+        let mut parts = s.splitn(2, " ").map(|s| s.to_string());
+        (parts.next().unwrap(), parts.next().unwrap())
+    })
+    .collect();
+    let mut contents = vec![String::new(), String::new(), String::new()];
+    let client = Client::new();
+    for (id, name) in track_ids {
+        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=1&onlyVerified=true",
+            43273,
+            VERSION,
+            id,
+            position - 1,
+        );
+        let mut att = 0;
+        let mut res = client.get(&url).send().await?.text().await?;
+        while res.is_empty() && att < REQUEST_RETRY_COUNT {
+            att += 1;
+            sleep(Duration::from_millis(1000)).await;
+            res = client.get(&url).send().await?.text().await?;
+        }
+        let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
+        let default_winner = LeaderBoardEntry {
+            name: "unknown".to_string(),
+            frames: 69420.0,
+            verified_state: 1,
+        };
+        let winner = leaderboard.entries.first().unwrap_or(&default_winner);
+        let winner_name = winner.name.clone();
+        let winner_time = winner.frames / 1000.0;
+        contents
+            .get_mut(0)
+            .unwrap()
+            .push_str(&format!("{}\n", name));
+        contents
+            .get_mut(1)
+            .unwrap()
+            .push_str(&format!("{}\n", winner_name));
+        contents
+            .get_mut(2)
+            .unwrap()
+            .push_str(&format!("{}s\n", winner_time));
+    }
+    write_embed(
+        ctx,
+        format!("Top {}", position),
+        String::new(),
+        vec!["Track", "Player", "Time"],
+        contents,
+        vec![true, true, true],
     )
     .await?;
     Ok(())
