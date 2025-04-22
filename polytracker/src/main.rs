@@ -1,10 +1,9 @@
 mod commands;
 pub mod utils;
 
-use commands::records;
 use commands::{
-    assign, compare, delete, edit_lists, help, list, players, policy, rankings, request,
-    update_rankings, users,
+    assign, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
+    top, update_rankings, users,
 };
 use dotenvy::dotenv;
 use poise::builtins;
@@ -53,6 +52,7 @@ async fn main() {
                 compare(),
                 update_rankings(),
                 records(),
+                top(),
                 rankings(),
                 policy(),
             ],
