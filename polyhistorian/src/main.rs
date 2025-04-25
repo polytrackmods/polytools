@@ -130,12 +130,16 @@ impl Record {
         {
             if let Ok(response) = send_result.text().await {
                 if let Ok(recordings) = serde_json::from_str::<Vec<Recording>>(&response) {
-                    recordings
-                        .first()
-                        .unwrap()
-                        .recording
-                        .trim_matches('"')
-                        .to_string()
+                    if recordings.is_empty() {
+                        String::new()
+                    } else {
+                        recordings
+                            .first()
+                            .unwrap()
+                            .recording
+                            .trim_matches('"')
+                            .to_string()
+                    }
                 } else {
                     String::new()
                 }
