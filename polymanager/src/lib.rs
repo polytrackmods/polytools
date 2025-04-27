@@ -411,12 +411,12 @@ pub async fn community_update() -> Result<(), Error> {
         .iter()
         .map(|(name, rankings)| {
             let mut tiebreakers = vec![0; COMMUNITY_LB_SIZE as usize * 500];
-            let mut points = 0;
+            let mut points = 0.0;
             for ranking in rankings {
-                points += (100.0 / (*ranking as f64 + 1.0).sqrt()) as u32;
+                points += 100.0 / (*ranking as f64 + 1.0).sqrt();
                 *tiebreakers.get_mut(*ranking).unwrap_or(&mut 0) += 1;
             }
-            (name.to_string(), points, tiebreakers)
+            (name.to_string(), points as u32, tiebreakers)
         })
         .collect();
     sorted_leaderboard.sort_by(|a, b| {
