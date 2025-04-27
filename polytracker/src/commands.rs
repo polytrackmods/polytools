@@ -485,6 +485,7 @@ pub async fn compare(
         )
     })
     .collect();
+    let track_names: Vec<String> = track_ids.iter().map(|(_, name)| name.clone()).collect();
     for user in [user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
         let mut id = String::new();
@@ -556,27 +557,33 @@ pub async fn compare(
     }
     let mut output = String::new();
     let mut display_total_diff = true;
-    output.push_str(format!("```\n{}", " ".repeat(24)).as_str());
+    let max_track_len = track_ids.iter().map(|(_, t)| t.len()).max().unwrap().max(5);
+    let column_gap = 3;
+    output.push_str(&format!("```\n{}", " ".repeat(max_track_len + 2)));
     for user in [user1.clone(), user2.clone()] {
-        output.push_str(format!("{:<21}", user).as_str());
+        output.push_str(format!("{:>18}", user).as_str());
+        output.push_str(&" ".repeat(column_gap));
     }
     output.push_str("Difference\n");
     for i in 0..results[0].len() - 1 {
         let mut display_diff = true;
-        output.push_str(
-            format!(
-                "{:>20}: ",
-                track_ids[i].1.chars().take(20).collect::<String>()
-            )
-            .as_str(),
-        );
-        for track in &results {
+        output.push_str(&format!(
+            "{:>width$}: ",
+            track_names[i],
+            width = max_track_len
+        ));
+        for track in results.iter() {
             if track[i].1 != 0.0 {
-                output.push_str(
-                    format!("{:>6}. - {:>7.3}s{}", track[i].0, track[i].1, " ".repeat(4)).as_str(),
-                );
+                output.push_str(&format!(
+                    "{:>6}. - {:>7.3}s{}",
+                    track[i].0,
+                    track[i].1,
+                    " ".repeat(column_gap)
+                ));
             } else {
-                output.push_str(format!("{:>18}{}", "Record not found", " ".repeat(4)).as_str());
+                output.push_str(
+                    format!("{:>18}{}", "Record not found", " ".repeat(column_gap)).as_str(),
+                );
                 display_diff = false;
             }
         }
@@ -585,30 +592,27 @@ pub async fn compare(
         }
         output.push('\n');
     }
-    output.push_str(format!("\n{}Total:   ", " ".repeat(15)).as_str());
+    output.push_str(&format!("\n{:>width$}: ", "Total", width = max_track_len));
     for track in &results {
         let total = track.last().unwrap().1 as u32;
         if total != 0 {
-            output.push_str(
-                format!(
-                    "{}{:>2}:{:0>2}.{:0>3}{}",
-                    " ".repeat(7),
-                    total / 60000,
-                    total % 60000 / 1000,
-                    total % 1000,
-                    " ".repeat(6)
-                )
-                .as_str(),
-            );
+            output.push_str(&format!(
+                "{}{:>2}:{:0>2}.{:0>3}{}",
+                " ".repeat(9),
+                total / 60000,
+                total % 60000 / 1000,
+                total % 1000,
+                " ".repeat(column_gap)
+            ));
         } else {
-            output.push_str(" Tracks not done");
+            output.push_str(&format!("{:>18}", "Tracks not done"));
             display_total_diff = false
         }
     }
     if display_total_diff {
         output.push_str(
             format!(
-                "{:>7.3}s",
+                "{:>9.3}s",
                 ((results[0].last().unwrap().1 - results[1].last().unwrap().1) / 1000.0)
             )
             .as_str(),
