@@ -38,6 +38,7 @@ struct FileRecord {
     name: String,
     frames: u32,
     timestamp: String,
+    recording: String,
 }
 
 pub async fn parse_leaderboard(file_path: &str) -> Vec<Entry> {
@@ -343,7 +344,7 @@ pub async fn get_standard_leaderboard(track_id: &str) -> Vec<Entry> {
     leaderboard
 }
 
-pub async fn parse_history(track_id: &str) -> Vec<(String, String, String)> {
+pub async fn parse_history(track_id: &str) -> Vec<(String, String, String, String)> {
     let records = fs::read_to_string(format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, track_id))
         .await
         .expect("Couldn't read from record file");
@@ -370,6 +371,7 @@ pub async fn parse_history(track_id: &str) -> Vec<(String, String, String)> {
                     .unwrap()
                     .format("%Y/%m/%d %H:%M:%S")
                     .to_string(),
+                record.recording,
             )
         })
         .collect()

@@ -1,5 +1,6 @@
 {% extends "base" %}
 {% block title %}{{ track_name }}History{% endblock title %}
+{% block scripts %}<script src="/static/scripts.js"></script>{% endblock scripts %}
 {% block content %}
 <h1>{{ track_name }}History</h1>
 <table>
@@ -8,6 +9,7 @@
             <th>Player</th>
             <th>Time</th>
             <th>Timestamp</th>
+            <th>Recording</th>
         </tr>
     </thead>
     <tbody>
@@ -16,6 +18,7 @@
             <td>{{ record.0 }}</td>
             <td>{{ record.1 }}</td>
             <td>{{ record.2 }}</td>
+            <td><button class="button" onclick="copyRecording(this)" data-recording="{{ record.3 }}">Copy</button></td>
         </tr>
         {% endfor %}
     </tbody>

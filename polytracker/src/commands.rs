@@ -1,6 +1,6 @@
 use crate::utils::{
     autocomplete_users, is_admin, write, write_embed, BotData, EditModal, LeaderBoard,
-    LeaderBoardEntry,
+    LeaderBoardEntry, WriteEmbed,
 };
 use crate::{Context, Error, MAX_RANKINGS_AGE};
 use dotenvy::dotenv;
@@ -259,11 +259,10 @@ pub async fn request(
                                 vec![position.to_string(), time, (found.len() + 1).to_string()];
                             write_embed(
                                 ctx,
-                                "Leaderboard".to_string(),
-                                String::new(),
-                                vec!["Ranking", "Time", "Unique"],
-                                contents,
-                                vec![true, true, true],
+                                vec![WriteEmbed::new(3)
+                                    .title("Leaderboard")
+                                    .headers(vec!["Ranking", "Time", "Unique"])
+                                    .contents(contents)],
                             )
                             .await?;
                         } else {
@@ -272,11 +271,10 @@ pub async fn request(
                             contents = vec![position.to_string(), time];
                             write_embed(
                                 ctx,
-                                "Leaderboard".to_string(),
-                                String::new(),
-                                vec!["Ranking", "Time"],
-                                contents,
-                                vec![true, true],
+                                vec![WriteEmbed::new(2)
+                                    .title("Leaderboard")
+                                    .headers(vec!["Ranking", "Time"])
+                                    .contents(contents)],
                             )
                             .await?;
                         }
@@ -434,7 +432,15 @@ pub async fn list(
             headers.push("Total");
             inlines.push(false);
         }
-        write_embed(ctx, user, String::new(), headers, contents, inlines).await?;
+        write_embed(
+            ctx,
+            vec![WriteEmbed::new(headers.len())
+                .title(&user)
+                .headers(headers)
+                .contents(contents)
+                .inlines(inlines)],
+        )
+        .await?;
     } else {
         write(&ctx, "`User ID not found`".to_string()).await?;
     }
@@ -615,7 +621,7 @@ pub async fn compare(
 
 /// Update leaderboard for official tracks
 ///
-/// displays users with top (500 * entry_requirement) records on all tracks (default: 2500)
+/// displays users with top 10k records on all tracks
 #[poise::command(slash_command, prefix_command, category = "Administration")]
 pub async fn update_rankings(
     ctx: Context<'_>,
@@ -655,11 +661,11 @@ pub async fn update_rankings(
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         ctx,
-        format!("{} Leaderboard", leaderboard.name()),
-        String::new(),
-        headers,
-        contents,
-        inlines,
+        vec![WriteEmbed::new(headers.len())
+            .title(&format!("{} Leaderboard", leaderboard.name()))
+            .headers(headers)
+            .contents(contents)
+            .inlines(inlines)],
     )
     .await?;
     Ok(())
@@ -733,19 +739,18 @@ pub async fn rankings(
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         ctx,
-        {
-            use LeaderboardChoice::*;
-            match lb {
-                Global => "Global Leaderboard",
-                Community => "Community Leaderboard",
-                Hof => "HOF Leaderboard",
-            }
-        }
-        .to_string(),
-        String::new(),
-        headers,
-        contents,
-        inlines,
+        vec![WriteEmbed::new(headers.len())
+            .title({
+                use LeaderboardChoice::*;
+                match lb {
+                    Global => "Global Leaderboard",
+                    Community => "Community Leaderboard",
+                    Hof => "HOF Leaderboard",
+                }
+            })
+            .headers(headers)
+            .contents(contents)
+            .inlines(inlines)],
     )
     .await?;
     Ok(())
@@ -804,7 +809,7 @@ pub async fn players(
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
-            Hof => HOF_TRACK_FILE,
+            Hof => HOF_ALL_TRACK_FILE,
         }
     })
     .await
@@ -841,11 +846,10 @@ pub async fn players(
     }
     write_embed(
         ctx,
-        "Player numbers".to_string(),
-        String::new(),
-        vec!["Track", "Players"],
-        contents,
-        vec![true, true],
+        vec![WriteEmbed::new(2)
+            .title("Player numbers")
+            .headers(vec!["Track", "Players"])
+            .contents(contents)],
     )
     .await?;
     Ok(())
@@ -912,15 +916,10 @@ pub async fn records(
             .unwrap()
             .push_str(&format!("{}s\n", winner_time));
     }
-    write_embed(
-        ctx,
-        "World Records".to_string(),
-        String::new(),
-        vec!["Track", "Player", "Time"],
-        contents,
-        vec![true, true, true],
-    )
-    .await?;
+    let embed1 = WriteEmbed::new(3)
+        .title("World Records")
+        .headers(vec!["Track", "Player", "Time"])
+        .contents(contents);
     let mut wr_amounts: Vec<(String, u32)> = wr_amounts.into_iter().collect();
     wr_amounts.sort_by_key(|(_, k)| -(*k as i32));
     let mut contents = vec![String::new(), String::new()];
@@ -934,15 +933,11 @@ pub async fn records(
             .unwrap()
             .push_str(&format!("{}\n", amount));
     }
-    write_embed(
-        ctx,
-        "WR Amounts".to_string(),
-        String::new(),
-        vec!["Player", "Amount"],
-        contents,
-        vec![true, true],
-    )
-    .await?;
+    let embed2 = WriteEmbed::new(2)
+        .title("WR Amounts")
+        .headers(vec!["Player", "Amount"])
+        .contents(contents);
+    write_embed(ctx, vec![embed1, embed2]).await?;
     Ok(())
 }
 
@@ -1009,11 +1004,10 @@ pub async fn top(
     }
     write_embed(
         ctx,
-        format!("Top {}", position),
-        String::new(),
-        vec!["Track", "Player", "Time"],
-        contents,
-        vec![true, true, true],
+        vec![WriteEmbed::new(3)
+            .title(&format!("Top {}", position))
+            .headers(vec!["Track", "Player", "Time"])
+            .contents(contents)],
     )
     .await?;
     Ok(())

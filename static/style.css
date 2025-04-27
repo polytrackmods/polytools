@@ -175,3 +175,22 @@ a:hover {
 .text-field::placeholder {
     color: var(--text-disabled-color);
 }
+
+.recordingNotification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: var(--surface-secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--primary-teal);
+    padding: 12px 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transition: opacity 0.4s ease, top 0.4s ease;
+    z-index: 9999;
+}
+
+.recordingNotification.show {
+    opacity: 1;
+    top: 40px;
+}

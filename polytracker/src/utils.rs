@@ -1,6 +1,5 @@
 use crate::{Context, Error, MAX_MSG_AGE};
 use diesel::prelude::*;
-use dotenvy::dotenv;
 use poise::serenity_prelude::{self as serenity, CacheHttp};
 use poise::{CreateReply, Modal};
 use polymanager::db::{Admin, NewUser, User};
@@ -122,60 +121,107 @@ pub async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
     Ok(())
 }
 
-// output function using embeds
-pub async fn write_embed(
-    ctx: Context<'_>,
+#[derive(Default, Debug)]
+pub struct WriteEmbed {
     title: String,
     description: String,
-    headers: Vec<&str>,
+    headers: Vec<String>,
     contents: Vec<String>,
     inlines: Vec<bool>,
-) -> Result<(), Error> {
-    if headers.len() == contents.len() && contents.len() == inlines.len() {
-        dotenv()?;
+}
+
+impl WriteEmbed {
+    pub fn new(field_count: usize) -> Self {
+        Self {
+            title: "PolyTracker Embed".to_string(),
+            description: String::new(),
+            headers: vec![String::new(); field_count],
+            contents: vec![String::new(); field_count],
+            inlines: vec![true; field_count],
+        }
+    }
+    pub fn title(mut self, title: &str) -> Self {
+        self.title = title.to_string();
+        self
+    }
+    pub fn description(mut self, description: &str) -> Self {
+        self.description = description.to_string();
+        self
+    }
+    pub fn headers(mut self, headers: Vec<&str>) -> Self {
+        self.headers = headers.iter().map(|h| h.to_string()).collect();
+        self
+    }
+    pub fn contents(mut self, contents: Vec<String>) -> Self {
+        self.contents = contents;
+        self
+    }
+    pub fn inlines(mut self, inlines: Vec<bool>) -> Self {
+        self.inlines = inlines;
+        self
+    }
+}
+
+// output function using embeds
+pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Result<(), Error> {
+    if write_embeds
+        .iter()
+        .all(|e| e.headers.len() == e.contents.len() && e.headers.len() == e.inlines.len())
+    {
         let ctx_id = ctx.id();
         let prev_id = format!("{}prev", ctx_id);
         let next_id = format!("{}next", ctx_id);
         let start_id = format!("{}start", ctx_id);
-        let mut pages: Vec<Vec<String>> = Vec::new();
-        for content in contents {
-            pages.push(
-                content
-                    .lines()
-                    .collect::<Vec<&str>>()
-                    .chunks(20)
-                    .map(|chunk| chunk.join("\n"))
-                    .collect(),
-            );
+        let mut embeds = Vec::new();
+        for (i, write_embed) in write_embeds.iter().enumerate() {
+            let mut pages: Vec<Vec<String>> = Vec::new();
+            for content in write_embed.contents.iter() {
+                pages.push(
+                    content
+                        .lines()
+                        .collect::<Vec<&str>>()
+                        .chunks(20)
+                        .map(|chunk| chunk.join("\n"))
+                        .collect(),
+                );
+            }
+            let fields = write_embed.headers.iter().enumerate().map(|(i, h)| {
+                (
+                    h.to_string(),
+                    pages.get(i).unwrap().first().unwrap().clone(),
+                    write_embed.inlines[i],
+                )
+            });
+            let mut embed = CreateEmbed::default()
+                .title(write_embed.title.clone())
+                .description(write_embed.description.clone())
+                .fields(fields.clone())
+                .color(Color::from_rgb(0, 128, 128));
+            if i == 0 {
+                embed = embed.url("https://polyweb.ireo.xyz");
+            }
+            embeds.push((embed, pages, write_embed));
         }
-        let fields = headers.iter().enumerate().map(|(i, h)| {
-            (
-                h.to_string(),
-                pages.get(i).unwrap().first().unwrap().clone(),
-                inlines[i],
-            )
-        });
-        let embed = CreateEmbed::default()
-            .title(title.clone())
-            .description(description.clone())
-            .fields(fields.clone())
-            .color(Color::from_rgb(0, 128, 128))
-            .url("https://polyweb.ireo.xyz");
-        let reply = if pages.first().unwrap().len() > 1 {
+        let mut reply = CreateReply::default();
+        reply
+            .embeds
+            .append(&mut embeds.iter().map(|(embed, _, _)| embed.clone()).collect());
+        if embeds
+            .iter()
+            .any(|(_, pages, _)| pages.first().unwrap().len() > 1)
+        {
             let components = CreateActionRow::Buttons(vec![
                 CreateButton::new(&prev_id).emoji('◀'),
                 CreateButton::new(&next_id).emoji('▶'),
                 CreateButton::new(&start_id).emoji('🔝'),
             ]);
-
-            CreateReply::default()
-                .embed(embed)
-                .components(vec![components])
-        } else {
-            CreateReply::default().embed(embed)
-        };
-        ctx.send(reply.clone()).await?;
-        if pages.first().unwrap().len() > 1 {
+            reply.components = Some(vec![components]);
+        }
+        ctx.send(reply).await?;
+        if embeds
+            .iter()
+            .any(|(_, pages, _)| pages.first().unwrap().len() > 1)
+        {
             let mut current_page = 0;
             while let Some(press) = ComponentInteractionCollector::new(ctx)
                 .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
@@ -184,35 +230,47 @@ pub async fn write_embed(
             {
                 if press.data.custom_id == next_id {
                     current_page += 1;
-                    if current_page >= pages[0].len() {
-                        current_page = 0;
-                    }
                 } else if press.data.custom_id == prev_id {
-                    current_page = current_page.checked_sub(1).unwrap_or(pages[0].len() - 1);
+                    current_page -= 1;
                 } else if press.data.custom_id == start_id {
                     current_page = 0;
                 } else {
                     continue;
                 }
-                let fields = headers.iter().enumerate().map(|(i, h)| {
-                    (
-                        h.to_string(),
-                        pages.get(i).unwrap().get(current_page).unwrap().clone(),
-                        inlines[i],
-                    )
-                });
-                let embed = CreateEmbed::default()
-                    .title(&title)
-                    .description(&description)
-                    .fields(fields)
-                    .color(Color::from_rgb(0, 128, 128))
-                    .url("https://polyweb.ireo.xyz");
-
+                for (i, (embed, pages, write_embed)) in embeds.iter_mut().enumerate() {
+                    let fields = write_embed.headers.iter().enumerate().map(|(i, h)| {
+                        (
+                            h.to_string(),
+                            pages
+                                .get(i)
+                                .unwrap()
+                                .get(current_page % pages.first().unwrap().len())
+                                .unwrap()
+                                .clone(),
+                            *write_embed.inlines.get(i).unwrap(),
+                        )
+                    });
+                    if i == 0 {
+                        *embed = CreateEmbed::default()
+                            .title(&write_embed.title)
+                            .description(&write_embed.description)
+                            .fields(fields)
+                            .color(Color::from_rgb(0, 128, 128))
+                            .url("https://polyweb.ireo.xyz");
+                    } else {
+                        *embed = CreateEmbed::default()
+                            .title(&write_embed.title)
+                            .description(&write_embed.description)
+                            .fields(fields)
+                            .color(Color::from_rgb(0, 128, 128));
+                    }
+                }
                 press
                     .create_response(
                         ctx.serenity_context(),
                         CreateInteractionResponse::UpdateMessage(
-                            CreateInteractionResponseMessage::new().embed(embed),
+                            CreateInteractionResponseMessage::new()
+                                .embeds(embeds.iter().map(|(embed, _, _)| embed.clone()).collect()),
                         ),
                     )
                     .await?;
