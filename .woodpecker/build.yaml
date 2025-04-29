@@ -6,4 +6,4 @@ steps:
     environment:
       CARGO_TERM_COLOR: always
     commands:
-      - cargo build --release -j4
+      - cargo clippy
