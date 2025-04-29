@@ -7,9 +7,10 @@ touch data/hof_alt_accounts.txt
 touch data/hof_rankings.txt
 touch data/custom_tracks.txt
 
-cat .env &> /dev/null || cp .env.example .env
+test -e .env || cp .env.example .env
 
 touch templates/privacy_policy.html.tera
 echo "Add your Privacy Policy in templates/privacy_policy.html.tera"
 
+eval "$(cat .env)"
 diesel migration run
