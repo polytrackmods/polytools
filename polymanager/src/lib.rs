@@ -3,6 +3,7 @@ pub mod schema;
 
 use std::{collections::HashMap, env, time::Duration};
 
+use anyhow::anyhow;
 use chrono::Utc;
 use dotenvy::dotenv;
 use futures::future::join_all;
@@ -93,7 +94,11 @@ pub async fn global_rankings_update() -> Result<(), Error> {
     for result in results {
         let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
         for res in result {
-            leaderboard.append(&mut serde_json::from_str::<LeaderBoard>(&res)?.entries);
+            leaderboard.append(
+                &mut serde_json::from_str::<LeaderBoard>(&res)
+                    .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
+                    .entries,
+            );
         }
         leaderboards.push(leaderboard);
     }
@@ -199,8 +204,9 @@ pub async fn hof_update() -> Result<(), Error> {
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
     for result in results {
         if !result.is_empty() {
-            let leaderboard: Vec<LeaderBoardEntry> =
-                serde_json::from_str::<LeaderBoard>(&result)?.entries;
+            let leaderboard: Vec<LeaderBoardEntry> = serde_json::from_str::<LeaderBoard>(&result)
+                .map_err(|| anyhow!("Probably got rate limited, please try again later"))?
+                .entries;
             leaderboards.push(leaderboard);
         }
     }
@@ -361,7 +367,9 @@ pub async fn community_update() -> Result<(), Error> {
         for result_part in result {
             if !result_part.is_empty() {
                 let mut leaderboard_part: Vec<LeaderBoardEntry> =
-                    serde_json::from_str::<LeaderBoard>(&result_part)?.entries;
+                    serde_json::from_str::<LeaderBoard>(&result_part)
+                        .map_err(|| anyhow!("Probably got rate limited, please try again later"))?
+                        .entries;
                 leaderboard.append(&mut leaderboard_part);
             }
         }
