@@ -6,5 +6,4 @@ steps:
     environment:
       CARGO_TERM_COLOR: always
     commands:
-      - rustup default stable
-      - cargo build --release
+      - cargo build --release -j4
