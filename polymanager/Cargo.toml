@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-chrono = "0.4.40"
-diesel = { version = "2.2.9", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+anyhow = "1.0.98"
+chrono = "0.4.41"
+diesel = { version = "2.2.10", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
 dotenvy = "0.15.7"
 futures = "0.3.31"
 openssl = { version = "0.10.72", features = ["vendored"] }
