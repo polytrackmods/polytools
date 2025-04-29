@@ -1,6 +1,7 @@
 mod commands;
 pub mod utils;
 
+use anyhow::Error;
 use commands::{
     assign, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
     top, update_rankings, users,
@@ -21,7 +22,6 @@ use utils::BotData;
 const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, BotData, Error>;
 
 #[tokio::main]

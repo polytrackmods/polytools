@@ -1971,6 +1971,7 @@ dependencies = [
 name = "polytracker"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "diesel",
  "dotenvy",
  "poise",

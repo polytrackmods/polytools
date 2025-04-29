@@ -1,4 +1,5 @@
-use crate::{Context, Error, MAX_MSG_AGE};
+use crate::{Context, MAX_MSG_AGE};
+use anyhow::Error;
 use diesel::prelude::*;
 use poise::serenity_prelude::{self as serenity, CacheHttp};
 use poise::{CreateReply, Modal};
