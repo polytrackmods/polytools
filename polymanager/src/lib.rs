@@ -3,7 +3,7 @@ pub mod schema;
 
 use std::{collections::HashMap, env, time::Duration};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Error};
 use chrono::Utc;
 use dotenvy::dotenv;
 use futures::future::join_all;
@@ -29,7 +29,6 @@ pub const VERSION: &str = "0.5.0";
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
 pub const REQUEST_RETRY_COUNT: u32 = 10;
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Deserialize, Serialize)]
 struct LeaderBoardEntry {
@@ -205,7 +204,7 @@ pub async fn hof_update() -> Result<(), Error> {
     for result in results {
         if !result.is_empty() {
             let leaderboard: Vec<LeaderBoardEntry> = serde_json::from_str::<LeaderBoard>(&result)
-                .map_err(|| anyhow!("Probably got rate limited, please try again later"))?
+                .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
                 .entries;
             leaderboards.push(leaderboard);
         }
@@ -368,7 +367,7 @@ pub async fn community_update() -> Result<(), Error> {
             if !result_part.is_empty() {
                 let mut leaderboard_part: Vec<LeaderBoardEntry> =
                     serde_json::from_str::<LeaderBoard>(&result_part)
-                        .map_err(|| anyhow!("Probably got rate limited, please try again later"))?
+                        .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
                         .entries;
                 leaderboard.append(&mut leaderboard_part);
             }
