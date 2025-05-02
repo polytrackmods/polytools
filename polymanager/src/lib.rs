@@ -3,7 +3,7 @@ pub mod schema;
 
 use std::{collections::HashMap, env, time::Duration};
 
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use chrono::Utc;
 use dotenvy::dotenv;
 use futures::future::join_all;
@@ -29,6 +29,7 @@ pub const VERSION: &str = "0.5.0";
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
 pub const REQUEST_RETRY_COUNT: u32 = 10;
 
+const UPDATE_LOCK_FILE: &str = "data/global.lock";
 
 #[derive(Deserialize, Serialize)]
 struct LeaderBoardEntry {
@@ -72,23 +73,29 @@ pub async fn global_rankings_update() -> Result<(), Error> {
             for url in urls {
                 let mut att = 0;
                 sleep(Duration::from_millis(200)).await;
-                let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                let mut response = client.get(&url).send().await?.text().await?;
                 while response.is_empty() && att < REQUEST_RETRY_COUNT {
                     att += 1;
                     sleep(Duration::from_millis(1000)).await;
-                    response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                    response = client.get(&url).send().await?.text().await?;
                 }
                 res.push(response);
             }
             Ok::<Vec<String>, reqwest::Error>(res)
         })
     });
+    if fs::try_exists(UPDATE_LOCK_FILE).await? {
+        return Err(anyhow!("Currently updating something, please wait a bit"));
+    } else {
+        fs::write(UPDATE_LOCK_FILE, "").await?;
+    }
     let results: Vec<Vec<String>> = join_all(futures)
         .await
         .into_iter()
         .map(|res| res.unwrap())
         .filter_map(|res| res.ok())
         .collect();
+    fs::remove_file(UPDATE_LOCK_FILE).await?;
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
     for result in results {
         let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
@@ -194,12 +201,18 @@ pub async fn hof_update() -> Result<(), Error> {
             Ok::<String, reqwest::Error>(res)
         })
     });
+    if fs::try_exists(UPDATE_LOCK_FILE).await? {
+        return Err(anyhow!("Currently updating something, please wait a bit"));
+    } else {
+        fs::write(UPDATE_LOCK_FILE, "").await?;
+    }
     let results: Vec<String> = join_all(futures)
         .await
         .into_iter()
         .map(|res| res.unwrap())
         .filter_map(|res| res.ok())
         .collect();
+    fs::remove_file(UPDATE_LOCK_FILE).await?;
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
     for result in results {
         if !result.is_empty() {
@@ -354,12 +367,18 @@ pub async fn community_update() -> Result<(), Error> {
             Ok::<Vec<String>, reqwest::Error>(res)
         })
     });
+    if fs::try_exists(UPDATE_LOCK_FILE).await? {
+        return Err(anyhow!("Currently updating something, please wait a bit"));
+    } else {
+        fs::write(UPDATE_LOCK_FILE, "").await?;
+    }
     let results: Vec<Vec<String>> = join_all(futures)
         .await
         .into_iter()
         .map(|res| res.unwrap())
         .filter_map(|res| res.ok())
         .collect();
+    fs::remove_file(UPDATE_LOCK_FILE).await?;
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
     for result in results {
         let mut leaderboard = Vec::new();
