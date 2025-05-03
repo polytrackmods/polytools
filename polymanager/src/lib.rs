@@ -161,7 +161,7 @@ pub async fn global_rankings_update() -> Result<(), Error> {
     for entry in leaderboard {
         output.push_str(
             format!(
-                "{:>3} - {:>2}:{:0>2}.{:0>3.3} - {}\n",
+                "{:>3} - {:>2}:{:0>2}.{:0>3} - {}\n",
                 entry.0 + 1,
                 entry.2 / 60000,
                 entry.2 % 60000 / 1000,
