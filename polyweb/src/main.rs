@@ -1,8 +1,7 @@
-#[macro_use]
-extern crate rocket;
-
+pub mod api;
 pub mod parsers;
 
+use api::get_api;
 use filenamify::filenamify;
 use parsers::{
     get_custom_leaderboard, get_standard_leaderboard, parse_community_leaderboard, parse_history,
@@ -18,6 +17,7 @@ use rocket::tokio::{
     fs, task,
     time::{sleep, Duration},
 };
+use rocket::{get, main, routes};
 use rocket_dyn_templates::{context, Template};
 use std::collections::HashMap;
 
@@ -144,7 +144,8 @@ async fn main() -> Result<(), rocket::Error> {
                 custom_lb,
                 policy,
                 history_home,
-                history
+                history,
+                get_api,
             ],
         )
         .mount("/static", FileServer::from("static"))
