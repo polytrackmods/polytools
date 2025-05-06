@@ -8,9 +8,10 @@ use poise::serenity_prelude as serenity;
 use poise::{builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, Modal};
 use polymanager::{
     community_update, global_rankings_update, hof_update, ALT_ACCOUNT_FILE, BLACKLIST_FILE,
-    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE,
-    HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT,
-    TRACK_FILE, VERSION,
+    COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
+    HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE,
+    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
+    VERSION,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -680,6 +681,7 @@ pub async fn update_rankings(
 pub async fn rankings(
     ctx: Context<'_>,
     #[description = "Leaderboard"] lb: Option<LeaderboardChoice>,
+    #[description = "Mode (HOF/community only)"] time_based: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
     if hidden.is_some_and(|x| x) {
@@ -688,12 +690,19 @@ pub async fn rankings(
         ctx.defer().await?;
     }
     let lb = lb.unwrap_or(LeaderboardChoice::Global);
+    let time_based = time_based.unwrap_or(false);
     let rankings_file = {
         use LeaderboardChoice::*;
         match lb {
             Global => RANKINGS_FILE,
-            Community => COMMUNITY_RANKINGS_FILE,
-            Hof => HOF_RANKINGS_FILE,
+            Community => match time_based {
+                false => COMMUNITY_RANKINGS_FILE,
+                true => COMMUNITY_TIME_RANKINGS_FILE,
+            },
+            Hof => match time_based {
+                false => HOF_RANKINGS_FILE,
+                true => HOF_TIME_RANKINGS_FILE,
+            },
         }
     };
     if fs::try_exists(rankings_file).await? {
@@ -720,8 +729,10 @@ pub async fn rankings(
             use LeaderboardChoice::*;
             match lb {
                 Global => "Time",
-                Community => "Points",
-                Hof => "Points",
+                _ => match time_based {
+                    false => "Points",
+                    true => "Time",
+                },
             }
         },
         "Player",
