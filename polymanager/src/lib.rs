@@ -32,6 +32,13 @@ pub const HISTORY_FILE_LOCATION: &str = "histories/";
 pub const REQUEST_RETRY_COUNT: u32 = 10;
 
 const UPDATE_LOCK_FILE: &str = "data/update.lock";
+const MAX_LOCK_TIME: Duration = Duration::from_secs(300);
+
+#[derive(thiserror::Error, Debug)]
+enum PolyError {
+    #[error("Currently updating something, please wait a bit")]
+    BusyUpdating,
+}
 
 #[derive(Deserialize, Serialize)]
 struct LeaderBoardEntry {
@@ -87,10 +94,18 @@ pub async fn global_rankings_update() -> Result<(), Error> {
         })
     });
     if fs::try_exists(UPDATE_LOCK_FILE).await? {
-        return Err(anyhow!("Currently updating something, please wait a bit"));
-    } else {
-        fs::write(UPDATE_LOCK_FILE, "").await?;
+        if fs::metadata(UPDATE_LOCK_FILE)
+            .await?
+            .modified()?
+            .elapsed()?
+            > MAX_LOCK_TIME
+        {
+            fs::remove_file(UPDATE_LOCK_FILE).await?;
+        } else {
+            return Err(PolyError::BusyUpdating.into());
+        }
     }
+    fs::write(UPDATE_LOCK_FILE, "").await?;
     let results: Vec<Vec<String>> = join_all(futures)
         .await
         .into_iter()
@@ -204,10 +219,18 @@ pub async fn hof_update() -> Result<(), Error> {
         })
     });
     if fs::try_exists(UPDATE_LOCK_FILE).await? {
-        return Err(anyhow!("Currently updating something, please wait a bit"));
-    } else {
-        fs::write(UPDATE_LOCK_FILE, "").await?;
+        if fs::metadata(UPDATE_LOCK_FILE)
+            .await?
+            .modified()?
+            .elapsed()?
+            > MAX_LOCK_TIME
+        {
+            fs::remove_file(UPDATE_LOCK_FILE).await?;
+        } else {
+            return Err(PolyError::BusyUpdating.into());
+        }
     }
+    fs::write(UPDATE_LOCK_FILE, "").await?;
     let results: Vec<String> = join_all(futures)
         .await
         .into_iter()
@@ -398,10 +421,18 @@ pub async fn community_update() -> Result<(), Error> {
         })
     });
     if fs::try_exists(UPDATE_LOCK_FILE).await? {
-        return Err(anyhow!("Currently updating something, please wait a bit"));
-    } else {
-        fs::write(UPDATE_LOCK_FILE, "").await?;
+        if fs::metadata(UPDATE_LOCK_FILE)
+            .await?
+            .modified()?
+            .elapsed()?
+            > MAX_LOCK_TIME
+        {
+            fs::remove_file(UPDATE_LOCK_FILE).await?;
+        } else {
+            return Err(PolyError::BusyUpdating.into());
+        }
     }
+    fs::write(UPDATE_LOCK_FILE, "").await?;
     let results: Vec<Vec<String>> = join_all(futures)
         .await
         .into_iter()

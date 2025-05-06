@@ -817,7 +817,13 @@ pub async fn users(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn players(
     ctx: Context<'_>,
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
+    #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
+    if hidden.is_some_and(|x| x) {
+        ctx.defer_ephemeral().await?;
+    } else {
+        ctx.defer().await?;
+    }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_ids: Vec<(String, String)> = fs::read_to_string({
         use LeaderboardChoice::*;
@@ -874,7 +880,13 @@ pub async fn players(
 pub async fn records(
     ctx: Context<'_>,
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
+    #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
+    if hidden.is_some_and(|x| x) {
+        ctx.defer_ephemeral().await?;
+    } else {
+        ctx.defer().await?;
+    }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_ids: Vec<(String, String)> = fs::read_to_string({
         use LeaderboardChoice::*;
@@ -961,7 +973,13 @@ pub async fn top(
     ctx: Context<'_>,
     #[description = "Position"] position: u32,
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
+    #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
+    if hidden.is_some_and(|x| x) {
+        ctx.defer_ephemeral().await?;
+    } else {
+        ctx.defer().await?;
+    }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_ids: Vec<(String, String)> = fs::read_to_string({
         use LeaderboardChoice::*;
