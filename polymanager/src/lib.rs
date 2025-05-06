@@ -21,15 +21,17 @@ pub const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
 pub const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
 const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
 pub const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
+pub const HOF_TIME_RANKINGS_FILE: &str = "data/hof_time_rankings.txt";
 pub const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
 pub const COMMUNITY_RANKINGS_FILE: &str = "data/community_rankings.txt";
+pub const COMMUNITY_TIME_RANKINGS_FILE: &str = "data/community_time_rankings.txt";
 const COMMUNITY_LB_SIZE: u32 = 20;
 pub const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 pub const VERSION: &str = "0.5.0";
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
 pub const REQUEST_RETRY_COUNT: u32 = 10;
 
-const UPDATE_LOCK_FILE: &str = "data/global.lock";
+const UPDATE_LOCK_FILE: &str = "data/update.lock";
 
 #[derive(Deserialize, Serialize)]
 struct LeaderBoardEntry {
@@ -223,6 +225,7 @@ pub async fn hof_update() -> Result<(), Error> {
         }
     }
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut time_rankings: HashMap<String, Vec<f64>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(HOF_BLACKLIST_FILE)
         .await?
         .lines()
@@ -262,6 +265,10 @@ pub async fn hof_update() -> Result<(), Error> {
             };
             if !has_ranking.contains(&name) && !blacklist.contains(&name) {
                 player_rankings.entry(name.clone()).or_default().push(pos);
+                time_rankings
+                    .entry(name.clone())
+                    .or_default()
+                    .push(entry.frames);
                 has_ranking.push(name);
                 pos += 1;
             }
@@ -327,6 +334,29 @@ pub async fn hof_update() -> Result<(), Error> {
         output.push_str(format!("<|-|> {:>3} - {} - {}\n", rank, records, name).as_str());
     }
     fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
+    let mut sorted_times: Vec<(String, u32)> = time_rankings
+        .into_iter()
+        .filter(|(_, times)| times.len() == track_num as usize)
+        .map(|(name, times)| (name, times.iter().sum::<f64>() as u32))
+        .collect();
+    sorted_times.sort_by_key(|(_, frames)| *frames);
+    let time_leaderboard: Vec<(usize, String, u32)> = sorted_times
+        .into_iter()
+        .enumerate()
+        .map(|(i, (name, frames))| (i, name, frames))
+        .collect();
+    let mut time_output = String::new();
+    for entry in time_leaderboard {
+        time_output.push_str(&format!(
+            "{:>3} - {:>2}:{:0>2}.{:0>3} - {}\n",
+            entry.0 + 1,
+            entry.2 / 60000,
+            entry.2 % 60000 / 1000,
+            entry.2 % 1000,
+            entry.1
+        ));
+    }
+    fs::write(HOF_TIME_RANKINGS_FILE, time_output).await?;
     Ok(())
 }
 
@@ -394,6 +424,7 @@ pub async fn community_update() -> Result<(), Error> {
         leaderboards.push(leaderboard);
     }
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut time_rankings: HashMap<String, Vec<f64>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await?
         .lines()
@@ -428,6 +459,10 @@ pub async fn community_update() -> Result<(), Error> {
             };
             if !has_ranking.contains(&name) && !blacklist.contains(&name) {
                 player_rankings.entry(name.clone()).or_default().push(pos);
+                time_rankings
+                    .entry(name.clone())
+                    .or_default()
+                    .push(entry.frames);
                 has_ranking.push(name);
                 pos += 1;
             }
@@ -491,6 +526,29 @@ pub async fn community_update() -> Result<(), Error> {
         output.push_str(format!("<|-|> {:>3} - {} - {}\n", rank, records, name).as_str());
     }
     fs::write(COMMUNITY_RANKINGS_FILE, output.clone()).await?;
+    let mut sorted_times: Vec<(String, u32)> = time_rankings
+        .into_iter()
+        .filter(|(_, times)| times.len() == track_num as usize)
+        .map(|(name, times)| (name, times.iter().sum::<f64>() as u32))
+        .collect();
+    sorted_times.sort_by_key(|(_, frames)| *frames);
+    let time_leaderboard: Vec<(usize, String, u32)> = sorted_times
+        .into_iter()
+        .enumerate()
+        .map(|(i, (name, frames))| (i, name, frames))
+        .collect();
+    let mut time_output = String::new();
+    for entry in time_leaderboard {
+        time_output.push_str(&format!(
+            "{:>3} - {:>2}:{:0>2}.{:0>3} - {}\n",
+            entry.0 + 1,
+            entry.2 / 60000,
+            entry.2 % 60000 / 1000,
+            entry.2 % 1000,
+            entry.1
+        ));
+    }
+    fs::write(COMMUNITY_TIME_RANKINGS_FILE, time_output).await?;
     Ok(())
 }
 
