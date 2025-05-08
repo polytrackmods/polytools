@@ -2,6 +2,7 @@ mod commands;
 pub mod utils;
 
 use anyhow::Error;
+use commands::update_admins;
 use commands::{
     assign, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
     top, update_rankings, users,
@@ -43,6 +44,7 @@ async fn main() {
             commands: vec![
                 assign(),
                 delete(),
+                update_admins(),
                 request(),
                 list(),
                 edit_lists(),
