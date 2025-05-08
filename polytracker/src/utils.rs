@@ -3,7 +3,7 @@ use anyhow::Error;
 use diesel::prelude::*;
 use poise::serenity_prelude::{self as serenity, CacheHttp};
 use poise::{CreateReply, Modal};
-use polymanager::db::{Admin, NewUser, User};
+use polymanager::db::{Admin, NewAdmin, NewUser, User};
 use serde::{Deserialize, Serialize};
 use serenity::{
     Color, ComponentInteractionCollector, CreateActionRow, CreateAttachment, CreateButton,
@@ -43,6 +43,29 @@ pub struct EditModal {
     #[name = "List"]
     #[paragraph]
     pub list: String,
+}
+
+#[derive(Modal, Default)]
+#[name = "Add Admin"]
+pub struct AddAdminModal {
+    #[name = "Discord username"]
+    pub discord: String,
+    #[name = "Privilege level"]
+    pub privilege: String,
+}
+#[derive(Modal, Default)]
+#[name = "Remove Admin"]
+pub struct RemoveAdminModal {
+    #[name = "Discord username"]
+    pub discord: String,
+}
+#[derive(Modal, Default)]
+#[name = "Edit Admin"]
+pub struct EditAdminModal {
+    #[name = "Discord username"]
+    pub discord: String,
+    #[name = "Privilege"]
+    pub privilege: String,
 }
 
 // the bot's shared data
@@ -96,6 +119,35 @@ impl BotData {
         diesel::delete(users.filter(name.eq(delete_name)))
             .execute(connection)
             .expect("Error deleting user");
+    }
+    pub async fn add_admin(&self, discord: &str, privilege: i32) {
+        use polymanager::schema::admins;
+        let connection = &mut *self.conn.lock().unwrap();
+        let new_admin = NewAdmin {
+            discord,
+            privilege: &privilege,
+        };
+        diesel::insert_into(admins::table)
+            .values(new_admin)
+            .returning(Admin::as_returning())
+            .get_result(connection)
+            .expect("Error adding new admin");
+    }
+    pub async fn remove_admin(&self, admin_discord: &str) {
+        use polymanager::schema::admins::dsl::*;
+        let connection = &mut *self.conn.lock().unwrap();
+        diesel::delete(admins.filter(discord.eq(admin_discord)))
+            .execute(connection)
+            .expect("Error deleting admin");
+    }
+    pub async fn edit_admin(&self, admin_discord: &str, new_privilege: i32) {
+        use polymanager::schema::admins::dsl::*;
+        let connection = &mut *self.conn.lock().unwrap();
+        diesel::update(admins.filter(discord.eq(admin_discord)))
+            .set(privilege.eq(new_privilege))
+            .returning(Admin::as_returning())
+            .get_result(connection)
+            .expect("Error editing admin");
     }
 }
 

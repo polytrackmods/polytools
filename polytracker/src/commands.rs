@@ -1,6 +1,6 @@
 use crate::utils::{
-    autocomplete_users, is_admin, write, write_embed, BotData, EditModal, LeaderBoard,
-    LeaderBoardEntry, WriteEmbed,
+    autocomplete_users, is_admin, write, write_embed, AddAdminModal, BotData, EditAdminModal,
+    EditModal, LeaderBoard, LeaderBoardEntry, RemoveAdminModal, WriteEmbed,
 };
 use crate::{Context, Error, MAX_RANKINGS_AGE};
 use dotenvy::dotenv;
@@ -116,6 +116,52 @@ impl ChoiceParameter for EditModalChoice {
     }
 }
 
+#[derive(Clone)]
+pub enum UpdateAdminsChoice {
+    Add,
+    Remove,
+    Edit,
+}
+
+impl ChoiceParameter for UpdateAdminsChoice {
+    fn list() -> Vec<CommandParameterChoice> {
+        let names = ["Add", "Remove", "Edit"];
+        names
+            .iter()
+            .map(|n| CommandParameterChoice {
+                name: n.to_string(),
+                localizations: HashMap::new(),
+                __non_exhaustive: (),
+            })
+            .collect()
+    }
+    fn from_index(index: usize) -> Option<Self> {
+        use UpdateAdminsChoice::*;
+        let values = [Add, Remove, Edit];
+        values.get(index).cloned()
+    }
+    fn localized_name(&self, _locale: &str) -> Option<&'static str> {
+        Some(self.name())
+    }
+    fn from_name(name: &str) -> Option<Self> {
+        use UpdateAdminsChoice::*;
+        match name {
+            "Add" => Some(Add),
+            "Remove" => Some(Remove),
+            "Edit" => Some(Edit),
+            _ => None,
+        }
+    }
+    fn name(&self) -> &'static str {
+        use UpdateAdminsChoice::*;
+        match self {
+            Add => "Add",
+            Remove => "Remove",
+            Edit => "Edit",
+        }
+    }
+}
+
 /// Assign a username an ID
 ///
 /// The ID can be found by going from the main menu to "Profile", clicking on the profile \
@@ -176,6 +222,65 @@ pub async fn delete(
         response = "`User not found!`".to_string();
     }
     write(&ctx, response).await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, category = "Administration")]
+pub async fn update_admins(
+    ctx: ApplicationContext<'_, BotData, Error>,
+    #[description = "Operation"] operation: UpdateAdminsChoice,
+) -> Result<(), Error> {
+    let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 0).await;
+    if !is_admin {
+        write(&ctx.into(), is_admin_msg).await?;
+        return Ok(());
+    }
+    use UpdateAdminsChoice::*;
+    let output = match operation {
+        Add => {
+            let modal_output = AddAdminModal::execute(ctx).await?.unwrap();
+            let discord = modal_output.discord;
+            let privilege = modal_output.privilege.parse()?;
+            ctx.data()
+                .admins
+                .lock()
+                .unwrap()
+                .insert(discord.clone(), privilege);
+            ctx.data().add_admin(&discord, privilege as i32).await;
+            format!("Added admin {} with privilege level {}", discord, privilege)
+        }
+        Remove => {
+            let modal_output = RemoveAdminModal::execute(ctx).await?.unwrap();
+            let discord = modal_output.discord;
+            if ctx.data().admins.lock().unwrap().contains_key(&discord) {
+                let privilege = ctx.data().admins.lock().unwrap().remove(&discord).unwrap();
+                ctx.data().remove_admin(&discord).await;
+                format!(
+                    "Removed admin {} with former privilege level {}",
+                    discord, privilege
+                )
+            } else {
+                format!("Admin {} does not exist", discord)
+            }
+        }
+        Edit => {
+            let modal_output = EditAdminModal::execute(ctx).await?.unwrap();
+            let discord = modal_output.discord;
+            let privilege = modal_output.privilege.parse()?;
+            if ctx.data().admins.lock().unwrap().contains_key(&discord) {
+                ctx.data()
+                    .admins
+                    .lock()
+                    .unwrap()
+                    .insert(discord.clone(), privilege);
+                ctx.data().edit_admin(&discord, privilege as i32).await;
+                format!("Updated admin {} to privilege level {}", discord, privilege)
+            } else {
+                format!("Admin {} does not exist", discord)
+            }
+        }
+    };
+    write(&ctx.into(), output).await?;
     Ok(())
 }
 
