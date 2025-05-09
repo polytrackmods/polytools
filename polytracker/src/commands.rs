@@ -844,19 +844,13 @@ pub async fn rankings(
         "Player",
     ];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-    let content = fs::read_to_string(match leaderboard {
-        Global => RANKINGS_FILE,
-        Community => COMMUNITY_RANKINGS_FILE,
-        Hof => HOF_RANKINGS_FILE,
-    })
-    .await?;
-    for line in content.lines() {
-        let lb: PolyLeaderBoard = serde_json::from_str(line).unwrap();
-        for i in 0..lb.total {
-            contents[0].push_str(&format!("{}\n", lb.entries[i as usize].rank));
-            contents[1].push_str(&format!("{}\n", lb.entries[i as usize].stat));
-            contents[2].push_str(&format!("{}\n", lb.entries[i as usize].name));
-        }
+    let content = fs::read_to_string(rankings_file).await?;
+    let line = content.lines().next().unwrap();
+    let lb: PolyLeaderBoard = serde_json::from_str(line).unwrap();
+    for i in 0..lb.total {
+        contents[0].push_str(&format!("{}\n", lb.entries[i as usize].rank));
+        contents[1].push_str(&format!("{}\n", lb.entries[i as usize].stat));
+        contents[2].push_str(&format!("{}\n", lb.entries[i as usize].name));
     }
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
