@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use chrono::DateTime;
 
 use polymanager::{
-    ALT_ACCOUNT_FILE, BLACKLIST_FILE, CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
+    PolyLeaderBoard, PolyLeaderBoardEntry, ALT_ACCOUNT_FILE, BLACKLIST_FILE, CUSTOM_TRACK_FILE,
+    HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
@@ -23,13 +24,13 @@ struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
 
-#[derive(Serialize, Deserialize)]
+/* #[derive(Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
 pub struct Entry {
     rank: u32,
     stat: String,
     name: String,
-}
+} */
 
 #[derive(Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
@@ -41,136 +42,24 @@ struct FileRecord {
     recording: String,
 }
 
-pub async fn parse_leaderboard(file_path: &str) -> Vec<Entry> {
+pub async fn parse_leaderboard(file_path: &str) -> PolyLeaderBoard {
     let contents = fs::read_to_string(file_path)
         .await
         .expect("Failed to read file");
-    contents
-        .lines()
-        .filter_map(|line| {
-            let parts: Vec<&str> = line
-                .trim_start()
-                .splitn(3, " - ")
-                .filter(|s| !s.is_empty())
-                .collect();
-            if parts.len() == 3 {
-                Some(Entry {
-                    rank: parts[0].parse().ok()?,
-                    stat: parts[1].to_string(),
-                    name: parts[2].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
+    serde_json::from_str(&contents).unwrap()
 }
 
-pub async fn parse_hof_leaderboard(file_path: &str) -> (Vec<Entry>, Vec<Entry>) {
+pub async fn parse_leaderboard_with_records(file_path: &str) -> (PolyLeaderBoard, PolyLeaderBoard) {
     let contents = fs::read_to_string(file_path)
         .await
         .expect("Failed to read file");
-    let leaderboard: Vec<Entry> = contents
-        .lines()
-        .filter_map(|line| {
-            if line.starts_with("<|-|>") {
-                return None;
-            }
-            let parts: Vec<&str> = line
-                .trim_start()
-                .splitn(3, " - ")
-                .filter(|s| !s.is_empty())
-                .collect();
-            if parts.len() == 3 {
-                Some(Entry {
-                    rank: parts[0].parse().ok()?,
-                    stat: parts[1].to_string(),
-                    name: parts[2].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-    let record_leaderboard: Vec<Entry> = contents
-        .lines()
-        .filter_map(|line| {
-            if !line.starts_with("<|-|>") {
-                return None;
-            }
-            let parts: Vec<&str> = line
-                .trim_start_matches("<|-|>")
-                .trim_start()
-                .splitn(3, " - ")
-                .filter(|s| !s.is_empty())
-                .collect();
-            if parts.len() == 3 {
-                Some(Entry {
-                    rank: parts[0].parse().ok()?,
-                    stat: parts[1].to_string(),
-                    name: parts[2].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
+    let mut lines = contents.lines();
+    let leaderboard: PolyLeaderBoard = serde_json::from_str(lines.next().unwrap()).unwrap();
+    let record_leaderboard: PolyLeaderBoard = serde_json::from_str(lines.next().unwrap()).unwrap();
     (leaderboard, record_leaderboard)
 }
 
-pub async fn parse_community_leaderboard(file_path: &str) -> (Vec<Entry>, Vec<Entry>) {
-    let contents = fs::read_to_string(file_path)
-        .await
-        .expect("Failed to read file");
-    let leaderboard: Vec<Entry> = contents
-        .lines()
-        .filter_map(|line| {
-            if line.starts_with("<|-|>") {
-                return None;
-            }
-            let parts: Vec<&str> = line
-                .trim_start()
-                .splitn(3, " - ")
-                .filter(|s| !s.is_empty())
-                .collect();
-            if parts.len() == 3 {
-                Some(Entry {
-                    rank: parts[0].parse().ok()?,
-                    stat: parts[1].to_string(),
-                    name: parts[2].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-    let record_leaderboard: Vec<Entry> = contents
-        .lines()
-        .filter_map(|line| {
-            if !line.starts_with("<|-|>") {
-                return None;
-            }
-            let parts: Vec<&str> = line
-                .trim_start_matches("<|-|>")
-                .trim_start()
-                .splitn(3, " - ")
-                .filter(|s| !s.is_empty())
-                .collect();
-            if parts.len() == 3 {
-                Some(Entry {
-                    rank: parts[0].parse().ok()?,
-                    stat: parts[1].to_string(),
-                    name: parts[2].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-    (leaderboard, record_leaderboard)
-}
-
-pub async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
+pub async fn get_custom_leaderboard(track_id: &str) -> (String, PolyLeaderBoard) {
     let client = Client::new();
     let track_ids: HashMap<String, String> = fs::read_to_string(CUSTOM_TRACK_FILE)
         .await
@@ -207,7 +96,7 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
     };
     let result = client.get(&url).send().await.unwrap().text().await.unwrap();
     let response: LeaderBoard = serde_json::from_str(&result).unwrap();
-    let mut leaderboard = Vec::new();
+    let mut leaderboard = PolyLeaderBoard::new();
     let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await
         .unwrap()
@@ -242,22 +131,20 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
             continue;
         }
         rank += 1;
-        leaderboard.push(Entry {
+        leaderboard.push_entry(PolyLeaderBoardEntry::new(
             rank,
-            stat: {
-                if entry.frames < 60000.0 {
-                    (entry.frames / 1000.0).to_string()
-                } else {
-                    format!(
-                        "{}:{:0>2}.{:0>3}",
-                        entry.frames as u32 / 60000,
-                        entry.frames as u32 % 60000 / 1000,
-                        entry.frames as u32 % 1000
-                    )
-                }
+            name.clone(),
+            if entry.frames < 60000.0 {
+                (entry.frames / 1000.0).to_string()
+            } else {
+                format!(
+                    "{}:{:0>2}.{:0>3}",
+                    entry.frames as u32 / 60000,
+                    entry.frames as u32 % 60000 / 1000,
+                    entry.frames as u32 % 1000
+                )
             },
-            name: name.clone(),
-        });
+        ));
         has_time.push(name);
     }
     let name = if track_ids.contains_key(&real_track_id) {
@@ -268,7 +155,7 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, Vec<Entry>) {
     (name, leaderboard)
 }
 
-pub async fn get_standard_leaderboard(track_id: &str) -> Vec<Entry> {
+pub async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
     let client = Client::new();
     let tracks = fs::read_to_string(TRACK_FILE).await.unwrap();
     let track_ids: HashMap<&str, String> = tracks
@@ -288,7 +175,7 @@ pub async fn get_standard_leaderboard(track_id: &str) -> Vec<Entry> {
     );
     let result = client.get(&url).send().await.unwrap().text().await.unwrap();
     let response: LeaderBoard = serde_json::from_str(&result).unwrap();
-    let mut leaderboard = Vec::new();
+    let mut leaderboard = PolyLeaderBoard::new();
     let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await
         .unwrap()
@@ -323,22 +210,20 @@ pub async fn get_standard_leaderboard(track_id: &str) -> Vec<Entry> {
             continue;
         }
         rank += 1;
-        leaderboard.push(Entry {
+        leaderboard.push_entry(PolyLeaderBoardEntry::new(
             rank,
-            stat: {
-                if entry.frames < 60000.0 {
-                    (entry.frames / 1000.0).to_string()
-                } else {
-                    format!(
-                        "{}:{}.{}",
-                        entry.frames as u32 / 60000,
-                        entry.frames as u32 % 60000 / 1000,
-                        entry.frames as u32 % 1000
-                    )
-                }
+            name.clone(),
+            if entry.frames < 60000.0 {
+                (entry.frames / 1000.0).to_string()
+            } else {
+                format!(
+                    "{}:{}.{}",
+                    entry.frames as u32 / 60000,
+                    entry.frames as u32 % 60000 / 1000,
+                    entry.frames as u32 % 1000
+                )
             },
-            name: name.clone(),
-        });
+        ));
         has_time.push(name);
     }
     leaderboard

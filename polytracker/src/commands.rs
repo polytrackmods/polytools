@@ -7,8 +7,8 @@ use dotenvy::dotenv;
 use poise::serenity_prelude as serenity;
 use poise::{builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, Modal};
 use polymanager::{
-    community_update, global_rankings_update, hof_update, ALT_ACCOUNT_FILE, BLACKLIST_FILE,
-    COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
+    community_update, global_rankings_update, hof_update, PolyLeaderBoard, ALT_ACCOUNT_FILE,
+    BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
     HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE,
     HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
     VERSION,
@@ -749,24 +749,30 @@ pub async fn update_rankings(
         Community => community_update().await,
         Hof => hof_update().await,
     }?;
-    let headers: Vec<&str> = vec!["Ranking", "Time", "Player"];
+    let headers: Vec<&str> = vec![
+        "Ranking",
+        {
+            use LeaderboardChoice::*;
+            match leaderboard {
+                Global => "Time",
+                _ => "Points",
+            }
+        },
+        "Player",
+    ];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-    for line in fs::read_to_string(match leaderboard {
+    let content = fs::read_to_string(match leaderboard {
         Global => RANKINGS_FILE,
         Community => COMMUNITY_RANKINGS_FILE,
         Hof => HOF_RANKINGS_FILE,
     })
-    .await?
-    .lines()
-    .filter(|s| !s.starts_with("<|-|>"))
-    .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
-    {
-        for i in 0..contents.len() {
-            contents
-                .get_mut(i)
-                .unwrap()
-                .push_str(format!("{}\n", line.get(i).unwrap()).as_str());
-        }
+    .await?;
+    let line = content.lines().next().unwrap();
+    let lb: PolyLeaderBoard = serde_json::from_str(line).unwrap();
+    for i in 0..lb.total {
+        contents[0].push_str(&format!("{}\n", lb.entries[i as usize].rank));
+        contents[1].push_str(&format!("{}\n", lb.entries[i as usize].stat));
+        contents[2].push_str(&format!("{}\n", lb.entries[i as usize].name));
     }
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
@@ -785,7 +791,7 @@ pub async fn update_rankings(
 #[poise::command(slash_command, prefix_command, category = "Query")]
 pub async fn rankings(
     ctx: Context<'_>,
-    #[description = "Leaderboard"] lb: Option<LeaderboardChoice>,
+    #[description = "Leaderboard"] leaderboard: Option<LeaderboardChoice>,
     #[description = "Mode (HOF/community only)"] time_based: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
@@ -794,35 +800,31 @@ pub async fn rankings(
     } else {
         ctx.defer().await?;
     }
-    let lb = lb.unwrap_or(LeaderboardChoice::Global);
+    let leaderboard = leaderboard.unwrap_or(LeaderboardChoice::Global);
     let time_based = time_based.unwrap_or(false);
-    let rankings_file = {
-        use LeaderboardChoice::*;
-        match lb {
-            Global => RANKINGS_FILE,
-            Community => match time_based {
-                false => COMMUNITY_RANKINGS_FILE,
-                true => COMMUNITY_TIME_RANKINGS_FILE,
-            },
-            Hof => match time_based {
-                false => HOF_RANKINGS_FILE,
-                true => HOF_TIME_RANKINGS_FILE,
-            },
-        }
+    use LeaderboardChoice::*;
+    let rankings_file = match leaderboard {
+        Global => RANKINGS_FILE,
+        Community => match time_based {
+            false => COMMUNITY_RANKINGS_FILE,
+            true => COMMUNITY_TIME_RANKINGS_FILE,
+        },
+        Hof => match time_based {
+            false => HOF_RANKINGS_FILE,
+            true => HOF_TIME_RANKINGS_FILE,
+        },
     };
     if fs::try_exists(rankings_file).await? {
         let age = fs::metadata(rankings_file).await?.modified()?.elapsed()?;
         if age > MAX_RANKINGS_AGE {
-            use LeaderboardChoice::*;
-            match lb {
+            match leaderboard {
                 Global => global_rankings_update().await?,
                 Community => community_update().await?,
                 Hof => hof_update().await?,
             }
         }
     } else {
-        use LeaderboardChoice::*;
-        match lb {
+        match leaderboard {
             Global => global_rankings_update().await?,
             Community => community_update().await?,
             Hof => hof_update().await?,
@@ -831,8 +833,7 @@ pub async fn rankings(
     let headers: Vec<&str> = vec![
         "Ranking",
         {
-            use LeaderboardChoice::*;
-            match lb {
+            match leaderboard {
                 Global => "Time",
                 _ => match time_based {
                     false => "Points",
@@ -843,31 +844,25 @@ pub async fn rankings(
         "Player",
     ];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-    for line in fs::read_to_string(rankings_file)
-        .await?
-        .lines()
-        .filter(|s| !s.starts_with("<|-|>"))
-        .map(|s| s.splitn(3, " - ").collect::<Vec<&str>>())
-    {
-        for i in 0..contents.len() {
-            contents
-                .get_mut(i)
-                .unwrap()
-                .push_str(format!("{}\n", line.get(i).unwrap()).as_str());
+    let content = fs::read_to_string(match leaderboard {
+        Global => RANKINGS_FILE,
+        Community => COMMUNITY_RANKINGS_FILE,
+        Hof => HOF_RANKINGS_FILE,
+    })
+    .await?;
+    for line in content.lines() {
+        let lb: PolyLeaderBoard = serde_json::from_str(line).unwrap();
+        for i in 0..lb.total {
+            contents[0].push_str(&format!("{}\n", lb.entries[i as usize].rank));
+            contents[1].push_str(&format!("{}\n", lb.entries[i as usize].stat));
+            contents[2].push_str(&format!("{}\n", lb.entries[i as usize].name));
         }
     }
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         ctx,
         vec![WriteEmbed::new(headers.len())
-            .title({
-                use LeaderboardChoice::*;
-                match lb {
-                    Global => "Global Leaderboard",
-                    Community => "Community Leaderboard",
-                    Hof => "HOF Leaderboard",
-                }
-            })
+            .title(&format!("{} Leaderboard", leaderboard.name()))
             .headers(headers)
             .contents(contents)
             .inlines(inlines)],

@@ -51,6 +51,38 @@ struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
 
+#[derive(Deserialize, Serialize, Default)]
+pub struct PolyLeaderBoard {
+    pub total: u32,
+    pub entries: Vec<PolyLeaderBoardEntry>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct PolyLeaderBoardEntry {
+    pub rank: u32,
+    pub name: String,
+    pub stat: String,
+}
+
+impl PolyLeaderBoard {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn push_entry(&mut self, entry: PolyLeaderBoardEntry) {
+        self.entries.push(entry);
+        self.total += 1;
+    }
+}
+impl PolyLeaderBoardEntry {
+    pub fn new(rank: u32, username: String, value: String) -> Self {
+        Self {
+            rank,
+            name: username,
+            stat: value,
+        }
+    }
+}
+
 pub async fn global_rankings_update() -> Result<(), Error> {
     dotenv().ok();
     let lb_size = env::var("LEADERBOARD_SIZE")
@@ -169,26 +201,27 @@ pub async fn global_rankings_update() -> Result<(), Error> {
         .map(|(name, times)| (name, times.iter().sum::<f64>() as u32))
         .collect();
     sorted_leaderboard.sort_by_key(|(_, frames)| *frames);
-    let leaderboard: Vec<(usize, String, u32)> = sorted_leaderboard
-        .into_iter()
-        .enumerate()
-        .map(|(i, (name, frames))| (i, name, frames))
-        .collect();
-    let mut output = String::new();
-    for entry in leaderboard {
-        output.push_str(
-            format!(
-                "{:>3} - {:>2}:{:0>2}.{:0>3} - {}\n",
-                entry.0 + 1,
-                entry.2 / 60000,
-                entry.2 % 60000 / 1000,
-                entry.2 % 1000,
-                entry.1
-            )
-            .as_str(),
-        );
-    }
-    fs::write(RANKINGS_FILE, output.clone()).await?;
+    let leaderboard: PolyLeaderBoard = PolyLeaderBoard {
+        total: sorted_leaderboard.len() as u32,
+        entries: sorted_leaderboard
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, frames))| {
+                PolyLeaderBoardEntry::new(
+                    (i + 1) as u32,
+                    name,
+                    format!(
+                        "{:>2}:{:0>2}.{:0>3}",
+                        frames / 60000,
+                        frames % 60000 / 1000,
+                        frames % 1000
+                    ),
+                )
+            })
+            .collect(),
+    };
+    let output = serde_json::to_string(&leaderboard)?;
+    fs::write(RANKINGS_FILE, output).await?;
     Ok(())
 }
 
@@ -318,7 +351,7 @@ pub async fn hof_update() -> Result<(), Error> {
             .cmp(points_a)
             .then_with(|| tiebreakers_b.cmp(tiebreakers_a))
     });
-    let mut final_leaderboard: Vec<(u32, u32, String)> = Vec::new();
+    let mut final_leaderboard = PolyLeaderBoard::new();
     let mut points_prev = point_values[0] * track_num + 1;
     let mut rank_prev = 0;
     for (name, points, _) in sorted_leaderboard.clone() {
@@ -326,12 +359,13 @@ pub async fn hof_update() -> Result<(), Error> {
             points_prev = points;
             rank_prev += 1;
         }
-        final_leaderboard.push((rank_prev, points_prev, name));
+        final_leaderboard.push_entry(PolyLeaderBoardEntry::new(
+            rank_prev,
+            name,
+            points_prev.to_string(),
+        ));
     }
-    let mut output = String::new();
-    for (rank, points, name) in final_leaderboard {
-        output.push_str(format!("{:>3} - {} - {}\n", rank, points, name).as_str());
-    }
+    let mut output = serde_json::to_string(&final_leaderboard)?;
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
@@ -343,7 +377,7 @@ pub async fn hof_update() -> Result<(), Error> {
     let mut player_records: Vec<(String, u32)> = player_records.into_iter().collect();
     player_records.sort_by_key(|(_, amt)| *amt);
     player_records.reverse();
-    let mut final_player_records: Vec<(u32, u32, String)> = Vec::new();
+    let mut final_player_records = PolyLeaderBoard::new();
     let mut records_prev = track_num + 1;
     let mut rank_prev = 0;
     for (name, records) in player_records.clone() {
@@ -351,11 +385,14 @@ pub async fn hof_update() -> Result<(), Error> {
             records_prev = records;
             rank_prev += 1;
         }
-        final_player_records.push((rank_prev, records_prev, name));
+        final_player_records.push_entry(PolyLeaderBoardEntry::new(
+            rank_prev,
+            name,
+            records_prev.to_string(),
+        ));
     }
-    for (rank, records, name) in final_player_records {
-        output.push_str(format!("<|-|> {:>3} - {} - {}\n", rank, records, name).as_str());
-    }
+    output.push('\n');
+    output.push_str(&serde_json::to_string(&final_player_records).unwrap());
     fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
@@ -363,22 +400,26 @@ pub async fn hof_update() -> Result<(), Error> {
         .map(|(name, times)| (name, times.iter().sum::<f64>() as u32))
         .collect();
     sorted_times.sort_by_key(|(_, frames)| *frames);
-    let time_leaderboard: Vec<(usize, String, u32)> = sorted_times
-        .into_iter()
-        .enumerate()
-        .map(|(i, (name, frames))| (i, name, frames))
-        .collect();
-    let mut time_output = String::new();
-    for entry in time_leaderboard {
-        time_output.push_str(&format!(
-            "{:>3} - {:>2}:{:0>2}.{:0>3} - {}\n",
-            entry.0 + 1,
-            entry.2 / 60000,
-            entry.2 % 60000 / 1000,
-            entry.2 % 1000,
-            entry.1
-        ));
-    }
+    let time_leaderboard = PolyLeaderBoard {
+        total: sorted_times.len() as u32,
+        entries: sorted_times
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, frames))| {
+                PolyLeaderBoardEntry::new(
+                    (i + 1) as u32,
+                    name,
+                    format!(
+                        "{:>2}:{:0>2}.{:0>3}",
+                        frames / 60000,
+                        frames % 60000 / 1000,
+                        frames % 1000
+                    ),
+                )
+            })
+            .collect(),
+    };
+    let time_output = serde_json::to_string(&time_leaderboard)?;
     fs::write(HOF_TIME_RANKINGS_FILE, time_output).await?;
     Ok(())
 }
@@ -518,7 +559,7 @@ pub async fn community_update() -> Result<(), Error> {
             .cmp(points_a)
             .then_with(|| tiebreakers_b.cmp(tiebreakers_a))
     });
-    let mut final_leaderboard: Vec<(u32, u32, String)> = Vec::new();
+    let mut final_leaderboard = PolyLeaderBoard::new();
     let mut points_prev = COMMUNITY_LB_SIZE * 500 * track_num + 1;
     let mut rank_prev = 0;
     for (name, points, _) in sorted_leaderboard.clone() {
@@ -526,12 +567,13 @@ pub async fn community_update() -> Result<(), Error> {
             points_prev = points;
             rank_prev += 1;
         }
-        final_leaderboard.push((rank_prev, points_prev, name));
+        final_leaderboard.push_entry(PolyLeaderBoardEntry::new(
+            rank_prev,
+            name,
+            points_prev.to_string(),
+        ));
     }
-    let mut output = String::new();
-    for (rank, points, name) in final_leaderboard {
-        output.push_str(format!("{:>3} - {} - {}\n", rank, points, name).as_str());
-    }
+    let mut output = serde_json::to_string(&final_leaderboard)?;
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
@@ -543,7 +585,7 @@ pub async fn community_update() -> Result<(), Error> {
     let mut player_records: Vec<(String, u32)> = player_records.into_iter().collect();
     player_records.sort_by_key(|(_, amt)| *amt);
     player_records.reverse();
-    let mut final_player_records: Vec<(u32, u32, String)> = Vec::new();
+    let mut final_player_records = PolyLeaderBoard::new();
     let mut records_prev = track_num + 1;
     let mut rank_prev = 0;
     for (name, records) in player_records.clone() {
@@ -551,34 +593,41 @@ pub async fn community_update() -> Result<(), Error> {
             records_prev = records;
             rank_prev += 1;
         }
-        final_player_records.push((rank_prev, records_prev, name));
+        final_player_records.push_entry(PolyLeaderBoardEntry::new(
+            rank_prev,
+            name,
+            records_prev.to_string(),
+        ));
     }
-    for (rank, records, name) in final_player_records {
-        output.push_str(format!("<|-|> {:>3} - {} - {}\n", rank, records, name).as_str());
-    }
-    fs::write(COMMUNITY_RANKINGS_FILE, output.clone()).await?;
+    output.push('\n');
+    output.push_str(&serde_json::to_string(&final_player_records).unwrap());
+    fs::write(COMMUNITY_RANKINGS_FILE, output).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
         .filter(|(_, times)| times.len() == track_num as usize)
         .map(|(name, times)| (name, times.iter().sum::<f64>() as u32))
         .collect();
     sorted_times.sort_by_key(|(_, frames)| *frames);
-    let time_leaderboard: Vec<(usize, String, u32)> = sorted_times
-        .into_iter()
-        .enumerate()
-        .map(|(i, (name, frames))| (i, name, frames))
-        .collect();
-    let mut time_output = String::new();
-    for entry in time_leaderboard {
-        time_output.push_str(&format!(
-            "{:>3} - {:>2}:{:0>2}.{:0>3} - {}\n",
-            entry.0 + 1,
-            entry.2 / 60000,
-            entry.2 % 60000 / 1000,
-            entry.2 % 1000,
-            entry.1
-        ));
-    }
+    let time_leaderboard = PolyLeaderBoard {
+        total: sorted_times.len() as u32,
+        entries: sorted_times
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, frames))| {
+                PolyLeaderBoardEntry::new(
+                    (i + 1) as u32,
+                    name,
+                    format!(
+                        "{:>2}:{:0>2}.{:0>3}",
+                        frames / 60000,
+                        frames % 60000 / 1000,
+                        frames % 1000
+                    ),
+                )
+            })
+            .collect(),
+    };
+    let time_output = serde_json::to_string(&time_leaderboard)?;
     fs::write(COMMUNITY_TIME_RANKINGS_FILE, time_output).await?;
     Ok(())
 }

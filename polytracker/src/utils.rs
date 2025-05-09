@@ -275,7 +275,7 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
             .iter()
             .any(|(_, pages, _)| pages.first().unwrap().len() > 1)
         {
-            let mut current_page = 0;
+            let mut current_page: i32 = 0;
             while let Some(press) = ComponentInteractionCollector::new(ctx)
                 .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
                 .timeout(MAX_MSG_AGE)
@@ -291,13 +291,17 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
                     continue;
                 }
                 for (i, (embed, pages, write_embed)) in embeds.iter_mut().enumerate() {
+                    let pages1_len = pages.first().unwrap().len() as i32;
                     let fields = write_embed.headers.iter().enumerate().map(|(i, h)| {
                         (
                             h.to_string(),
                             pages
                                 .get(i)
                                 .unwrap()
-                                .get(current_page % pages.first().unwrap().len())
+                                .get(
+                                    ((current_page % pages1_len + pages1_len) % pages1_len)
+                                        as usize,
+                                )
                                 .unwrap()
                                 .clone(),
                             *write_embed.inlines.get(i).unwrap(),
