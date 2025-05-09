@@ -4,8 +4,8 @@ pub mod parsers;
 use api::get_api;
 use filenamify::filenamify;
 use parsers::{
-    get_custom_leaderboard, get_standard_leaderboard, parse_community_leaderboard, parse_history,
-    parse_hof_leaderboard, parse_leaderboard,
+    get_custom_leaderboard, get_standard_leaderboard, parse_history, parse_leaderboard,
+    parse_leaderboard_with_records,
 };
 use polymanager::{
     community_update, global_rankings_update, hof_update, COMMUNITY_RANKINGS_FILE,
@@ -36,13 +36,13 @@ async fn global() -> Template {
 
 #[get("/community")]
 async fn community() -> Template {
-    let leaderboard = parse_community_leaderboard(COMMUNITY_RANKINGS_FILE).await;
+    let leaderboard = parse_leaderboard_with_records(COMMUNITY_RANKINGS_FILE).await;
     Template::render("community", context! { leaderboard })
 }
 
 #[get("/hof")]
 async fn hof() -> Template {
-    let leaderboard = parse_hof_leaderboard(HOF_RANKINGS_FILE).await;
+    let leaderboard = parse_leaderboard_with_records(HOF_RANKINGS_FILE).await;
     Template::render("hof", context! { leaderboard })
 }
 

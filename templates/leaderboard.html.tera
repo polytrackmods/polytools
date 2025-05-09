@@ -11,7 +11,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for entry in leaderboard %}
+        {% for entry in leaderboard.entries %}
         <tr>
             <td>{{ entry.rank }}.</td>
             <td>{{ entry.stat }}</td>
