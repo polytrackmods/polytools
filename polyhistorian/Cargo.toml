@@ -10,4 +10,4 @@ polymanager = { version = "0.1.0", path = "../polymanager" }
 reqwest = { version = "0.12.15", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-tokio = { version = "1.44.2", features = ["fs", "macros", "rt-multi-thread"] }
+tokio = { version = "1.45.0", features = ["fs", "macros", "rt-multi-thread"] }
