@@ -1,9 +1,14 @@
+use crate::commands::LeaderboardChoice;
 use crate::{Context, MAX_MSG_AGE};
 use anyhow::Error;
 use diesel::prelude::*;
 use poise::serenity_prelude::{self as serenity, CacheHttp};
 use poise::{CreateReply, Modal};
 use polymanager::db::{Admin, NewAdmin, NewUser, User};
+use polymanager::{
+    COMMUNITY_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, VERSION,
+};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serenity::{
     Color, ComponentInteractionCollector, CreateActionRow, CreateAttachment, CreateButton,
@@ -11,6 +16,9 @@ use serenity::{
 };
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::Duration;
+use tokio::fs;
+use tokio::time::sleep;
 
 // structs for deserializing leaderboards
 #[derive(Deserialize, Serialize)]
@@ -398,4 +406,60 @@ pub async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> 
             .filter(|key| key.to_lowercase().starts_with(&partial.to_lowercase()))
             .collect();
     }
+}
+
+pub struct PolyRecords {
+    pub records: Vec<Vec<String>>,
+    pub wr_amounts: HashMap<String, u32>,
+}
+
+pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error> {
+    let track_ids: Vec<(String, String)> = fs::read_to_string({
+        use LeaderboardChoice::*;
+        match tracks {
+            Global => TRACK_FILE,
+            Community => COMMUNITY_TRACK_FILE,
+            Hof => HOF_ALL_TRACK_FILE,
+        }
+    })
+    .await
+    .unwrap()
+    .lines()
+    .map(|s| {
+        let mut parts = s.splitn(2, " ").map(|s| s.to_string());
+        (parts.next().unwrap(), parts.next().unwrap())
+    })
+    .collect();
+    let mut records = vec![Vec::new(); 3];
+    let client = Client::new();
+    let mut wr_amounts: HashMap<String, u32> = HashMap::new();
+    for (id, name) in track_ids {
+        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=true",
+            43273,
+            VERSION,
+            id,
+        );
+        let mut att = 0;
+        let mut res = client.get(&url).send().await?.text().await?;
+        while res.is_empty() && att < REQUEST_RETRY_COUNT {
+            att += 1;
+            sleep(Duration::from_millis(1000)).await;
+            res = client.get(&url).send().await?.text().await?;
+        }
+        let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
+        let default_winner = LeaderBoardEntry {
+            name: "unknown".to_string(),
+            frames: 69420.0,
+            verified_state: 1,
+        };
+        let winner = leaderboard.entries.first().unwrap_or(&default_winner);
+        let winner_name = winner.name.clone();
+        let winner_time = winner.frames / 1000.0;
+        *wr_amounts.entry(winner_name.clone()).or_default() += 1;
+        records.get_mut(0).unwrap().push(name);
+        records.get_mut(1).unwrap().push(winner_name);
+        records.get_mut(2).unwrap().push(winner_time.to_string());
+    }
+    let poly_records = PolyRecords { wr_amounts, records };
+    Ok(poly_records)
 }
