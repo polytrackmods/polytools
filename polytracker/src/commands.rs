@@ -1,6 +1,6 @@
 use crate::utils::{
-    autocomplete_users, is_admin, write, write_embed, AddAdminModal, BotData, EditAdminModal,
-    EditModal, LeaderBoard, LeaderBoardEntry, RemoveAdminModal, WriteEmbed,
+    autocomplete_users, get_records, is_admin, write, write_embed, AddAdminModal, BotData,
+    EditAdminModal, EditModal, LeaderBoard, LeaderBoardEntry, RemoveAdminModal, WriteEmbed,
 };
 use crate::{Context, Error, MAX_RANKINGS_AGE};
 use dotenvy::dotenv;
@@ -22,7 +22,7 @@ use tokio::{fs, task};
 
 // argument enum for leaderboard related commands
 #[derive(Clone)]
-enum LeaderboardChoice {
+pub enum LeaderboardChoice {
     Global,
     Community,
     Hof,
@@ -787,6 +787,118 @@ pub async fn update_rankings(
     Ok(())
 }
 
+#[poise::command(slash_command, prefix_command, category = "Query")]
+pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let mut embeds: Vec<WriteEmbed> = Vec::new();
+    let champion_contents = {
+        let mut champions = vec![String::new(); 2];
+        let ct_champion = serde_json::from_str::<PolyLeaderBoard>(
+            fs::read_to_string(COMMUNITY_RANKINGS_FILE)
+                .await?
+                .lines()
+                .next()
+                .unwrap(),
+        )?
+        .entries
+        .first()
+        .unwrap()
+        .name
+        .clone();
+        champions[0].push_str(&format!("{}\n", ct_champion));
+        champions[1].push_str("CT Champion\n");
+        let hof_champion = serde_json::from_str::<PolyLeaderBoard>(
+            fs::read_to_string(HOF_RANKINGS_FILE)
+                .await?
+                .lines()
+                .next()
+                .unwrap(),
+        )?
+        .entries
+        .first()
+        .unwrap()
+        .name
+        .clone();
+        champions[0].push_str(&format!("{}\n", hof_champion));
+        champions[1].push_str("HOF Champion\n");
+        let wr_champion = get_records(LeaderboardChoice::Global)
+            .await?
+            .wr_amounts
+            .iter()
+            .max_by_key(|(_, v)| *v)
+            .unwrap()
+            .0
+            .clone();
+        champions[0].push_str(&format!("{}\n", wr_champion));
+        champions[1].push_str("WR Champion\n");
+        champions
+    };
+    let champion_embed = WriteEmbed::new(2)
+        .title("Champions")
+        .headers(vec!["User", "Title"])
+        .contents(champion_contents);
+    embeds.push(champion_embed);
+    let wr_holder_contents = {
+        let mut wr_holders = vec![String::new(); 2];
+        let hof_poly_records = get_records(LeaderboardChoice::Hof).await?;
+        let hof_records = hof_poly_records
+            .wr_amounts
+            .keys()
+            .filter(|k| *k != "Anonymous" && *k != "unknown");
+        let hof_record_amount = hof_records.clone().count();
+        wr_holders[0].push_str(&hof_records.map(|k| format!("{}\n", k)).collect::<String>());
+        wr_holders[1].push_str(&"HOF WR Holder\n".repeat(hof_record_amount));
+        let ct_poly_records = get_records(LeaderboardChoice::Community).await?;
+        let ct_records = ct_poly_records
+            .wr_amounts
+            .keys()
+            .filter(|k| *k != "Anonymous" && *k != "unknown");
+        let ct_record_amount = ct_records.clone().count();
+        wr_holders[0].push_str(&ct_records.map(|k| format!("{}\n", k)).collect::<String>());
+        wr_holders[1].push_str(&"CT WR Holder\n".repeat(ct_record_amount));
+        wr_holders
+    };
+    let wr_holder_embed = WriteEmbed::new(2)
+        .title("WR Holders")
+        .headers(vec!["User", "Title"])
+        .contents(wr_holder_contents);
+    embeds.push(wr_holder_embed);
+    let global_grandmaster_contents = {
+        let mut global_grandmasters = Vec::new();
+        let mut main_leaderboard =
+            serde_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)?
+                .entries
+                .iter()
+                .take(20)
+                .map(|e| e.name.clone())
+                .collect();
+        global_grandmasters.append(&mut main_leaderboard);
+        let mut community_leaderboard = serde_json::from_str::<PolyLeaderBoard>(
+            fs::read_to_string(COMMUNITY_RANKINGS_FILE)
+                .await?
+                .lines()
+                .next()
+                .unwrap(),
+        )?
+        .entries
+        .iter()
+        .take(20)
+        .map(|e| e.name.clone())
+        .collect();
+        global_grandmasters.append(&mut community_leaderboard);
+        global_grandmasters.sort();
+        global_grandmasters.dedup();
+        global_grandmasters.join("\n")
+    };
+    let global_grandmaster_embed = WriteEmbed::new(1)
+        .title("Global Grandmaster")
+        .headers(vec!["User"])
+        .contents(vec![global_grandmaster_contents]);
+    embeds.push(global_grandmaster_embed);
+    write_embed(ctx, embeds).await?;
+    Ok(())
+}
+
 /// Leaderboard for official tracks
 #[poise::command(slash_command, prefix_command, category = "Query")]
 pub async fn rankings(
@@ -982,66 +1094,13 @@ pub async fn records(
         ctx.defer().await?;
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
-    let track_ids: Vec<(String, String)> = fs::read_to_string({
-        use LeaderboardChoice::*;
-        match tracks {
-            Global => TRACK_FILE,
-            Community => COMMUNITY_TRACK_FILE,
-            Hof => HOF_ALL_TRACK_FILE,
-        }
-    })
-    .await
-    .unwrap()
-    .lines()
-    .map(|s| {
-        let mut parts = s.splitn(2, " ").map(|s| s.to_string());
-        (parts.next().unwrap(), parts.next().unwrap())
-    })
-    .collect();
-    let mut contents = vec![String::new(), String::new(), String::new()];
-    let client = Client::new();
-    let mut wr_amounts: HashMap<String, u32> = HashMap::new();
-    for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=true",
-            43273,
-            VERSION,
-            id,
-        );
-        let mut att = 0;
-        let mut res = client.get(&url).send().await?.text().await?;
-        while res.is_empty() && att < REQUEST_RETRY_COUNT {
-            att += 1;
-            sleep(Duration::from_millis(1000)).await;
-            res = client.get(&url).send().await?.text().await?;
-        }
-        let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
-        let default_winner = LeaderBoardEntry {
-            name: "unknown".to_string(),
-            frames: 69420.0,
-            verified_state: 1,
-        };
-        let winner = leaderboard.entries.first().unwrap_or(&default_winner);
-        let winner_name = winner.name.clone();
-        let winner_time = winner.frames / 1000.0;
-        *wr_amounts.entry(winner_name.clone()).or_default() += 1;
-        contents
-            .get_mut(0)
-            .unwrap()
-            .push_str(&format!("{}\n", name));
-        contents
-            .get_mut(1)
-            .unwrap()
-            .push_str(&format!("{}\n", winner_name));
-        contents
-            .get_mut(2)
-            .unwrap()
-            .push_str(&format!("{}s\n", winner_time));
-    }
+    let poly_records = get_records(tracks).await?;
+    let contents = poly_records.records.iter().map(|v| v.join("\n")).collect();
     let embed1 = WriteEmbed::new(3)
         .title("World Records")
         .headers(vec!["Track", "Player", "Time"])
         .contents(contents);
-    let mut wr_amounts: Vec<(String, u32)> = wr_amounts.into_iter().collect();
+    let mut wr_amounts: Vec<(String, u32)> = poly_records.wr_amounts.into_iter().collect();
     wr_amounts.sort_by_key(|(_, k)| -(*k as i32));
     let mut contents = vec![String::new(), String::new()];
     for (name, amount) in wr_amounts {

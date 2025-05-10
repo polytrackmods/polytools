@@ -2,7 +2,7 @@ mod commands;
 pub mod utils;
 
 use anyhow::Error;
-use commands::update_admins;
+use commands::{roles, update_admins};
 use commands::{
     assign, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
     top, update_rankings, users,
@@ -56,6 +56,7 @@ async fn main() {
                 records(),
                 top(),
                 rankings(),
+                roles(),
                 policy(),
             ],
             prefix_options: PrefixFrameworkOptions {
