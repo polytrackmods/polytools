@@ -225,7 +225,7 @@ pub async fn delete(
     Ok(())
 }
 
-#[poise::command(slash_command, category = "Administration")]
+#[poise::command(slash_command, category = "Administration", ephemeral)]
 pub async fn update_admins(
     ctx: ApplicationContext<'_, BotData, Error>,
     #[description = "Operation"] operation: UpdateAdminsChoice,
@@ -1015,6 +1015,17 @@ pub async fn users(ctx: Context<'_>) -> Result<(), Error> {
         users.push_str(format!("{}: {}\n", user, id).as_str());
     }
     write(&ctx, format!("```{}```", users)).await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, category = "Administration", ephemeral)]
+pub async fn admins(ctx: Context<'_>) -> Result<(), Error> {
+    let bot_data = ctx.data();
+    let mut admins = String::new();
+    for (admin, privilege) in bot_data.admins.lock().unwrap().iter() {
+        admins.push_str(format!("{}: {}\n", admin, privilege).as_str());
+    }
+    write(&ctx, format!("```{}```", admins)).await?;
     Ok(())
 }
 
