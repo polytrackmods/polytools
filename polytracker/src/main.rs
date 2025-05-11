@@ -2,7 +2,7 @@ mod commands;
 pub mod utils;
 
 use anyhow::Error;
-use commands::{roles, update_admins};
+use commands::{admins, roles, update_admins};
 use commands::{
     assign, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
     top, update_rankings, users,
@@ -49,6 +49,7 @@ async fn main() {
                 list(),
                 edit_lists(),
                 users(),
+                admins(),
                 players(),
                 help(),
                 compare(),
