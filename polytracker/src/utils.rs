@@ -460,6 +460,9 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error
         records.get_mut(1).unwrap().push(winner_name);
         records.get_mut(2).unwrap().push(winner_time.to_string());
     }
-    let poly_records = PolyRecords { wr_amounts, records };
+    let poly_records = PolyRecords {
+        wr_amounts,
+        records,
+    };
     Ok(poly_records)
 }
