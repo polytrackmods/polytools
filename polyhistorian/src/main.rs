@@ -207,12 +207,23 @@ async fn main() -> Result<(), Error> {
                 "https://vps.kodub.com:43273/leaderboard?version=0.5.0&skip=0&onlyVerified=true&amount=5&trackId={}",
                 id
             );
-            let mut response = client.get(&url).send().await?.text().await?;
-            while response.is_empty() {
-                sleep(Duration::from_millis(500)).await;
-                response = client.get(&url).send().await?.text().await?;
+            let mut response_text = String::new();
+            while response_text.is_empty() {
+                response_text = match client.get(&url).send().await {
+                    Ok(response) => match response.text().await {
+                        Ok(text) => text,
+                        Err(_) => {
+                            sleep(Duration::from_millis(500)).await;
+                            String::new()
+                        }
+                    },
+                    Err(_) => {
+                        sleep(Duration::from_secs(60 * 5)).await;
+                        continue;
+                    }
+                };
             }
-            if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response) {
+            if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response_text) {
                 if let Some(new_record) = new_lb.entries.first() {
                     if *new_record < prior_records.get(name).unwrap().clone().to_record() {
                         let path =
