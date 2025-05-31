@@ -14,7 +14,7 @@ pub enum ApiList {
 impl<'a> FromParam<'a> for ApiList {
     type Error = &'a str;
     fn from_param(param: &'a str) -> Result<Self, Self::Error> {
-        use ApiList::*;
+        use ApiList::{Community, CommunityTime, Global, Hof, HofTime};
         match param.to_lowercase().as_str() {
             "global" => Ok(Global),
             "hof" => Ok(Hof),
@@ -26,10 +26,11 @@ impl<'a> FromParam<'a> for ApiList {
     }
 }
 
+#[allow(clippy::missing_panics_doc)]
 #[get("/api/<list>")]
 pub async fn get_api(list: ApiList) -> String {
     let file = {
-        use ApiList::*;
+        use ApiList::{Community, CommunityTime, Global, Hof, HofTime};
         match list {
             Global => RANKINGS_FILE,
             Hof => HOF_RANKINGS_FILE,
@@ -38,5 +39,5 @@ pub async fn get_api(list: ApiList) -> String {
             CommunityTime => COMMUNITY_TIME_RANKINGS_FILE,
         }
     };
-    fs::read_to_string(file).await.unwrap()
+    fs::read_to_string(file).await.expect("Failed to read file")
 }

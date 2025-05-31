@@ -28,7 +28,7 @@ type Context<'a> = poise::Context<'a, BotData, Error>;
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    let conn = Mutex::new(establish_connection());
+    let conn = Mutex::new(establish_connection().expect("Failed to establish DB connection"));
     let token = env::var("DISCORD_TOKEN").expect("Token missing");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS;
 
@@ -37,7 +37,7 @@ async fn main() {
         admins: Mutex::new(HashMap::new()),
         conn,
     };
-    bot_data.load().await;
+    bot_data.load();
 
     let framework = Framework::builder()
         .options(FrameworkOptions {
@@ -99,5 +99,9 @@ async fn main() {
     let client = ClientBuilder::new(token, intents)
         .framework(framework)
         .await;
-    client.unwrap().start().await.unwrap();
+    client
+        .expect("Failed to create client")
+        .start()
+        .await
+        .expect("Failed to start client");
 }

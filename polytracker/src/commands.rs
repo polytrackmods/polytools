@@ -15,6 +15,7 @@ use polymanager::{
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
+use std::fmt::Write as _;
 use std::time::Duration;
 use std::{collections::HashMap, env};
 use tokio::time::sleep;
@@ -30,7 +31,7 @@ pub enum LeaderboardChoice {
 
 impl ChoiceParameter for LeaderboardChoice {
     fn list() -> Vec<CommandParameterChoice> {
-        use LeaderboardChoice::*;
+        use LeaderboardChoice::{Community, Global, Hof};
         [Global, Community, Hof]
             .iter()
             .map(|c| CommandParameterChoice {
@@ -41,7 +42,7 @@ impl ChoiceParameter for LeaderboardChoice {
             .collect()
     }
     fn name(&self) -> &'static str {
-        use LeaderboardChoice::*;
+        use LeaderboardChoice::{Community, Global, Hof};
         match self {
             Global => "Global",
             Community => "Community",
@@ -49,14 +50,14 @@ impl ChoiceParameter for LeaderboardChoice {
         }
     }
     fn from_index(index: usize) -> Option<Self> {
-        use LeaderboardChoice::*;
+        use LeaderboardChoice::{Community, Global, Hof};
         [Global, Community, Hof].get(index).cloned()
     }
     fn localized_name(&self, _: &str) -> Option<&'static str> {
         Some(self.name())
     }
     fn from_name(name: &str) -> Option<Self> {
-        use LeaderboardChoice::*;
+        use LeaderboardChoice::{Community, Global, Hof};
         match name.to_lowercase().as_str() {
             "global" => Some(Global),
             "community" => Some(Community),
@@ -81,14 +82,14 @@ impl ChoiceParameter for EditModalChoice {
         names
             .iter()
             .map(|n| CommandParameterChoice {
-                name: n.to_string(),
+                name: (*n).to_string(),
                 localizations: HashMap::new(),
                 __non_exhaustive: (),
             })
             .collect()
     }
     fn from_index(index: usize) -> Option<Self> {
-        use EditModalChoice::*;
+        use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
         let values = [Black, Alt, HOFBlack, HOFAlt];
         values.get(index).cloned()
     }
@@ -96,7 +97,7 @@ impl ChoiceParameter for EditModalChoice {
         Some(self.name())
     }
     fn from_name(name: &str) -> Option<Self> {
-        use EditModalChoice::*;
+        use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
         match name {
             "Black List" => Some(Black),
             "Alt List" => Some(Alt),
@@ -106,7 +107,7 @@ impl ChoiceParameter for EditModalChoice {
         }
     }
     fn name(&self) -> &'static str {
-        use EditModalChoice::*;
+        use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
         match self {
             Black => "Blacklist",
             Alt => "Alt-List",
@@ -129,14 +130,14 @@ impl ChoiceParameter for UpdateAdminsChoice {
         names
             .iter()
             .map(|n| CommandParameterChoice {
-                name: n.to_string(),
+                name: (*n).to_string(),
                 localizations: HashMap::new(),
                 __non_exhaustive: (),
             })
             .collect()
     }
     fn from_index(index: usize) -> Option<Self> {
-        use UpdateAdminsChoice::*;
+        use UpdateAdminsChoice::{Add, Edit, Remove};
         let values = [Add, Remove, Edit];
         values.get(index).cloned()
     }
@@ -144,7 +145,7 @@ impl ChoiceParameter for UpdateAdminsChoice {
         Some(self.name())
     }
     fn from_name(name: &str) -> Option<Self> {
-        use UpdateAdminsChoice::*;
+        use UpdateAdminsChoice::{Add, Edit, Remove};
         match name {
             "Add" => Some(Add),
             "Remove" => Some(Remove),
@@ -153,7 +154,7 @@ impl ChoiceParameter for UpdateAdminsChoice {
         }
     }
     fn name(&self) -> &'static str {
-        use UpdateAdminsChoice::*;
+        use UpdateAdminsChoice::{Add, Edit, Remove};
         match self {
             Add => "Add",
             Remove => "Remove",
@@ -177,21 +178,26 @@ pub async fn assign(
     if user_id.starts_with("User ID: ") {
         user_id = user_id.trim_start_matches("User ID: ").to_string();
     }
-    if ctx.data().user_ids.lock().unwrap().contains_key(&user) {
+    if ctx
+        .data()
+        .user_ids
+        .lock()
+        .expect("Failed to acquire Mutex")
+        .contains_key(&user)
+    {
         let response = format!(
-            "`User '{}' is already assigned an ID, to reassign please contact this bot's owner`",
-            user
+            "`User '{user}' is already assigned an ID, to reassign please contact this bot's owner`"
         );
         write(&ctx, response).await?;
         return Ok(());
     }
-    let response = format!("`Added user '{}' with ID '{}'`", user, user_id);
+    let response = format!("`Added user '{user}' with ID '{user_id}'`");
     ctx.data()
         .user_ids
         .lock()
-        .unwrap()
+        .expect("Failed to acquire Mutex")
         .insert(user.clone(), user_id.clone());
-    ctx.data().add(user.as_str(), user_id.as_str()).await;
+    ctx.data().add(user.as_str(), user_id.as_str());
     write(&ctx, response).await?;
     Ok(())
 }
@@ -213,14 +219,23 @@ pub async fn delete(
         return Ok(());
     }
     let bot_data = ctx.data();
-    let response;
-    if bot_data.user_ids.lock().unwrap().contains_key(&user) {
-        let id = bot_data.user_ids.lock().unwrap().remove(&user).unwrap();
-        ctx.data().delete(user.as_str()).await;
-        response = format!("`Removed user '{}' with ID '{}'`", user, id,);
+    let response = if bot_data
+        .user_ids
+        .lock()
+        .expect("Failed to acquire Mutex")
+        .contains_key(&user)
+    {
+        let id = bot_data
+            .user_ids
+            .lock()
+            .expect("Failed to acquire Mutex")
+            .remove(&user)
+            .expect("Checked for user earlier");
+        ctx.data().delete(user.as_str());
+        format!("`Removed user '{user}' with ID '{id}'`")
     } else {
-        response = "`User not found!`".to_string();
-    }
+        "`User not found!`".to_string()
+    };
     write(&ctx, response).await?;
     Ok(())
 }
@@ -230,53 +245,74 @@ pub async fn update_admins(
     ctx: ApplicationContext<'_, BotData, Error>,
     #[description = "Operation"] operation: UpdateAdminsChoice,
 ) -> Result<(), Error> {
+    use UpdateAdminsChoice::{Add, Edit, Remove};
     let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 0).await;
     if !is_admin {
         write(&ctx.into(), is_admin_msg).await?;
         return Ok(());
     }
-    use UpdateAdminsChoice::*;
     let output = match operation {
         Add => {
-            let modal_output = AddAdminModal::execute(ctx).await?.unwrap();
+            let modal_output = AddAdminModal::execute(ctx)
+                .await?
+                .expect("Empty modal output");
             let discord = modal_output.discord;
             let privilege = modal_output.privilege.parse()?;
             ctx.data()
                 .admins
                 .lock()
-                .unwrap()
+                .expect("Failed to acquire Mutex")
                 .insert(discord.clone(), privilege);
-            ctx.data().add_admin(&discord, privilege as i32).await;
-            format!("Added admin {} with privilege level {}", discord, privilege)
+            ctx.data().add_admin(&discord, i32::try_from(privilege)?);
+            format!("Added admin {discord} with privilege level {privilege}")
         }
         Remove => {
-            let modal_output = RemoveAdminModal::execute(ctx).await?.unwrap();
+            let modal_output = RemoveAdminModal::execute(ctx)
+                .await?
+                .expect("Empty modal output");
             let discord = modal_output.discord;
-            if ctx.data().admins.lock().unwrap().contains_key(&discord) {
-                let privilege = ctx.data().admins.lock().unwrap().remove(&discord).unwrap();
-                ctx.data().remove_admin(&discord).await;
-                format!(
-                    "Removed admin {} with former privilege level {}",
-                    discord, privilege
-                )
+            if ctx
+                .data()
+                .admins
+                .lock()
+                .expect("Failed to acquire Mutex")
+                .contains_key(&discord)
+            {
+                let privilege = ctx
+                    .data()
+                    .admins
+                    .lock()
+                    .expect("Failed to acquire Mutex")
+                    .remove(&discord)
+                    .expect("Failed to remove entry");
+                ctx.data().remove_admin(&discord);
+                format!("Removed admin {discord} with former privilege level {privilege}")
             } else {
-                format!("Admin {} does not exist", discord)
+                format!("Admin {discord} does not exist")
             }
         }
         Edit => {
-            let modal_output = EditAdminModal::execute(ctx).await?.unwrap();
+            let modal_output = EditAdminModal::execute(ctx)
+                .await?
+                .expect("Empty modal output");
             let discord = modal_output.discord;
             let privilege = modal_output.privilege.parse()?;
-            if ctx.data().admins.lock().unwrap().contains_key(&discord) {
+            if ctx
+                .data()
+                .admins
+                .lock()
+                .expect("Failed to acquire Mutex")
+                .contains_key(&discord)
+            {
                 ctx.data()
                     .admins
                     .lock()
-                    .unwrap()
+                    .expect("Failed to acquire Mutex")
                     .insert(discord.clone(), privilege);
-                ctx.data().edit_admin(&discord, privilege as i32).await;
-                format!("Updated admin {} to privilege level {}", discord, privilege)
+                ctx.data().edit_admin(&discord, i32::try_from(privilege)?);
+                format!("Updated admin {discord} to privilege level {privilege}")
             } else {
-                format!("Admin {} does not exist", discord)
+                format!("Admin {discord} does not exist")
             }
         }
     };
@@ -289,6 +325,7 @@ pub async fn update_admins(
 /// Choose between standard tracks (off=True) or custom tracks (off=False).
 /// For standard tracks use the track number (1-13).
 /// For custom tracks use the track ID.
+#[allow(clippy::too_many_lines)]
 #[poise::command(slash_command, prefix_command, category = "Query")]
 pub async fn request(
     ctx: Context<'_>,
@@ -305,16 +342,21 @@ pub async fn request(
         ctx.defer().await?;
     }
     let mut id = String::new();
-    if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
-        id = id_test.clone();
+    if let Some(id_test) = ctx
+        .data()
+        .user_ids
+        .lock()
+        .expect("Failed to acquire Mutex")
+        .get(&user)
+    {
+        id.clone_from(id_test);
     }
-    if !id.is_empty() {
+    if id.is_empty() {
+        write(&ctx, "`User ID not found`".to_string()).await?;
+    } else {
         let client = Client::new();
-        let url;
-        if off {
-            if track.parse::<usize>().is_err()
-                || !(1..=13).contains(&track.parse::<usize>().unwrap())
-            {
+        let url = if off {
+            if track.parse::<usize>().is_err() || !(1..=15).contains(&track.parse::<usize>()?) {
                 ctx.defer_ephemeral().await?;
                 ctx.say("Not an official track!").await?;
                 return Ok(());
@@ -323,22 +365,17 @@ pub async fn request(
                 .await?
                 .lines()
                 .map(|s| {
-                    let mut parts = s.splitn(2, " ");
-                    (
-                        parts.next().unwrap().to_string(),
-                        parts.next().unwrap().to_string(),
-                    )
+                    let parts = s.split_once(' ').expect("Invalid track ids file");
+                    (parts.0.to_string(), parts.1.to_string())
                 })
                 .collect();
-            let track_id = track_ids.get(track.parse::<usize>().unwrap() - 1).unwrap();
-            url = format!("https://vps.kodub.com:43273/leaderboard?version=0.5.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
-            track_id.0,
-            id);
+            let track_id = track_ids
+                .get(track.parse::<usize>()? - 1)
+                .expect("Couldn't find track");
+            format!("https://vps.kodub.com:43273/leaderboard?version=0.5.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",track_id.0)
         } else {
-            url = format!("https://vps.kodub.com:43273/leaderboard?version=0.5.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
-            track,
-            id);
-        }
+            format!("https://vps.kodub.com:43273/leaderboard?version=0.5.0&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}")
+        };
         let contents: Vec<String>;
         if let Ok(response) = client.get(url).send().await {
             if let Ok(body) = response.text().await {
@@ -359,7 +396,7 @@ pub async fn request(
                                     found.push(entry.name);
                                 }
                             }
-                            let mut time = (frames / 1000.0).to_string();
+                            let mut time = (f64::from(frames) / 1000.0).to_string();
                             time.push('s');
                             contents =
                                 vec![position.to_string(), time, (found.len() + 1).to_string()];
@@ -367,19 +404,19 @@ pub async fn request(
                                 ctx,
                                 vec![WriteEmbed::new(3)
                                     .title("Leaderboard")
-                                    .headers(vec!["Ranking", "Time", "Unique"])
+                                    .headers(&["Ranking", "Time", "Unique"])
                                     .contents(contents)],
                             )
                             .await?;
                         } else {
-                            let mut time = (frames / 1000.0).to_string();
+                            let mut time = (f64::from(frames) / 1000.0).to_string();
                             time.push('s');
                             contents = vec![position.to_string(), time];
                             write_embed(
                                 ctx,
                                 vec![WriteEmbed::new(2)
                                     .title("Leaderboard")
-                                    .headers(vec!["Ranking", "Time"])
+                                    .headers(&["Ranking", "Time"])
                                     .contents(contents)],
                             )
                             .await?;
@@ -397,13 +434,12 @@ pub async fn request(
                 }
             }
         }
-    } else {
-        write(&ctx, "`User ID not found`".to_string()).await?;
     }
     Ok(())
 }
 
 /// List standard track records for a user
+#[allow(clippy::too_many_lines)]
 #[poise::command(slash_command, prefix_command, category = "Query")]
 pub async fn list(
     ctx: Context<'_>,
@@ -420,7 +456,7 @@ pub async fn list(
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_file = {
-        use LeaderboardChoice::*;
+        use LeaderboardChoice::{Community, Global, Hof};
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
@@ -428,10 +464,18 @@ pub async fn list(
         }
     };
     let mut id = String::new();
-    if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
-        id = id_test.clone();
+    if let Some(id_test) = ctx
+        .data()
+        .user_ids
+        .lock()
+        .expect("Failed to acquire Mutex")
+        .get(&user)
+    {
+        id.clone_from(id_test);
     }
-    if !id.is_empty() {
+    if id.is_empty() {
+        write(&ctx, "`User ID not found`".to_string()).await?;
+    } else {
         let client = Client::new();
         let mut line_num: u32 = 0;
         let mut total_time = 0.0;
@@ -440,11 +484,8 @@ pub async fn list(
             .await?
             .lines()
             .map(|s| {
-                let mut parts = s.splitn(2, " ");
-                (
-                    parts.next().unwrap().to_string(),
-                    parts.next().unwrap().to_string(),
-                )
+                let parts = s.split_once(' ').expect("Invalid track ids file");
+                (parts.0.to_string(), parts.1.to_string())
             })
             .collect();
         let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
@@ -457,11 +498,11 @@ pub async fn list(
             task::spawn(
             async move {
                 let mut att = 0;
-                let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                let mut res = client.get(&url).send().await?.text().await?;
                     while res.is_empty() && att < REQUEST_RETRY_COUNT {
                         att += 1;
                         sleep(Duration::from_millis(500)).await;
-                        res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                        res = client.get(&url).send().await?.text().await?;
                     }
                 Ok::<(usize, String), reqwest::Error>((i, res))
             })
@@ -469,8 +510,8 @@ pub async fn list(
         let mut results: Vec<(usize, String)> = join_all(futures)
             .await
             .into_iter()
-            .map(|res| res.unwrap())
-            .filter_map(|res| res.ok())
+            .map(|res| res.expect("JoinError ig"))
+            .filter_map(std::result::Result::ok)
             .collect();
         results.sort_by_key(|(i, _)| *i);
         let responses: Vec<String> = results.into_iter().map(|(_, res)| res).collect();
@@ -495,7 +536,7 @@ pub async fn list(
                                 found.push(entry.name);
                             }
                         }
-                        let time = frames / 1000.0;
+                        let time = f64::from(frames) / 1000.0;
                         total_time += time;
                         let mut time = time.to_string();
                         time.push('s');
@@ -503,17 +544,17 @@ pub async fn list(
                             .push_str(format!("{}\n", track_ids[line_num as usize].1).as_str());
                         contents[1]
                             .push_str(format!("{} [{}]\n", position, (found.len() + 1)).as_str());
-                        contents[2].push_str(format!("{}\n", time).as_str());
+                        contents[2].push_str(format!("{time}\n").as_str());
                     } else {
-                        let time = frames.to_string().parse::<f64>().unwrap() / 1000.0;
+                        let time = f64::from(frames) / 1000.0;
                         total_time += time;
                         let mut time = time.to_string();
                         time.push('s');
                         contents[0]
                             .push_str(format!("{}\n", track_ids[line_num as usize].1).as_str());
-                        contents[1].push_str(format!("{}\n", position).as_str());
-                        contents[2].push_str(format!("{}\n", time).as_str());
-                    };
+                        contents[1].push_str(format!("{position}\n").as_str());
+                        contents[2].push_str(format!("{time}\n").as_str());
+                    }
                 } else {
                     display_total = false;
                 }
@@ -528,12 +569,12 @@ pub async fn list(
             line_num += 1;
         }
         if display_total && matches!(tracks, LeaderboardChoice::Global) {
-            let total_time = (total_time * 1000.0) as u32;
+            let total_time = (total_time * 1000.0).floor();
             contents.push(format!(
                 "{:>2}:{:0>2}.{:0>3}",
-                total_time / 60000,
-                total_time % 60000 / 1000,
-                total_time % 1000
+                (total_time / 60000.0).floor(),
+                (total_time % 60000.0 / 1000.0).floor(),
+                (total_time % 1000.0).floor()
             ));
             headers.push("Total");
             inlines.push(false);
@@ -542,18 +583,17 @@ pub async fn list(
             ctx,
             vec![WriteEmbed::new(headers.len())
                 .title(&user)
-                .headers(headers)
+                .headers(&headers)
                 .contents(contents)
                 .inlines(inlines)],
         )
         .await?;
-    } else {
-        write(&ctx, "`User ID not found`".to_string()).await?;
     }
     Ok(())
 }
 
 /// Compares two user's record times and placements
+#[allow(clippy::too_many_lines)]
 #[poise::command(slash_command, prefix_command, category = "Query")]
 pub async fn compare(
     ctx: Context<'_>,
@@ -574,7 +614,7 @@ pub async fn compare(
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
     let track_ids: Vec<(String, String)> = fs::read_to_string({
-        use LeaderboardChoice::*;
+        use LeaderboardChoice::{Community, Global, Hof};
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
@@ -584,48 +624,55 @@ pub async fn compare(
     .await?
     .lines()
     .map(|s| {
-        let mut parts = s.splitn(2, " ");
-        (
-            parts.next().unwrap().to_string(),
-            parts.next().unwrap().to_string(),
-        )
+        let parts = s.split_once(' ').expect("Invalid track ids file");
+        (parts.0.to_string(), parts.1.to_string())
     })
     .collect();
     let track_names: Vec<String> = track_ids.iter().map(|(_, name)| name.clone()).collect();
     for user in [user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
         let mut id = String::new();
-        if let Some(id_test) = ctx.data().user_ids.lock().unwrap().get(&user) {
-            id = id_test.clone();
+        if let Some(id_test) = ctx
+            .data()
+            .user_ids
+            .lock()
+            .expect("Failed to acquire Mutex")
+            .get(&user)
+        {
+            id.clone_from(id_test);
         }
-        if !id.is_empty() {
+        if id.is_empty() {
+            write(&ctx, "`User ID not found`".to_string()).await?;
+        } else {
             let client = Client::new();
             let mut total_time = 0.0;
             let mut display_total = true;
             let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
-            let client = client.clone();
-            let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
-            43273,
-            VERSION,
-            track_id.0,
-            id);
-            task::spawn(
-            async move {
-                let mut att = 0;
-                let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
-                    while res.is_empty() && att < REQUEST_RETRY_COUNT {
-                        att += 1;
-                        sleep(Duration::from_millis(500)).await;
-                        res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                let client = client.clone();
+                let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
+                    43273,
+                    VERSION,
+                    track_id.0,
+                    id
+                );
+                task::spawn(
+                    async move {
+                        let mut att = 0;
+                        let mut res = client.get(&url).send().await?.text().await?;
+                        while res.is_empty() && att < REQUEST_RETRY_COUNT {
+                            att += 1;
+                            sleep(Duration::from_millis(500)).await;
+                            res = client.get(&url).send().await?.text().await?;
+                        }
+                        Ok::<(usize, String), reqwest::Error>((i, res))
                     }
-                Ok::<(usize, String), reqwest::Error>((i, res))
-            })
-        });
+                )
+            });
             let mut results: Vec<(usize, String)> = join_all(futures)
                 .await
                 .into_iter()
-                .map(|res| res.unwrap())
-                .filter_map(|res| res.ok())
+                .map(|res| res.expect("JoinError ig"))
+                .filter_map(std::result::Result::ok)
                 .collect();
             results.sort_by_key(|(i, _)| *i);
             let responses: Vec<String> = results.into_iter().map(|(_, res)| res).collect();
@@ -634,7 +681,7 @@ pub async fn compare(
                     if let Some(user_entry) = leaderboard.user_entry {
                         let position = user_entry.position;
                         let frames = user_entry.frames;
-                        let time = frames / 1000.0;
+                        let time = f64::from(frames) / 1000.0;
                         user_results.push((position, time));
                         total_time += time;
                     } else {
@@ -656,41 +703,46 @@ pub async fn compare(
             } else {
                 user_results.push((0, 0.0));
             }
-        } else {
-            write(&ctx, "`User ID not found`".to_string()).await?;
         }
         results.push(user_results);
     }
     let mut output = String::new();
     let mut display_total_diff = true;
-    let max_track_len = track_ids.iter().map(|(_, t)| t.len()).max().unwrap().max(5);
+    let max_track_len = track_ids
+        .iter()
+        .map(|(_, t)| t.len())
+        .max()
+        .expect("Empty track ids file")
+        .max(5);
     let column_gap = 3;
-    output.push_str(&format!("```\n{}", " ".repeat(max_track_len + 2)));
+    write!(output, "```\n{}", " ".repeat(max_track_len + 2))?;
     for user in [user1.clone(), user2.clone()] {
-        output.push_str(format!("{:>18}", user).as_str());
+        write!(output, "{user:>18}")?;
         output.push_str(&" ".repeat(column_gap));
     }
     output.push_str("Difference\n");
     for i in 0..results[0].len() - 1 {
         let mut display_diff = true;
-        output.push_str(&format!(
+        write!(
+            output,
             "{:>width$}: ",
             track_names[i],
             width = max_track_len
-        ));
-        for track in results.iter() {
-            if track[i].1 != 0.0 {
-                output.push_str(&format!(
-                    "{:>6}. - {:>7.3}s{}",
-                    track[i].0,
-                    track[i].1,
-                    " ".repeat(column_gap)
-                ));
-            } else {
+        )?;
+        for track in &results {
+            if track[i].1 == 0.0 {
                 output.push_str(
                     format!("{:>18}{}", "Record not found", " ".repeat(column_gap)).as_str(),
                 );
                 display_diff = false;
+            } else {
+                write!(
+                    output,
+                    "{:>6}. - {:>7.3}s{}",
+                    track[i].0,
+                    track[i].1,
+                    " ".repeat(column_gap)
+                )?;
             }
         }
         if display_diff {
@@ -698,28 +750,31 @@ pub async fn compare(
         }
         output.push('\n');
     }
-    output.push_str(&format!("\n{:>width$}: ", "Total", width = max_track_len));
+    write!(output, "\n{:>width$}: ", "Total", width = max_track_len)?;
     for track in &results {
-        let total = track.last().unwrap().1 as u32;
-        if total != 0 {
-            output.push_str(&format!(
+        let total = track.last().expect("Should have a last track").1.floor();
+        if total == 0.0 {
+            write!(output, "{:>18}", "Tracks not done")?;
+            display_total_diff = false;
+        } else {
+            write!(
+                output,
                 "{}{:>2}:{:0>2}.{:0>3}{}",
                 " ".repeat(9),
-                total / 60000,
-                total % 60000 / 1000,
-                total % 1000,
+                (total / 60000.0).floor(),
+                (total % 60000.0 / 1000.0).floor(),
+                (total % 1000.0).floor(),
                 " ".repeat(column_gap)
-            ));
-        } else {
-            output.push_str(&format!("{:>18}", "Tracks not done"));
-            display_total_diff = false
+            )?;
         }
     }
     if display_total_diff {
         output.push_str(
             format!(
                 "{:>9.3}s",
-                ((results[0].last().unwrap().1 - results[1].last().unwrap().1) / 1000.0)
+                ((results[0].last().expect("should have last one").1
+                    - results[1].last().expect("should have last one").1)
+                    / 1000.0)
             )
             .as_str(),
         );
@@ -737,13 +792,13 @@ pub async fn update_rankings(
     ctx: Context<'_>,
     #[description = "Updated Leaderboard"] leaderboard: LeaderboardChoice,
 ) -> Result<(), Error> {
+    use LeaderboardChoice::{Community, Global, Hof};
     ctx.defer_ephemeral().await?;
     let (is_admin, is_admin_msg) = is_admin(&ctx, 2).await;
     if !is_admin {
         write(&ctx, is_admin_msg).await?;
         return Ok(());
     }
-    use LeaderboardChoice::*;
     match leaderboard {
         Global => global_rankings_update().await,
         Community => community_update().await,
@@ -752,7 +807,6 @@ pub async fn update_rankings(
     let headers: Vec<&str> = vec![
         "Ranking",
         {
-            use LeaderboardChoice::*;
             match leaderboard {
                 Global => "Time",
                 _ => "Points",
@@ -767,19 +821,19 @@ pub async fn update_rankings(
         Hof => HOF_RANKINGS_FILE,
     })
     .await?;
-    let line = content.lines().next().unwrap();
-    let lb: PolyLeaderBoard = serde_json::from_str(line).unwrap();
+    let line = content.lines().next().expect("Should have next line");
+    let lb: PolyLeaderBoard = serde_json::from_str(line).expect("Invalid leaderboard");
     for i in 0..lb.total {
-        contents[0].push_str(&format!("{}\n", lb.entries[i as usize].rank));
-        contents[1].push_str(&format!("{}\n", lb.entries[i as usize].stat));
-        contents[2].push_str(&format!("{}\n", lb.entries[i as usize].name));
+        writeln!(contents[0], "{}", lb.entries[i].rank)?;
+        writeln!(contents[1], "{}", lb.entries[i].stat)?;
+        writeln!(contents[2], "{}", lb.entries[i].name)?;
     }
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         ctx,
         vec![WriteEmbed::new(headers.len())
             .title(&format!("{} Leaderboard", leaderboard.name()))
-            .headers(headers)
+            .headers(&headers)
             .contents(contents)
             .inlines(inlines)],
     )
@@ -787,6 +841,7 @@ pub async fn update_rankings(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 #[poise::command(slash_command, prefix_command, category = "Query")]
 pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
@@ -798,44 +853,44 @@ pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
                 .await?
                 .lines()
                 .next()
-                .unwrap(),
+                .expect("Should have next line"),
         )?
         .entries
         .first()
-        .unwrap()
+        .expect("Should have first entry")
         .name
         .clone();
-        champions[0].push_str(&format!("{}\n", ct_champion));
+        writeln!(champions[0], "{ct_champion}")?;
         champions[1].push_str("CT Champion\n");
         let hof_champion = serde_json::from_str::<PolyLeaderBoard>(
             fs::read_to_string(HOF_RANKINGS_FILE)
                 .await?
                 .lines()
                 .next()
-                .unwrap(),
+                .expect("Should have next line"),
         )?
         .entries
         .first()
-        .unwrap()
+        .expect("Should have first entry")
         .name
         .clone();
-        champions[0].push_str(&format!("{}\n", hof_champion));
+        writeln!(champions[0], "{hof_champion}")?;
         champions[1].push_str("HOF Champion\n");
         let wr_champion = get_records(LeaderboardChoice::Global)
             .await?
             .wr_amounts
             .iter()
             .max_by_key(|(_, v)| *v)
-            .unwrap()
+            .expect("Should have max")
             .0
             .clone();
-        champions[0].push_str(&format!("{}\n", wr_champion));
+        writeln!(champions[0], "{wr_champion}")?;
         champions[1].push_str("WR Champion\n");
         champions
     };
     let champion_embed = WriteEmbed::new(2)
         .title("Champions")
-        .headers(vec!["User", "Title"])
+        .headers(&["User", "Title"])
         .contents(champion_contents);
     embeds.push(champion_embed);
     let wr_holder_contents = {
@@ -846,7 +901,7 @@ pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
             .keys()
             .filter(|k| *k != "Anonymous" && *k != "unknown");
         let hof_record_amount = hof_records.clone().count();
-        wr_holders[0].push_str(&hof_records.map(|k| format!("{}\n", k)).collect::<String>());
+        wr_holders[0].push_str(&hof_records.fold(String::new(), |acc, k| acc + &format!("{k}\n")));
         wr_holders[1].push_str(&"HOF WR Holder\n".repeat(hof_record_amount));
         let ct_poly_records = get_records(LeaderboardChoice::Community).await?;
         let ct_records = ct_poly_records
@@ -854,13 +909,13 @@ pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
             .keys()
             .filter(|k| *k != "Anonymous" && *k != "unknown");
         let ct_record_amount = ct_records.clone().count();
-        wr_holders[0].push_str(&ct_records.map(|k| format!("{}\n", k)).collect::<String>());
+        wr_holders[0].push_str(&ct_records.fold(String::new(), |acc, k| acc + &format!("{k}\n")));
         wr_holders[1].push_str(&"CT WR Holder\n".repeat(ct_record_amount));
         wr_holders
     };
     let wr_holder_embed = WriteEmbed::new(2)
         .title("WR Holders")
-        .headers(vec!["User", "Title"])
+        .headers(&["User", "Title"])
         .contents(wr_holder_contents);
     embeds.push(wr_holder_embed);
     let global_grandmaster_contents = {
@@ -878,7 +933,7 @@ pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
                 .await?
                 .lines()
                 .next()
-                .unwrap(),
+                .expect("Should have first line"),
         )?
         .entries
         .iter()
@@ -892,7 +947,7 @@ pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
     };
     let global_grandmaster_embed = WriteEmbed::new(1)
         .title("Global Grandmaster")
-        .headers(vec!["User"])
+        .headers(&["User"])
         .contents(vec![global_grandmaster_contents]);
     embeds.push(global_grandmaster_embed);
     write_embed(ctx, embeds).await?;
@@ -907,6 +962,7 @@ pub async fn rankings(
     #[description = "Mode (HOF/community only)"] time_based: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
+    use LeaderboardChoice::{Community, Global, Hof};
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -914,17 +970,22 @@ pub async fn rankings(
     }
     let leaderboard = leaderboard.unwrap_or(LeaderboardChoice::Global);
     let time_based = time_based.unwrap_or(false);
-    use LeaderboardChoice::*;
     let rankings_file = match leaderboard {
         Global => RANKINGS_FILE,
-        Community => match time_based {
-            false => COMMUNITY_RANKINGS_FILE,
-            true => COMMUNITY_TIME_RANKINGS_FILE,
-        },
-        Hof => match time_based {
-            false => HOF_RANKINGS_FILE,
-            true => HOF_TIME_RANKINGS_FILE,
-        },
+        Community => {
+            if time_based {
+                COMMUNITY_TIME_RANKINGS_FILE
+            } else {
+                COMMUNITY_RANKINGS_FILE
+            }
+        }
+        Hof => {
+            if time_based {
+                HOF_TIME_RANKINGS_FILE
+            } else {
+                HOF_RANKINGS_FILE
+            }
+        }
     };
     if fs::try_exists(rankings_file).await? {
         let age = fs::metadata(rankings_file).await?.modified()?.elapsed()?;
@@ -947,29 +1008,32 @@ pub async fn rankings(
         {
             match leaderboard {
                 Global => "Time",
-                _ => match time_based {
-                    false => "Points",
-                    true => "Time",
-                },
+                _ => {
+                    if time_based {
+                        "Time"
+                    } else {
+                        "Points"
+                    }
+                }
             }
         },
         "Player",
     ];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
     let content = fs::read_to_string(rankings_file).await?;
-    let line = content.lines().next().unwrap();
-    let lb: PolyLeaderBoard = serde_json::from_str(line).unwrap();
+    let line = content.lines().next().expect("Should have first line");
+    let lb: PolyLeaderBoard = serde_json::from_str(line).expect("Invalid leaderboard");
     for i in 0..lb.total {
-        contents[0].push_str(&format!("{}\n", lb.entries[i as usize].rank));
-        contents[1].push_str(&format!("{}\n", lb.entries[i as usize].stat));
-        contents[2].push_str(&format!("{}\n", lb.entries[i as usize].name));
+        writeln!(contents[0], "{}", lb.entries[i].rank)?;
+        writeln!(contents[1], "{}", lb.entries[i].stat)?;
+        writeln!(contents[2], "{}", lb.entries[i].name)?;
     }
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         ctx,
         vec![WriteEmbed::new(headers.len())
             .title(&format!("{} Leaderboard", leaderboard.name()))
-            .headers(headers)
+            .headers(&headers)
             .contents(contents)
             .inlines(inlines)],
     )
@@ -983,13 +1047,13 @@ pub async fn edit_lists(
     ctx: ApplicationContext<'_, BotData, Error>,
     #[description = "List to edit"] list: EditModalChoice,
 ) -> Result<(), Error> {
+    use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
     let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 2).await;
     if !is_admin {
         write(&ctx.into(), is_admin_msg).await?;
         return Ok(());
     }
     let list_file = {
-        use EditModalChoice::*;
         match list {
             Black => BLACKLIST_FILE,
             Alt => ALT_ACCOUNT_FILE,
@@ -1002,7 +1066,9 @@ pub async fn edit_lists(
     let modal_returned = EditModal::execute_with_defaults(ctx, modal_defaults.clone())
         .await?
         .unwrap_or(modal_defaults);
-    fs::write(list_file, modal_returned.list).await.unwrap();
+    fs::write(list_file, modal_returned.list)
+        .await
+        .expect("Failed to write file");
     Ok(())
 }
 
@@ -1011,10 +1077,15 @@ pub async fn edit_lists(
 pub async fn users(ctx: Context<'_>) -> Result<(), Error> {
     let bot_data = ctx.data();
     let mut users = String::new();
-    for (user, id) in bot_data.user_ids.lock().unwrap().iter() {
-        users.push_str(format!("{}: {}\n", user, id).as_str());
+    for (user, id) in bot_data
+        .user_ids
+        .lock()
+        .expect("Failed to acquire Mutex")
+        .iter()
+    {
+        writeln!(users, "{user}: {id}")?;
     }
-    write(&ctx, format!("```{}```", users)).await?;
+    write(&ctx, format!("```{users}```")).await?;
     Ok(())
 }
 
@@ -1022,10 +1093,15 @@ pub async fn users(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn admins(ctx: Context<'_>) -> Result<(), Error> {
     let bot_data = ctx.data();
     let mut admins = String::new();
-    for (admin, privilege) in bot_data.admins.lock().unwrap().iter() {
-        admins.push_str(format!("{}: {}\n", admin, privilege).as_str());
+    for (admin, privilege) in bot_data
+        .admins
+        .lock()
+        .expect("Failed to acquire Mutex")
+        .iter()
+    {
+        writeln!(admins, "{admin}: {privilege}")?;
     }
-    write(&ctx, format!("```{}```", admins)).await?;
+    write(&ctx, format!("```{admins}```")).await?;
     Ok(())
 }
 
@@ -1036,6 +1112,7 @@ pub async fn players(
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
+    use LeaderboardChoice::{Community, Global, Hof};
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -1043,7 +1120,6 @@ pub async fn players(
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_ids: Vec<(String, String)> = fs::read_to_string({
-        use LeaderboardChoice::*;
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
@@ -1051,11 +1127,11 @@ pub async fn players(
         }
     })
     .await
-    .unwrap()
+    .expect("Failed to read file")
     .lines()
     .map(|s| {
-        let mut parts = s.splitn(2, " ").map(|s| s.to_string());
-        (parts.next().unwrap(), parts.next().unwrap())
+        let parts = s.split_once(' ').expect("Invalid track ids file");
+        (parts.0.to_string(), parts.1.to_string())
     })
     .collect();
     let mut contents = vec![String::new(), String::new()];
@@ -1073,20 +1149,20 @@ pub async fn players(
             res = client.get(&url).send().await?.text().await?;
         }
         let number = serde_json::from_str::<LeaderBoard>(&res)?.total;
-        contents
-            .get_mut(0)
-            .unwrap()
-            .push_str(&format!("{}\n", name));
-        contents
-            .get_mut(1)
-            .unwrap()
-            .push_str(&format!("{}\n", number));
+        writeln!(
+            contents.get_mut(0).expect("Should have first entry"),
+            "{name}"
+        )?;
+        writeln!(
+            contents.get_mut(1).expect("Should have second entry"),
+            "{number}"
+        )?;
     }
     write_embed(
         ctx,
         vec![WriteEmbed::new(2)
             .title("Player numbers")
-            .headers(vec!["Track", "Players"])
+            .headers(&["Track", "Players"])
             .contents(contents)],
     )
     .await?;
@@ -1109,24 +1185,25 @@ pub async fn records(
     let contents = poly_records.records.iter().map(|v| v.join("\n")).collect();
     let embed1 = WriteEmbed::new(3)
         .title("World Records")
-        .headers(vec!["Track", "Player", "Time"])
+        .headers(&["Track", "Player", "Time"])
         .contents(contents);
     let mut wr_amounts: Vec<(String, u32)> = poly_records.wr_amounts.into_iter().collect();
-    wr_amounts.sort_by_key(|(_, k)| -(*k as i32));
+    wr_amounts.sort_by_key(|(_, k)| *k);
+    wr_amounts.reverse();
     let mut contents = vec![String::new(), String::new()];
     for (name, amount) in wr_amounts {
-        contents
-            .get_mut(0)
-            .unwrap()
-            .push_str(&format!("{}\n", name));
-        contents
-            .get_mut(1)
-            .unwrap()
-            .push_str(&format!("{}\n", amount));
+        writeln!(
+            contents.get_mut(0).expect("Should have first entry"),
+            "{name}",
+        )?;
+        writeln!(
+            contents.get_mut(1).expect("Should have second entry"),
+            "{amount}",
+        )?;
     }
     let embed2 = WriteEmbed::new(2)
         .title("WR Amounts")
-        .headers(vec!["Player", "Amount"])
+        .headers(&["Player", "Amount"])
         .contents(contents);
     write_embed(ctx, vec![embed1, embed2]).await?;
     Ok(())
@@ -1139,6 +1216,7 @@ pub async fn top(
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
 ) -> Result<(), Error> {
+    use LeaderboardChoice::{Community, Global, Hof};
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -1146,7 +1224,6 @@ pub async fn top(
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_ids: Vec<(String, String)> = fs::read_to_string({
-        use LeaderboardChoice::*;
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
@@ -1154,11 +1231,11 @@ pub async fn top(
         }
     })
     .await
-    .unwrap()
+    .expect("Failed to read file")
     .lines()
     .map(|s| {
-        let mut parts = s.splitn(2, " ").map(|s| s.to_string());
-        (parts.next().unwrap(), parts.next().unwrap())
+        let parts = s.split_once(' ').expect("Invalid track ids file");
+        (parts.0.to_string(), parts.1.to_string())
     })
     .collect();
     let mut contents = vec![String::new(), String::new(), String::new()];
@@ -1186,24 +1263,24 @@ pub async fn top(
         let winner = leaderboard.entries.first().unwrap_or(&default_winner);
         let winner_name = winner.name.clone();
         let winner_time = winner.frames / 1000.0;
-        contents
-            .get_mut(0)
-            .unwrap()
-            .push_str(&format!("{}\n", name));
-        contents
-            .get_mut(1)
-            .unwrap()
-            .push_str(&format!("{}\n", winner_name));
-        contents
-            .get_mut(2)
-            .unwrap()
-            .push_str(&format!("{}s\n", winner_time));
+        writeln!(
+            contents.get_mut(0).expect("Should have first entry"),
+            "{name}",
+        )?;
+        writeln!(
+            contents.get_mut(1).expect("Should have second entry"),
+            "{winner_name}",
+        )?;
+        writeln!(
+            contents.get_mut(2).expect("Should have third entry"),
+            "{winner_time}s",
+        )?;
     }
     write_embed(
         ctx,
         vec![WriteEmbed::new(3)
-            .title(&format!("Top {}", position))
-            .headers(vec!["Track", "Player", "Time"])
+            .title(&format!("Top {position}"))
+            .headers(&["Track", "Player", "Time"])
             .contents(contents)],
     )
     .await?;
@@ -1218,7 +1295,7 @@ pub async fn policy(ctx: Context<'_>) -> Result<(), Error> {
         "https://{}/policy",
         env::var("WEBSITE_URL").expect("Expected WEBSITE_URL in env!")
     );
-    write(&ctx, format!("Privacy Policy: <{}>", url)).await?;
+    write(&ctx, format!("Privacy Policy: <{url}>")).await?;
     Ok(())
 }
 

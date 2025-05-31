@@ -19,12 +19,11 @@ use rocket::tokio::{
 };
 use rocket::{get, main, routes};
 use rocket_dyn_templates::{context, Template};
-use std::collections::HashMap;
 
 const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 
 #[get("/")]
-async fn index() -> Template {
+fn index() -> Template {
     Template::render("index", Context::default())
 }
 
@@ -50,10 +49,15 @@ async fn hof() -> Template {
 async fn custom_lb_home() -> Template {
     let tracks: Vec<String> = fs::read_to_string(CUSTOM_TRACK_FILE)
         .await
-        .unwrap()
+        .expect("Failed to read file")
         .lines()
-        .map(|s| s.to_string())
-        .map(|s| s.split_once(" ").unwrap().1.to_string())
+        .map(std::string::ToString::to_string)
+        .map(|s| {
+            s.split_once(' ')
+                .expect("Invalid custom tracks file")
+                .1
+                .to_string()
+        })
         .collect();
     Template::render("lb_custom_home", context! { tracks })
 }
@@ -62,9 +66,14 @@ async fn custom_lb_home() -> Template {
 async fn standard_lb_home() -> Template {
     let track_names: Vec<String> = fs::read_to_string(TRACK_FILE)
         .await
-        .unwrap()
+        .expect("Failed to read file")
         .lines()
-        .map(|s| s.split_once(" ").unwrap().1.to_string())
+        .map(|s| {
+            s.split_once(' ')
+                .expect("Invalid track ids file")
+                .1
+                .to_string()
+        })
         .collect();
     Template::render("lb_standard_home", context! { track_names })
 }
@@ -88,31 +97,34 @@ async fn standard_lb(track_id: &str) -> Template {
 }
 
 #[get("/policy")]
-async fn policy() -> Template {
-    let context: HashMap<String, String> = HashMap::new();
-    Template::render("privacy_policy", context)
+fn policy() -> Template {
+    Template::render("privacy_policy", context! {})
 }
 
 #[get("/tutorial")]
-async fn tutorial() -> Template {
-    let context: HashMap<String, String> = HashMap::new();
-    Template::render("tutorial", context)
+fn tutorial() -> Template {
+    Template::render("tutorial", context! {})
 }
 
 #[get("/history")]
 async fn history_home() -> Template {
     let mut track_names: Vec<String> = fs::read_to_string(TRACK_FILE)
         .await
-        .unwrap()
+        .expect("Failed to read file")
         .lines()
-        .map(|s| s.split_once(" ").unwrap().1.to_string())
+        .map(|s| {
+            s.split_once(' ')
+                .expect("Invalid track ids file")
+                .1
+                .to_string()
+        })
         .collect();
     track_names.append(
         &mut fs::read_to_string(COMMUNITY_TRACK_FILE)
             .await
-            .unwrap()
+            .expect("Failed to read file")
             .lines()
-            .map(|s| filenamify(s.split_once(" ").unwrap().1))
+            .map(|s| filenamify(s.split_once(' ').expect("Invalid track ids file").1))
             .collect(),
     );
     Template::render("history_home", context! { track_names })
@@ -128,7 +140,7 @@ async fn history(track_id: &str) -> Template {
 }
 
 #[main]
-async fn main() -> Result<(), rocket::Error> {
+async fn main() -> Result<(), Box<rocket::Error>> {
     let rocket = rocket::build()
         .mount(
             "/",
