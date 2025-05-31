@@ -40,7 +40,7 @@ pub struct LeaderBoard {
 #[derive(Deserialize, Serialize)]
 pub struct UserEntry {
     pub position: u32,
-    pub frames: f64,
+    pub frames: u32,
     id: u64,
 }
 
@@ -83,33 +83,36 @@ pub struct BotData {
     pub conn: Mutex<SqliteConnection>,
 }
 
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::cast_sign_loss)]
 impl BotData {
-    pub async fn load(&self) {
-        use polymanager::schema::admins::dsl::*;
-        use polymanager::schema::users::dsl::*;
-        let connection = &mut *self.conn.lock().unwrap();
+    pub fn load(&self) {
+        use polymanager::schema::admins::dsl::admins;
+        use polymanager::schema::users::dsl::users;
+        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
         let results = users
             .select(User::as_select())
             .load(connection)
             .expect("Error loading users");
-        let mut user_ids = self.user_ids.lock().unwrap();
+        let mut user_ids = self.user_ids.lock().expect("Failed to acquire Mutex");
         user_ids.clear();
         for user in results {
             user_ids.insert(user.name, user.game_id);
         }
+        drop(user_ids);
         let results = admins
             .select(Admin::as_select())
             .load(connection)
             .expect("Error loading users");
-        let mut admin_ids = self.admins.lock().unwrap();
+        let mut admin_ids = self.admins.lock().expect("Failed to acquire Mutex");
         admin_ids.clear();
         for admin in results {
             admin_ids.insert(admin.discord, admin.privilege as u32);
         }
     }
-    pub async fn add(&self, name: &str, game_id: &str) {
+    pub fn add(&self, name: &str, game_id: &str) {
         use polymanager::schema::users;
-        let connection = &mut *self.conn.lock().unwrap();
+        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
         let new_user = NewUser {
             name,
             game_id,
@@ -121,16 +124,16 @@ impl BotData {
             .get_result(connection)
             .expect("Error saving new user");
     }
-    pub async fn delete(&self, delete_name: &str) {
-        use polymanager::schema::users::dsl::*;
-        let connection = &mut *self.conn.lock().unwrap();
+    pub fn delete(&self, delete_name: &str) {
+        use polymanager::schema::users::dsl::{name, users};
+        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
         diesel::delete(users.filter(name.eq(delete_name)))
             .execute(connection)
             .expect("Error deleting user");
     }
-    pub async fn add_admin(&self, discord: &str, privilege: i32) {
+    pub fn add_admin(&self, discord: &str, privilege: i32) {
         use polymanager::schema::admins;
-        let connection = &mut *self.conn.lock().unwrap();
+        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
         let new_admin = NewAdmin {
             discord,
             privilege: &privilege,
@@ -141,16 +144,16 @@ impl BotData {
             .get_result(connection)
             .expect("Error adding new admin");
     }
-    pub async fn remove_admin(&self, admin_discord: &str) {
-        use polymanager::schema::admins::dsl::*;
-        let connection = &mut *self.conn.lock().unwrap();
+    pub fn remove_admin(&self, admin_discord: &str) {
+        use polymanager::schema::admins::dsl::{admins, discord};
+        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
         diesel::delete(admins.filter(discord.eq(admin_discord)))
             .execute(connection)
             .expect("Error deleting admin");
     }
-    pub async fn edit_admin(&self, admin_discord: &str, new_privilege: i32) {
-        use polymanager::schema::admins::dsl::*;
-        let connection = &mut *self.conn.lock().unwrap();
+    pub fn edit_admin(&self, admin_discord: &str, new_privilege: i32) {
+        use polymanager::schema::admins::dsl::{admins, discord, privilege};
+        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
         diesel::update(admins.filter(discord.eq(admin_discord)))
             .set(privilege.eq(new_privilege))
             .returning(Admin::as_returning())
@@ -160,11 +163,15 @@ impl BotData {
 }
 
 // non-embed output function
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
 pub async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
     if text.chars().count() > 2000 {
-        if text.chars().next().unwrap() == text.chars().nth(1).unwrap()
-            && text.chars().nth(1).unwrap() == text.chars().nth(2).unwrap()
-            && text.chars().nth(2).unwrap() == '`'
+        if text.chars().next().expect("Guaranteed to be there")
+            == text.chars().nth(1).expect("Guaranteed to be there")
+            && text.chars().nth(1).expect("Guaranteed to be there")
+                == text.chars().nth(2).expect("Guaranteed to be there")
+            && text.chars().nth(2).expect("Guaranteed to be there") == '`'
         {
             for _ in 0..3 {
                 text.remove(0);
@@ -192,6 +199,7 @@ pub struct WriteEmbed {
 }
 
 impl WriteEmbed {
+    #[must_use]
     pub fn new(field_count: usize) -> Self {
         Self {
             title: "PolyTracker Embed".to_string(),
@@ -201,22 +209,30 @@ impl WriteEmbed {
             inlines: vec![true; field_count],
         }
     }
+    #[must_use]
     pub fn title(mut self, title: &str) -> Self {
         self.title = title.to_string();
         self
     }
+    #[must_use]
     pub fn description(mut self, description: &str) -> Self {
         self.description = description.to_string();
         self
     }
-    pub fn headers(mut self, headers: Vec<&str>) -> Self {
-        self.headers = headers.iter().map(|h| h.to_string()).collect();
+    #[must_use]
+    pub fn headers(mut self, headers: &[&str]) -> Self {
+        self.headers = headers
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
         self
     }
+    #[must_use]
     pub fn contents(mut self, contents: Vec<String>) -> Self {
         self.contents = contents;
         self
     }
+    #[must_use]
     pub fn inlines(mut self, inlines: Vec<bool>) -> Self {
         self.inlines = inlines;
         self
@@ -224,19 +240,22 @@ impl WriteEmbed {
 }
 
 // output function using embeds
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::too_many_lines)]
 pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Result<(), Error> {
     if write_embeds
         .iter()
         .all(|e| e.headers.len() == e.contents.len() && e.headers.len() == e.inlines.len())
     {
         let ctx_id = ctx.id();
-        let prev_id = format!("{}prev", ctx_id);
-        let next_id = format!("{}next", ctx_id);
-        let start_id = format!("{}start", ctx_id);
+        let prev_id = format!("{ctx_id}prev");
+        let next_id = format!("{ctx_id}next");
+        let start_id = format!("{ctx_id}start");
         let mut embeds = Vec::new();
         for (i, write_embed) in write_embeds.iter().enumerate() {
             let mut pages: Vec<Vec<String>> = Vec::new();
-            for content in write_embed.contents.iter() {
+            for content in &write_embed.contents {
                 pages.push(
                     content
                         .lines()
@@ -249,7 +268,12 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
             let fields = write_embed.headers.iter().enumerate().map(|(i, h)| {
                 (
                     h.to_string(),
-                    pages.get(i).unwrap().first().unwrap().clone(),
+                    pages
+                        .get(i)
+                        .expect("should find page")
+                        .first()
+                        .expect("should have first entry")
+                        .clone(),
                     write_embed.inlines[i],
                 )
             });
@@ -269,7 +293,7 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
             .append(&mut embeds.iter().map(|(embed, _, _)| embed.clone()).collect());
         if embeds
             .iter()
-            .any(|(_, pages, _)| pages.first().unwrap().len() > 1)
+            .any(|(_, pages, _)| pages.first().expect("should have a page").len() > 1)
         {
             let components = CreateActionRow::Buttons(vec![
                 CreateButton::new(&prev_id).emoji('◀'),
@@ -281,7 +305,7 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
         ctx.send(reply).await?;
         if embeds
             .iter()
-            .any(|(_, pages, _)| pages.first().unwrap().len() > 1)
+            .any(|(_, pages, _)| pages.first().expect("should have a page").len() > 1)
         {
             let mut current_page: i32 = 0;
             while let Some(press) = ComponentInteractionCollector::new(ctx)
@@ -299,20 +323,23 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
                     continue;
                 }
                 for (i, (embed, pages, write_embed)) in embeds.iter_mut().enumerate() {
-                    let pages1_len = pages.first().unwrap().len() as i32;
+                    let pages1_len =
+                        i32::try_from(pages.first().expect("should have a page").len())?;
                     let fields = write_embed.headers.iter().enumerate().map(|(i, h)| {
                         (
                             h.to_string(),
                             pages
                                 .get(i)
-                                .unwrap()
+                                .expect("should have that page")
                                 .get(
-                                    ((current_page % pages1_len + pages1_len) % pages1_len)
-                                        as usize,
+                                    usize::try_from(
+                                        (current_page % pages1_len + pages1_len) % pages1_len,
+                                    )
+                                    .expect("should not have that many pages"),
                                 )
-                                .unwrap()
+                                .expect("should have that entry")
                                 .clone(),
-                            *write_embed.inlines.get(i).unwrap(),
+                            *write_embed.inlines.get(i).expect("should have that page"),
                         )
                     });
                     if i == 0 {
@@ -348,8 +375,14 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
 }
 
 // checks whether invoking user is an admin with the required privilege level
+#[allow(clippy::missing_panics_doc)]
 pub async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
-    let admin_list = ctx.data().admins.lock().unwrap().clone();
+    let admin_list = ctx
+        .data()
+        .admins
+        .lock()
+        .expect("Failed to acquire Mutex")
+        .clone();
     if let Ok(application_info) = ctx.http().get_current_application_info().await {
         if let Some(owner) = application_info.owner {
             if ctx.author().id == owner.id {
@@ -358,7 +391,11 @@ pub async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
         }
     }
     if admin_list.contains_key(&ctx.author().name) {
-        if admin_list.get(&ctx.author().name).unwrap() <= &level {
+        if admin_list
+            .get(&ctx.author().name)
+            .expect("should have that key")
+            <= &level
+        {
             (true, String::new())
         } else {
             (false, "Not privileged!".to_string())
@@ -369,12 +406,13 @@ pub async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
 }
 
 // autocompletion function for registered users
+#[allow(clippy::missing_panics_doc)]
 pub async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
     let user_ids: Vec<String> = ctx
         .data()
         .user_ids
         .lock()
-        .unwrap()
+        .expect("Failed to acquire Mutex")
         .keys()
         .cloned()
         .collect();
@@ -413,9 +451,11 @@ pub struct PolyRecords {
     pub wr_amounts: HashMap<String, u32>,
 }
 
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
 pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error> {
+    use LeaderboardChoice::{Community, Global, Hof};
     let track_ids: Vec<(String, String)> = fs::read_to_string({
-        use LeaderboardChoice::*;
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
@@ -423,11 +463,11 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error
         }
     })
     .await
-    .unwrap()
+    .expect("Failed to read file")
     .lines()
     .map(|s| {
-        let mut parts = s.splitn(2, " ").map(|s| s.to_string());
-        (parts.next().unwrap(), parts.next().unwrap())
+        let parts = s.split_once(' ').expect("Invalid track ids file");
+        (parts.1.to_string(), parts.0.to_string())
     })
     .collect();
     let mut records = vec![Vec::new(); 3];
@@ -456,13 +496,22 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error
         let winner_name = winner.name.clone();
         let winner_time = winner.frames / 1000.0;
         *wr_amounts.entry(winner_name.clone()).or_default() += 1;
-        records.get_mut(0).unwrap().push(name);
-        records.get_mut(1).unwrap().push(winner_name);
-        records.get_mut(2).unwrap().push(winner_time.to_string());
+        records
+            .get_mut(0)
+            .expect("should have that entry")
+            .push(name);
+        records
+            .get_mut(1)
+            .expect("should have that entry")
+            .push(winner_name);
+        records
+            .get_mut(2)
+            .expect("should have that entry")
+            .push(winner_time.to_string());
     }
     let poly_records = PolyRecords {
-        wr_amounts,
         records,
+        wr_amounts,
     };
     Ok(poly_records)
 }

@@ -43,7 +43,7 @@ enum PolyError {
 #[derive(Deserialize, Serialize)]
 struct LeaderBoardEntry {
     name: String,
-    frames: f64,
+    frames: u32,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -53,36 +53,33 @@ struct LeaderBoard {
 
 #[derive(Deserialize, Serialize, Default)]
 pub struct PolyLeaderBoard {
-    pub total: u32,
+    pub total: usize,
     pub entries: Vec<PolyLeaderBoardEntry>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct PolyLeaderBoardEntry {
-    pub rank: u32,
+    pub rank: usize,
     pub name: String,
     pub stat: String,
 }
 
 impl PolyLeaderBoard {
-    pub fn new() -> Self {
-        Self::default()
-    }
     pub fn push_entry(&mut self, entry: PolyLeaderBoardEntry) {
         self.entries.push(entry);
         self.total += 1;
     }
 }
 impl PolyLeaderBoardEntry {
-    pub fn new(rank: u32, username: String, value: String) -> Self {
-        Self {
-            rank,
-            name: username,
-            stat: value,
-        }
+    #[must_use]
+    pub const fn new(rank: usize, name: String, stat: String) -> Self {
+        Self { rank, name, stat }
     }
 }
 
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::too_many_lines)]
 pub async fn global_rankings_update() -> Result<(), Error> {
     dotenv().ok();
     let lb_size = env::var("LEADERBOARD_SIZE")
@@ -94,7 +91,12 @@ pub async fn global_rankings_update() -> Result<(), Error> {
     let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
         .await?
         .lines()
-        .map(|s| s.split(" ").next().unwrap().to_string())
+        .map(|s| {
+            s.split(' ')
+                .next()
+                .expect("Error in track file")
+                .to_string()
+        })
         .collect();
     let track_num = track_ids.len();
     let futures = track_ids.iter().map(|track_id| {
@@ -141,8 +143,8 @@ pub async fn global_rankings_update() -> Result<(), Error> {
     let results: Vec<Vec<String>> = join_all(futures)
         .await
         .into_iter()
-        .map(|res| res.unwrap())
-        .filter_map(|res| res.ok())
+        .map(|res| res.expect("JoinError ig"))
+        .filter_map(std::result::Result::ok)
         .collect();
     fs::remove_file(UPDATE_LOCK_FILE).await?;
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
@@ -157,16 +159,16 @@ pub async fn global_rankings_update() -> Result<(), Error> {
         }
         leaderboards.push(leaderboard);
     }
-    let mut player_times: HashMap<String, Vec<f64>> = HashMap::new();
+    let mut player_times: HashMap<String, Vec<u32>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let alt_file: Vec<String> = fs::read_to_string(ALT_ACCOUNT_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let mut alt_list: HashMap<String, String> = HashMap::new();
     for line in alt_file {
@@ -174,18 +176,17 @@ pub async fn global_rankings_update() -> Result<(), Error> {
         for entry in line.split(SPLIT_CHAR).skip(1) {
             alt_list.insert(
                 entry.to_string(),
-                line.split(SPLIT_CHAR).next().unwrap().to_string(),
+                line.split(SPLIT_CHAR)
+                    .next()
+                    .expect("Wrong alt list file format")
+                    .to_string(),
             );
         }
     }
     for leaderboard in leaderboards {
         let mut has_time: Vec<String> = Vec::new();
         for entry in leaderboard {
-            let name: String = if alt_list.contains_key(&entry.name) {
-                alt_list.get(&entry.name).unwrap().clone()
-            } else {
-                entry.name.clone()
-            };
+            let name: String = alt_list.get(&entry.name).unwrap_or(&entry.name).clone();
             if !has_time.contains(&name) && !blacklist.contains(&name) {
                 player_times
                     .entry(name.clone())
@@ -198,17 +199,17 @@ pub async fn global_rankings_update() -> Result<(), Error> {
     let mut sorted_leaderboard: Vec<(String, u32)> = player_times
         .into_iter()
         .filter(|(_, times)| times.len() == track_num)
-        .map(|(name, times)| (name, times.iter().sum::<f64>() as u32))
+        .map(|(name, times)| (name, times.iter().sum()))
         .collect();
     sorted_leaderboard.sort_by_key(|(_, frames)| *frames);
     let leaderboard: PolyLeaderBoard = PolyLeaderBoard {
-        total: sorted_leaderboard.len() as u32,
+        total: sorted_leaderboard.len(),
         entries: sorted_leaderboard
             .into_iter()
             .enumerate()
             .map(|(i, (name, frames))| {
                 PolyLeaderBoardEntry::new(
-                    (i + 1) as u32,
+                    i + 1,
                     name,
                     format!(
                         "{:>2}:{:0>2}.{:0>3}",
@@ -225,28 +226,32 @@ pub async fn global_rankings_update() -> Result<(), Error> {
     Ok(())
 }
 
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
 pub async fn hof_update() -> Result<(), Error> {
     let client = Client::new();
     let track_ids: Vec<String> = fs::read_to_string(HOF_TRACK_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
-    let track_num = track_ids.len() as u32;
+    let track_num = u32::try_from(track_ids.len()).expect("Shouldn't have that many track IDs");
     let futures = track_ids.iter().map(|track_id| {
         let client = client.clone();
         let url = format!(
             "https://vps.kodub.com:43273/leaderboard?version={}&trackId={}&skip=0&amount=100",
             VERSION,
-            track_id.split(" ").next().unwrap()
+            track_id.split(' ').next().expect("Invalid track id file")
         );
         task::spawn(async move {
             let mut att = 0;
-            let mut res = client.get(&url).send().await.unwrap().text().await.unwrap();
+            let mut res = client.get(&url).send().await?.text().await?;
             while res.is_empty() && att < REQUEST_RETRY_COUNT {
                 att += 1;
                 sleep(Duration::from_millis(1000)).await;
-                res = client.get(&url).send().await.unwrap().text().await.unwrap();
+                res = client.get(&url).send().await?.text().await?;
             }
             Ok::<String, reqwest::Error>(res)
         })
@@ -267,8 +272,8 @@ pub async fn hof_update() -> Result<(), Error> {
     let results: Vec<String> = join_all(futures)
         .await
         .into_iter()
-        .map(|res| res.unwrap())
-        .filter_map(|res| res.ok())
+        .map(|res| res.expect("JoinError ig"))
+        .filter_map(std::result::Result::ok)
         .collect();
     fs::remove_file(UPDATE_LOCK_FILE).await?;
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
@@ -281,16 +286,16 @@ pub async fn hof_update() -> Result<(), Error> {
         }
     }
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
-    let mut time_rankings: HashMap<String, Vec<f64>> = HashMap::new();
+    let mut time_rankings: HashMap<String, Vec<u32>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(HOF_BLACKLIST_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let alt_file: Vec<String> = fs::read_to_string(HOF_ALT_ACCOUNT_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let mut alt_list: HashMap<String, String> = HashMap::new();
     for line in alt_file {
@@ -298,14 +303,17 @@ pub async fn hof_update() -> Result<(), Error> {
         for entry in line.split(SPLIT_CHAR).skip(1) {
             alt_list.insert(
                 entry.to_string(),
-                line.split(SPLIT_CHAR).next().unwrap().to_string(),
+                line.split(SPLIT_CHAR)
+                    .next()
+                    .expect("Invalid alt list file")
+                    .to_string(),
             );
         }
     }
     let point_values: Vec<u32> = fs::read_to_string(HOF_POINTS_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string().parse().unwrap())
+        .map(|s| s.to_string().parse().expect("Invalid point value file"))
         .collect();
     for leaderboard in leaderboards {
         let mut has_ranking: Vec<String> = Vec::new();
@@ -314,11 +322,7 @@ pub async fn hof_update() -> Result<(), Error> {
             if pos + 1 > point_values.len() {
                 break;
             }
-            let name = if alt_list.contains_key(&entry.name) {
-                alt_list.get(&entry.name).unwrap().clone()
-            } else {
-                entry.name.clone()
-            };
+            let name = alt_list.get(&entry.name).unwrap_or(&entry.name).clone();
             if !has_ranking.contains(&name) && !blacklist.contains(&name) {
                 player_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings
@@ -337,8 +341,8 @@ pub async fn hof_update() -> Result<(), Error> {
             let mut points = 0;
             for ranking in rankings {
                 if *ranking < point_values.len() {
-                    points += point_values.get(*ranking).unwrap();
-                    *tiebreakers.get_mut(*ranking).unwrap() += 1;
+                    points += point_values[*ranking];
+                    tiebreakers[*ranking] += 1;
                 }
             }
             (name.to_string(), points, tiebreakers)
@@ -351,7 +355,7 @@ pub async fn hof_update() -> Result<(), Error> {
             .cmp(points_a)
             .then_with(|| tiebreakers_b.cmp(tiebreakers_a))
     });
-    let mut final_leaderboard = PolyLeaderBoard::new();
+    let mut final_leaderboard = PolyLeaderBoard::default();
     let mut points_prev = point_values[0] * track_num + 1;
     let mut rank_prev = 0;
     for (name, points, _) in sorted_leaderboard.clone() {
@@ -377,7 +381,7 @@ pub async fn hof_update() -> Result<(), Error> {
     let mut player_records: Vec<(String, u32)> = player_records.into_iter().collect();
     player_records.sort_by_key(|(_, amt)| *amt);
     player_records.reverse();
-    let mut final_player_records = PolyLeaderBoard::new();
+    let mut final_player_records = PolyLeaderBoard::default();
     let mut records_prev = track_num + 1;
     let mut rank_prev = 0;
     for (name, records) in player_records.clone() {
@@ -392,22 +396,22 @@ pub async fn hof_update() -> Result<(), Error> {
         ));
     }
     output.push('\n');
-    output.push_str(&serde_json::to_string(&final_player_records).unwrap());
+    output.push_str(&serde_json::to_string(&final_player_records).expect("Failed to serialize"));
     fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
         .filter(|(_, times)| times.len() == track_num as usize)
-        .map(|(name, times)| (name, times.iter().sum::<f64>() as u32))
+        .map(|(name, times)| (name, times.iter().sum()))
         .collect();
     sorted_times.sort_by_key(|(_, frames)| *frames);
     let time_leaderboard = PolyLeaderBoard {
-        total: sorted_times.len() as u32,
+        total: sorted_times.len(),
         entries: sorted_times
             .into_iter()
             .enumerate()
             .map(|(i, (name, frames))| {
                 PolyLeaderBoardEntry::new(
-                    (i + 1) as u32,
+                    i + 1,
                     name,
                     format!(
                         "{:>2}:{:0>2}.{:0>3}",
@@ -424,14 +428,21 @@ pub async fn hof_update() -> Result<(), Error> {
     Ok(())
 }
 
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 pub async fn community_update() -> Result<(), Error> {
     let client = Client::new();
     let track_ids: Vec<String> = fs::read_to_string(COMMUNITY_TRACK_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
-    let track_num = track_ids.len() as u32;
+    let track_num = u32::try_from(track_ids.len()).expect("Shouldn't have that many tracks");
     let futures = track_ids.iter().map(|track_id| {
         let client = client.clone();
         let mut urls = Vec::new();
@@ -440,7 +451,7 @@ pub async fn community_update() -> Result<(), Error> {
                 "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
                 43273,
                 VERSION,
-                track_id.split(" ").next().unwrap(),
+                track_id.split(' ').next().expect("Invalid track ids file"),
                 i * 500,
             );
             urls.push(url);
@@ -450,11 +461,11 @@ pub async fn community_update() -> Result<(), Error> {
             for url in urls {
                 let mut att = 0;
                 sleep(Duration::from_millis(500)).await;
-                let mut response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                let mut response = client.get(&url).send().await?.text().await?;
                 while response.is_empty() && att < REQUEST_RETRY_COUNT {
                     att += 1;
                     sleep(Duration::from_millis(1000)).await;
-                    response = client.get(&url).send().await.unwrap().text().await.unwrap();
+                    response = client.get(&url).send().await?.text().await?;
                 }
                 res.push(response);
             }
@@ -477,8 +488,8 @@ pub async fn community_update() -> Result<(), Error> {
     let results: Vec<Vec<String>> = join_all(futures)
         .await
         .into_iter()
-        .map(|res| res.unwrap())
-        .filter_map(|res| res.ok())
+        .map(|res| res.expect("JoinError ig"))
+        .filter_map(std::result::Result::ok)
         .collect();
     fs::remove_file(UPDATE_LOCK_FILE).await?;
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
@@ -496,16 +507,16 @@ pub async fn community_update() -> Result<(), Error> {
         leaderboards.push(leaderboard);
     }
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
-    let mut time_rankings: HashMap<String, Vec<f64>> = HashMap::new();
+    let mut time_rankings: HashMap<String, Vec<u32>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let alt_file: Vec<String> = fs::read_to_string(ALT_ACCOUNT_FILE)
         .await?
         .lines()
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
         .collect();
     let mut alt_list: HashMap<String, String> = HashMap::new();
     for line in alt_file {
@@ -513,7 +524,10 @@ pub async fn community_update() -> Result<(), Error> {
         for entry in line.split(SPLIT_CHAR).skip(1) {
             alt_list.insert(
                 entry.to_string(),
-                line.split(SPLIT_CHAR).next().unwrap().to_string(),
+                line.split(SPLIT_CHAR)
+                    .next()
+                    .expect("Invalid alt list file")
+                    .to_string(),
             );
         }
     }
@@ -524,11 +538,7 @@ pub async fn community_update() -> Result<(), Error> {
             if pos + 1 > COMMUNITY_LB_SIZE as usize * 500 {
                 break;
             }
-            let name = if alt_list.contains_key(&entry.name) {
-                alt_list.get(&entry.name).unwrap().clone()
-            } else {
-                entry.name.clone()
-            };
+            let name = alt_list.get(&entry.name).unwrap_or(&entry.name).clone();
             if !has_ranking.contains(&name) && !blacklist.contains(&name) {
                 player_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings
@@ -559,7 +569,7 @@ pub async fn community_update() -> Result<(), Error> {
             .cmp(points_a)
             .then_with(|| tiebreakers_b.cmp(tiebreakers_a))
     });
-    let mut final_leaderboard = PolyLeaderBoard::new();
+    let mut final_leaderboard = PolyLeaderBoard::default();
     let mut points_prev = COMMUNITY_LB_SIZE * 500 * track_num + 1;
     let mut rank_prev = 0;
     for (name, points, _) in sorted_leaderboard.clone() {
@@ -585,7 +595,7 @@ pub async fn community_update() -> Result<(), Error> {
     let mut player_records: Vec<(String, u32)> = player_records.into_iter().collect();
     player_records.sort_by_key(|(_, amt)| *amt);
     player_records.reverse();
-    let mut final_player_records = PolyLeaderBoard::new();
+    let mut final_player_records = PolyLeaderBoard::default();
     let mut records_prev = track_num + 1;
     let mut rank_prev = 0;
     for (name, records) in player_records.clone() {
@@ -600,22 +610,22 @@ pub async fn community_update() -> Result<(), Error> {
         ));
     }
     output.push('\n');
-    output.push_str(&serde_json::to_string(&final_player_records).unwrap());
+    output.push_str(&serde_json::to_string(&final_player_records).expect("Failed to serialize"));
     fs::write(COMMUNITY_RANKINGS_FILE, output).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
         .filter(|(_, times)| times.len() == track_num as usize)
-        .map(|(name, times)| (name, times.iter().sum::<f64>() as u32))
+        .map(|(name, times)| (name, times.iter().sum()))
         .collect();
     sorted_times.sort_by_key(|(_, frames)| *frames);
     let time_leaderboard = PolyLeaderBoard {
-        total: sorted_times.len() as u32,
+        total: sorted_times.len(),
         entries: sorted_times
             .into_iter()
             .enumerate()
             .map(|(i, (name, frames))| {
                 PolyLeaderBoardEntry::new(
-                    (i + 1) as u32,
+                    i + 1,
                     name,
                     format!(
                         "{:>2}:{:0>2}.{:0>3}",
@@ -632,6 +642,7 @@ pub async fn community_update() -> Result<(), Error> {
     Ok(())
 }
 
+#[must_use]
 pub fn get_datetime() -> String {
     let now = Utc::now();
     now.format("%Y/%m/%d %H:%M:%S").to_string()

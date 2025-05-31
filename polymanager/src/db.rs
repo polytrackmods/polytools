@@ -1,15 +1,17 @@
-use crate::schema::*;
+use crate::schema::{admins, users};
+use anyhow::Error;
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use dotenvy::dotenv;
 use std::env;
 
-pub fn establish_connection() -> SqliteConnection {
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::missing_panics_doc)]
+pub fn establish_connection() -> Result<SqliteConnection, Error> {
     dotenv().ok();
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    SqliteConnection::establish(&database_url)
-        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+    let database_url = env::var("DATABASE_URL").expect("Expected DATABASE_URL in env");
+    Ok(SqliteConnection::establish(&database_url)?)
 }
 
 #[derive(Queryable, Selectable)]
