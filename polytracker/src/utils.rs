@@ -467,7 +467,7 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error
     .lines()
     .map(|s| {
         let parts = s.split_once(' ').expect("Invalid track ids file");
-        (parts.1.to_string(), parts.0.to_string())
+        (parts.0.to_string(), parts.1.to_string())
     })
     .collect();
     let mut records = vec![Vec::new(); 3];
