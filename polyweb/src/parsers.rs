@@ -24,14 +24,6 @@ struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
 
-/* #[derive(Serialize, Deserialize)]
-#[serde(crate = "rocket::serde")]
-pub struct Entry {
-    rank: u32,
-    stat: String,
-    name: String,
-} */
-
 #[derive(Deserialize, Clone)]
 #[serde(crate = "rocket::serde")]
 #[serde(rename_all = "camelCase")]
@@ -270,7 +262,7 @@ pub async fn parse_history(track_id: &str) -> Vec<(String, String, String, Strin
                         record.frames % 1000
                     )
                 } else {
-                    (f64::from(record.frames) / 1000.0).to_string()
+                    format!("{:.3}", f64::from(record.frames) / 1000.0)
                 },
                 DateTime::from_timestamp(record.timestamp, 0)
                     .expect("Should be a valid timestamp")
