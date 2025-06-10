@@ -933,7 +933,7 @@ pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
             serde_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)?
                 .entries
                 .iter()
-                .take(20)
+                .take_while(|entry| entry.rank < 21)
                 .map(|e| e.name.clone())
                 .collect();
         global_grandmasters.append(&mut main_leaderboard);
@@ -946,7 +946,7 @@ pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
         )?
         .entries
         .iter()
-        .take(20)
+        .take_while(|entry| entry.rank < 21)
         .map(|e| e.name.clone())
         .collect();
         global_grandmasters.append(&mut community_leaderboard);
