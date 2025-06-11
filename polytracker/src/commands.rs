@@ -1027,7 +1027,7 @@ pub async fn rankings(
             }
         },
         "Player",
-        "Update",
+        "Update in",
     ];
     let mut contents: Vec<String> = vec![
         String::new(),

@@ -255,15 +255,24 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
         let mut embeds = Vec::new();
         for (i, write_embed) in write_embeds.iter().enumerate() {
             let mut pages: Vec<Vec<String>> = Vec::new();
+            let max_len = write_embed
+                .contents
+                .iter()
+                .max_by_key(|content| content.lines().count())
+                .expect("should have contents")
+                .lines()
+                .count();
             for content in &write_embed.contents {
-                pages.push(
+                pages.push(if content.lines().count() < 20 {
+                    vec![content.to_string(); max_len]
+                } else {
                     content
                         .lines()
                         .collect::<Vec<&str>>()
                         .chunks(20)
                         .map(|chunk| chunk.join("\n"))
-                        .collect(),
-                );
+                        .collect()
+                });
             }
             let fields = write_embed.headers.iter().enumerate().map(|(i, h)| {
                 (
