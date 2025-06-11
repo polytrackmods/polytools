@@ -1036,7 +1036,7 @@ pub async fn rankings(
         format!(
             "{}:{:0>2}.{:0>3}",
             duration / 60000,
-            duration % 60 / 1000,
+            duration / 1000 % 60,
             duration % 1000
         ),
     ];
