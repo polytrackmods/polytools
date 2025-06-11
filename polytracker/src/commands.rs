@@ -2,7 +2,7 @@ use crate::utils::{
     autocomplete_users, get_records, is_admin, write, write_embed, AddAdminModal, BotData,
     EditAdminModal, EditModal, LeaderBoard, LeaderBoardEntry, RemoveAdminModal, WriteEmbed,
 };
-use crate::{Context, Error, MAX_RANKINGS_AGE};
+use crate::{Context, Error};
 use dotenvy::dotenv;
 use poise::serenity_prelude as serenity;
 use poise::{builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, Modal};
@@ -11,7 +11,7 @@ use polymanager::{
     BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
     HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE,
     HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
-    VERSION,
+    UPDATE_CYCLE_LEN, VERSION,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -996,14 +996,12 @@ pub async fn rankings(
             }
         }
     };
-    if fs::try_exists(rankings_file).await? {
+    let duration = if fs::try_exists(rankings_file).await? {
         let age = fs::metadata(rankings_file).await?.modified()?.elapsed()?;
-        if age > MAX_RANKINGS_AGE {
-            match leaderboard {
-                Global => global_rankings_update().await?,
-                Community => community_update().await?,
-                Hof => hof_update().await?,
-            }
+        if age > UPDATE_CYCLE_LEN {
+            UPDATE_CYCLE_LEN
+        } else {
+            UPDATE_CYCLE_LEN - age
         }
     } else {
         match leaderboard {
@@ -1011,7 +1009,9 @@ pub async fn rankings(
             Community => community_update().await?,
             Hof => hof_update().await?,
         }
+        UPDATE_CYCLE_LEN
     }
+    .as_millis();
     let headers: Vec<&str> = vec![
         "Ranking",
         {
@@ -1027,8 +1027,19 @@ pub async fn rankings(
             }
         },
         "Player",
+        "Update",
     ];
-    let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
+    let mut contents: Vec<String> = vec![
+        String::new(),
+        String::new(),
+        String::new(),
+        format!(
+            "{}:{:0>2}.{:0>3}",
+            duration / 60000,
+            duration % 60 / 1000,
+            duration % 1000
+        ),
+    ];
     let content = fs::read_to_string(rankings_file).await?;
     let line = content.lines().next().expect("Should have first line");
     let lb: PolyLeaderBoard = serde_json::from_str(line).expect("Invalid leaderboard");
@@ -1037,7 +1048,7 @@ pub async fn rankings(
         writeln!(contents[1], "{}", lb.entries[i].stat)?;
         writeln!(contents[2], "{}", lb.entries[i].name)?;
     }
-    let inlines: Vec<bool> = vec![true, true, true];
+    let inlines: Vec<bool> = vec![true, true, true, false];
     write_embed(
         ctx,
         vec![WriteEmbed::new(headers.len())

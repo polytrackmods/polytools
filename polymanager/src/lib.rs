@@ -31,6 +31,8 @@ pub const VERSION: &str = "0.5.0";
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
 pub const REQUEST_RETRY_COUNT: u32 = 10;
 
+pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(15 * 60);
+
 const UPDATE_LOCK_FILE: &str = "data/update.lock";
 const MAX_LOCK_TIME: Duration = Duration::from_secs(300);
 

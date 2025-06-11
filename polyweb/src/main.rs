@@ -10,17 +10,13 @@ use parsers::{
 use polymanager::{
     community_update, global_rankings_update, hof_update, COMMUNITY_RANKINGS_FILE,
     COMMUNITY_TRACK_FILE, CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
+    UPDATE_CYCLE_LEN,
 };
 use rocket::form::Context;
 use rocket::fs::FileServer;
-use rocket::tokio::{
-    fs, task,
-    time::{sleep, Duration},
-};
+use rocket::tokio::{fs, task, time::sleep};
 use rocket::{get, main, routes};
 use rocket_dyn_templates::{context, Template};
-
-const AUTOUPDATE_TIMER: Duration = Duration::from_secs(60 * 30);
 
 #[get("/")]
 fn index() -> Template {
@@ -167,15 +163,15 @@ async fn main() -> Result<(), Box<rocket::Error>> {
             community_update()
                 .await
                 .unwrap_or_else(|_| println!("Failed update"));
-            sleep(AUTOUPDATE_TIMER / 3).await;
+            sleep(UPDATE_CYCLE_LEN / 3).await;
             hof_update()
                 .await
                 .unwrap_or_else(|_| println!("Failed update"));
-            sleep(AUTOUPDATE_TIMER / 3).await;
+            sleep(UPDATE_CYCLE_LEN / 3).await;
             global_rankings_update()
                 .await
                 .unwrap_or_else(|_| println!("Failed update"));
-            sleep(AUTOUPDATE_TIMER / 3).await;
+            sleep(UPDATE_CYCLE_LEN / 3).await;
         }
     });
     rocket.launch().await?;

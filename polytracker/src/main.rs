@@ -20,7 +20,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use utils::BotData;
 
-const MAX_RANKINGS_AGE: Duration = Duration::from_secs(60 * 10);
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 
 type Context<'a> = poise::Context<'a, BotData, Error>;
