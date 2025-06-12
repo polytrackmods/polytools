@@ -14,6 +14,7 @@ use polymanager::{
 };
 use rocket::form::Context;
 use rocket::fs::FileServer;
+use rocket::tokio::join;
 use rocket::tokio::{fs, task, time::sleep};
 use rocket::{get, main, routes};
 use rocket_dyn_templates::{context, Template};
@@ -160,18 +161,18 @@ async fn main() -> Result<(), Box<rocket::Error>> {
         .attach(Template::fairing());
     task::spawn(async {
         loop {
-            community_update()
-                .await
+            join!(hof_update(), sleep(UPDATE_CYCLE_LEN / 3))
+                .0
                 .unwrap_or_else(|_| println!("Failed update"));
-            sleep(UPDATE_CYCLE_LEN / 3).await;
-            hof_update()
-                .await
+            println!("Cycle done");
+            join!(community_update(), sleep(UPDATE_CYCLE_LEN / 3))
+                .0
                 .unwrap_or_else(|_| println!("Failed update"));
-            sleep(UPDATE_CYCLE_LEN / 3).await;
-            global_rankings_update()
-                .await
+            println!("Cycle done");
+            join!(global_rankings_update(), sleep(UPDATE_CYCLE_LEN / 3))
+                .0
                 .unwrap_or_else(|_| println!("Failed update"));
-            sleep(UPDATE_CYCLE_LEN / 3).await;
+            println!("Cycle done");
         }
     });
     rocket.launch().await?;
