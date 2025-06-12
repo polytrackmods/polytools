@@ -257,16 +257,14 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
         let mut embeds = Vec::new();
         for (i, write_embed) in write_embeds.iter().enumerate() {
             let mut pages: Vec<Vec<String>> = Vec::new();
-            let max_len = (write_embed
+            let max_len = write_embed
                 .contents
                 .iter()
                 .max_by_key(|content| content.lines().count())
                 .expect("should have contents")
                 .lines()
                 .count()
-                + EMBED_PAGE_LEN
-                - 1)
-                / EMBED_PAGE_LEN;
+                .div_ceil(EMBED_PAGE_LEN);
             for content in &write_embed.contents {
                 pages.push(if content.lines().count() < EMBED_PAGE_LEN {
                     vec![content.to_string(); max_len]
