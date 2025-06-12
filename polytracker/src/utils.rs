@@ -20,6 +20,8 @@ use std::time::Duration;
 use tokio::fs;
 use tokio::time::sleep;
 
+const EMBED_PAGE_LEN: usize = 20;
+
 // structs for deserializing leaderboards
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -255,21 +257,24 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
         let mut embeds = Vec::new();
         for (i, write_embed) in write_embeds.iter().enumerate() {
             let mut pages: Vec<Vec<String>> = Vec::new();
-            let max_len = write_embed
+            let max_len = (write_embed
                 .contents
                 .iter()
                 .max_by_key(|content| content.lines().count())
                 .expect("should have contents")
                 .lines()
-                .count();
+                .count()
+                + EMBED_PAGE_LEN
+                - 1)
+                / EMBED_PAGE_LEN;
             for content in &write_embed.contents {
-                pages.push(if content.lines().count() < 20 {
+                pages.push(if content.lines().count() < EMBED_PAGE_LEN {
                     vec![content.to_string(); max_len]
                 } else {
                     content
                         .lines()
                         .collect::<Vec<&str>>()
-                        .chunks(20)
+                        .chunks(EMBED_PAGE_LEN)
                         .map(|chunk| chunk.join("\n"))
                         .collect()
                 });
