@@ -1,9 +1,9 @@
 pub mod db;
 pub mod schema;
 
-use std::{collections::HashMap, env, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
-use anyhow::{Error, anyhow};
+use anyhow::{anyhow, Result};
 use chrono::Utc;
 use dotenvy::dotenv;
 use futures::future::join_all;
@@ -14,6 +14,7 @@ use tokio::{fs, task, time::sleep};
 pub const BLACKLIST_FILE: &str = "data/blacklist.txt";
 pub const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
 pub const RANKINGS_FILE: &str = "data/poly_rankings.txt";
+const LB_SIZE: u32 = 20;
 pub const TRACK_FILE: &str = "lists/official_tracks.txt";
 pub const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
 pub const HOF_ALL_TRACK_FILE: &str = "lists/hof_tracks_all.txt";
@@ -82,14 +83,8 @@ impl PolyLeaderBoardEntry {
 
 #[allow(clippy::missing_errors_doc)]
 #[allow(clippy::missing_panics_doc)]
-#[allow(clippy::too_many_lines)]
-pub async fn global_rankings_update() -> Result<(), Error> {
+pub async fn global_rankings_update() -> Result<()> {
     dotenv().ok();
-    let lb_size = env::var("LEADERBOARD_SIZE")
-        .expect("Expected LEADERBOARD_SIZE in env!")
-        .parse()
-        .expect("LEADERBOARD_SIZE not a valid integer!");
-    let client = Client::new();
     let official_tracks_file = TRACK_FILE;
     let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
         .await?
@@ -102,66 +97,7 @@ pub async fn global_rankings_update() -> Result<(), Error> {
         })
         .collect();
     let track_num = track_ids.len();
-    let futures = track_ids.iter().map(|track_id| {
-        let client = client.clone();
-        let mut urls = Vec::new();
-        for i in 0..lb_size {
-            urls.push(format!(
-                "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
-                43273,
-                VERSION,
-                track_id,
-                i * 500,
-            ));
-        }
-        task::spawn(async move {
-            let mut res = Vec::new();
-            for url in urls {
-                let mut att = 0;
-                sleep(Duration::from_millis(200)).await;
-                let mut response = client.get(&url).send().await?.text().await?;
-                while response.is_empty() && att < REQUEST_RETRY_COUNT {
-                    att += 1;
-                    sleep(Duration::from_millis(1000)).await;
-                    response = client.get(&url).send().await?.text().await?;
-                }
-                res.push(response);
-            }
-            Ok::<Vec<String>, reqwest::Error>(res)
-        })
-    });
-    if fs::try_exists(UPDATE_LOCK_FILE).await? {
-        if fs::metadata(UPDATE_LOCK_FILE)
-            .await?
-            .modified()?
-            .elapsed()?
-            > MAX_LOCK_TIME
-        {
-            fs::remove_file(UPDATE_LOCK_FILE).await?;
-        } else {
-            return Err(PolyError::BusyUpdating.into());
-        }
-    }
-    fs::write(UPDATE_LOCK_FILE, "").await?;
-    let results: Vec<Vec<String>> = join_all(futures)
-        .await
-        .into_iter()
-        .map(|res| res.expect("JoinError ig"))
-        .filter_map(std::result::Result::ok)
-        .collect();
-    fs::remove_file(UPDATE_LOCK_FILE).await?;
-    let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
-    for result in results {
-        let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
-        for res in result {
-            leaderboard.append(
-                &mut serde_json::from_str::<LeaderBoard>(&res)
-                    .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
-                    .entries,
-            );
-        }
-        leaderboards.push(leaderboard);
-    }
+    let leaderboards = tracks_leaderboards(track_ids, LB_SIZE).await?;
     let mut player_times: HashMap<String, Vec<u32>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
         .await?
@@ -233,61 +169,20 @@ pub async fn global_rankings_update() -> Result<(), Error> {
 #[allow(clippy::missing_errors_doc)]
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::cognitive_complexity)]
-pub async fn hof_update() -> Result<(), Error> {
-    let client = Client::new();
+pub async fn hof_update() -> Result<()> {
     let track_ids: Vec<String> = fs::read_to_string(HOF_TRACK_FILE)
         .await?
         .lines()
-        .map(std::string::ToString::to_string)
+        .map(|track_id| {
+            track_id
+                .split_once(' ')
+                .expect("invalid lb file format")
+                .0
+                .to_string()
+        })
         .collect();
     let track_num = u32::try_from(track_ids.len()).expect("Shouldn't have that many track IDs");
-    let futures = track_ids.iter().map(|track_id| {
-        let client = client.clone();
-        let url = format!(
-            "https://vps.kodub.com:43273/leaderboard?version={}&trackId={}&skip=0&amount=100",
-            VERSION,
-            track_id.split(' ').next().expect("Invalid track id file")
-        );
-        task::spawn(async move {
-            let mut att = 0;
-            let mut res = client.get(&url).send().await?.text().await?;
-            while res.is_empty() && att < REQUEST_RETRY_COUNT {
-                att += 1;
-                sleep(Duration::from_millis(1000)).await;
-                res = client.get(&url).send().await?.text().await?;
-            }
-            Ok::<String, reqwest::Error>(res)
-        })
-    });
-    if fs::try_exists(UPDATE_LOCK_FILE).await? {
-        if fs::metadata(UPDATE_LOCK_FILE)
-            .await?
-            .modified()?
-            .elapsed()?
-            > MAX_LOCK_TIME
-        {
-            fs::remove_file(UPDATE_LOCK_FILE).await?;
-        } else {
-            return Err(PolyError::BusyUpdating.into());
-        }
-    }
-    fs::write(UPDATE_LOCK_FILE, "").await?;
-    let results: Vec<String> = join_all(futures)
-        .await
-        .into_iter()
-        .map(|res| res.expect("JoinError ig"))
-        .filter_map(std::result::Result::ok)
-        .collect();
-    fs::remove_file(UPDATE_LOCK_FILE).await?;
-    let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
-    for result in results {
-        if !result.is_empty() {
-            let leaderboard: Vec<LeaderBoardEntry> = serde_json::from_str::<LeaderBoard>(&result)
-                .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
-                .entries;
-            leaderboards.push(leaderboard);
-        }
-    }
+    let leaderboards = tracks_leaderboards(track_ids, 1).await?;
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
     let mut time_rankings: HashMap<String, Vec<u32>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(HOF_BLACKLIST_FILE)
@@ -438,77 +333,20 @@ pub async fn hof_update() -> Result<(), Error> {
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
-pub async fn community_update() -> Result<(), Error> {
-    let client = Client::new();
+pub async fn community_update() -> Result<()> {
     let track_ids: Vec<String> = fs::read_to_string(COMMUNITY_TRACK_FILE)
         .await?
         .lines()
-        .map(std::string::ToString::to_string)
+        .map(|track_id| {
+            track_id
+                .split_once(' ')
+                .expect("invalid lb file format")
+                .0
+                .to_string()
+        })
         .collect();
     let track_num = u32::try_from(track_ids.len()).expect("Shouldn't have that many tracks");
-    let futures = track_ids.iter().map(|track_id| {
-        let client = client.clone();
-        let mut urls = Vec::new();
-        for i in 0..COMMUNITY_LB_SIZE {
-            let url = format!(
-                "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
-                43273,
-                VERSION,
-                track_id.split(' ').next().expect("Invalid track ids file"),
-                i * 500,
-            );
-            urls.push(url);
-        }
-        task::spawn(async move {
-            let mut res = Vec::new();
-            for url in urls {
-                let mut att = 0;
-                sleep(Duration::from_millis(500)).await;
-                let mut response = client.get(&url).send().await?.text().await?;
-                while response.is_empty() && att < REQUEST_RETRY_COUNT {
-                    att += 1;
-                    sleep(Duration::from_millis(1000)).await;
-                    response = client.get(&url).send().await?.text().await?;
-                }
-                res.push(response);
-            }
-            Ok::<Vec<String>, reqwest::Error>(res)
-        })
-    });
-    if fs::try_exists(UPDATE_LOCK_FILE).await? {
-        if fs::metadata(UPDATE_LOCK_FILE)
-            .await?
-            .modified()?
-            .elapsed()?
-            > MAX_LOCK_TIME
-        {
-            fs::remove_file(UPDATE_LOCK_FILE).await?;
-        } else {
-            return Err(PolyError::BusyUpdating.into());
-        }
-    }
-    fs::write(UPDATE_LOCK_FILE, "").await?;
-    let results: Vec<Vec<String>> = join_all(futures)
-        .await
-        .into_iter()
-        .map(|res| res.expect("JoinError ig"))
-        .filter_map(std::result::Result::ok)
-        .collect();
-    fs::remove_file(UPDATE_LOCK_FILE).await?;
-    let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
-    for result in results {
-        let mut leaderboard = Vec::new();
-        for result_part in result {
-            if !result_part.is_empty() {
-                let mut leaderboard_part: Vec<LeaderBoardEntry> =
-                    serde_json::from_str::<LeaderBoard>(&result_part)
-                        .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
-                        .entries;
-                leaderboard.append(&mut leaderboard_part);
-            }
-        }
-        leaderboards.push(leaderboard);
-    }
+    let leaderboards = tracks_leaderboards(track_ids, COMMUNITY_LB_SIZE).await?;
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
     let mut time_rankings: HashMap<String, Vec<u32>> = HashMap::new();
     let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
@@ -649,4 +487,72 @@ pub async fn community_update() -> Result<(), Error> {
 pub fn get_datetime() -> String {
     let now = Utc::now();
     now.format("%Y/%m/%d %H:%M:%S").to_string()
+}
+
+async fn tracks_leaderboards(
+    track_ids: Vec<String>,
+    lb_size: u32,
+) -> Result<Vec<Vec<LeaderBoardEntry>>> {
+    let client = Client::new();
+    let futures = track_ids.iter().map(|track_id| {
+        let client = client.clone();
+        let mut urls = Vec::new();
+        for i in 0..lb_size {
+            urls.push(format!(
+                "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
+                43273,
+                VERSION,
+                track_id,
+                i * 500,
+            ));
+        }
+        task::spawn(async move {
+            let mut res = Vec::new();
+            for url in urls {
+                let mut att = 0;
+                sleep(Duration::from_millis(200)).await;
+                let mut response = client.get(&url).send().await?.text().await?;
+                while response.is_empty() && att < REQUEST_RETRY_COUNT {
+                    att += 1;
+                    sleep(Duration::from_millis(1000)).await;
+                    response = client.get(&url).send().await?.text().await?;
+                }
+                res.push(response);
+            }
+            Ok::<Vec<String>, reqwest::Error>(res)
+        })
+    });
+    if fs::try_exists(UPDATE_LOCK_FILE).await? {
+        if fs::metadata(UPDATE_LOCK_FILE)
+            .await?
+            .modified()?
+            .elapsed()?
+            > MAX_LOCK_TIME
+        {
+            fs::remove_file(UPDATE_LOCK_FILE).await?;
+        } else {
+            return Err(PolyError::BusyUpdating.into());
+        }
+    }
+    fs::write(UPDATE_LOCK_FILE, "").await?;
+    let results: Vec<Vec<String>> = join_all(futures)
+        .await
+        .into_iter()
+        .map(|res| res.expect("JoinError ig"))
+        .filter_map(std::result::Result::ok)
+        .collect();
+    fs::remove_file(UPDATE_LOCK_FILE).await?;
+    let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
+    for result in results {
+        let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
+        for res in result {
+            leaderboard.append(
+                &mut serde_json::from_str::<LeaderBoard>(&res)
+                    .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
+                    .entries,
+            );
+        }
+        leaderboards.push(leaderboard);
+    }
+    Ok(leaderboards)
 }
