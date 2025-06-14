@@ -562,7 +562,7 @@ pub async fn list(
                         contents[0]
                             .push_str(format!("{}\n", track_ids[line_num as usize].1).as_str());
                         contents[1].push_str(format!("{position}\n").as_str());
-                        contents[2].push_str(format!("{time}\n").as_str());
+                        contents[2].push_str(format!("{:.3}\n", time).as_str());
                     }
                 } else {
                     display_total = false;
