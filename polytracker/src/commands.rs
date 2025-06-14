@@ -529,6 +529,12 @@ pub async fn list(
                 if let Some(user_entry) = leaderboard.user_entry {
                     let position = user_entry.position;
                     let frames = user_entry.frames;
+                    let time = f64::from(frames) / 1000.0;
+                    total_time += time;
+                    let mut time = format!("{time:.3}");
+                    time.push('s');
+                    contents[0].push_str(format!("{}\n", track_ids[line_num as usize].1).as_str());
+                    contents[2].push_str(format!("{time}\n").as_str());
                     if position <= 501 {
                         let entries = leaderboard.entries;
                         let mut found: Vec<String> = Vec::new();
@@ -545,24 +551,9 @@ pub async fn list(
                                 found.push(entry.name);
                             }
                         }
-                        let time = f64::from(frames) / 1000.0;
-                        total_time += time;
-                        let mut time = time.to_string();
-                        time.push('s');
-                        contents[0]
-                            .push_str(format!("{}\n", track_ids[line_num as usize].1).as_str());
-                        contents[1]
-                            .push_str(format!("{} [{}]\n", position, (found.len() + 1)).as_str());
-                        contents[2].push_str(format!("{time}\n").as_str());
+                        writeln!(contents[1], "{position} [{}]", (found.len() + 1))?;
                     } else {
-                        let time = f64::from(frames) / 1000.0;
-                        total_time += time;
-                        let mut time = time.to_string();
-                        time.push('s');
-                        contents[0]
-                            .push_str(format!("{}\n", track_ids[line_num as usize].1).as_str());
-                        contents[1].push_str(format!("{position}\n").as_str());
-                        contents[2].push_str(format!("{:.3}\n", time).as_str());
+                        writeln!(contents[1], "{position}")?;
                     }
                 } else {
                     display_total = false;
