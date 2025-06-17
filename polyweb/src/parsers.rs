@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use chrono::DateTime;
 
 use polymanager::{
-    PolyLeaderBoard, PolyLeaderBoardEntry, ALT_ACCOUNT_FILE, BLACKLIST_FILE, CUSTOM_TRACK_FILE,
-    HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
+    check_blacklist, get_alt, PolyLeaderBoard, PolyLeaderBoardEntry, ALT_ACCOUNT_FILE,
+    BLACKLIST_FILE, CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
@@ -98,61 +98,34 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, PolyLeaderBoard)
         .expect("Failed to get request text");
     let response: LeaderBoard = serde_json::from_str(&result).expect("Invalid leaderboard");
     let mut leaderboard = PolyLeaderBoard::default();
-    let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
-        .await
-        .expect("Failed to open file")
-        .lines()
-        .map(std::string::ToString::to_string)
-        .collect();
-    let alt_file: Vec<String> = fs::read_to_string(ALT_ACCOUNT_FILE)
-        .await
-        .expect("Failed to open file")
-        .lines()
-        .map(std::string::ToString::to_string)
-        .collect();
-    let mut alt_list: HashMap<String, String> = HashMap::new();
-    for line in alt_file {
-        const SPLIT_CHAR: &str = "<|>";
-        for entry in line.split(SPLIT_CHAR).skip(1) {
-            alt_list.insert(
-                entry.to_string(),
-                line.split(SPLIT_CHAR)
-                    .next()
-                    .expect("Invalid alt list file")
-                    .to_string(),
-            );
-        }
-    }
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
-        let name = if alt_list.contains_key(&entry.name) {
-            alt_list
-                .get(&entry.name)
-                .expect("Check for entry earlier")
-                .clone()
-        } else {
-            entry.name.clone()
-        };
-        if has_time.contains(&name) || blacklist.contains(&name) {
-            continue;
+        let name = get_alt(ALT_ACCOUNT_FILE, &entry.name)
+            .await
+            .expect("should be able to get alt");
+        if !has_time.contains(&name)
+            && check_blacklist(BLACKLIST_FILE, &name)
+                .await
+                .expect("should be able to get blacklist")
+        {
+            rank += 1;
+            leaderboard.push_entry(PolyLeaderBoardEntry::new(
+                rank,
+                name.clone(),
+                if entry.frames < 60000 {
+                    (f64::from(entry.frames) / 1000.0).to_string()
+                } else {
+                    format!(
+                        "{}:{:0>2}.{:0>3}",
+                        entry.frames / 60000,
+                        entry.frames % 60000 / 1000,
+                        entry.frames % 1000
+                    )
+                },
+            ));
+            has_time.push(name);
         }
-        rank += 1;
-        leaderboard.push_entry(PolyLeaderBoardEntry::new(
-            rank,
-            name.clone(),
-            if entry.frames < 60000 {
-                (f64::from(entry.frames) / 1000.0).to_string()
-            } else {
-                format!(
-                    "{}:{:0>2}.{:0>3}",
-                    entry.frames / 60000,
-                    entry.frames % 60000 / 1000,
-                    entry.frames % 1000
-                )
-            },
-        ));
-        has_time.push(name);
     }
     let name = if track_ids.contains_key(&real_track_id) {
         format!("{real_track_id} ")
@@ -190,54 +163,34 @@ pub async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
         .expect("Failed to get request text");
     let response: LeaderBoard = serde_json::from_str(&result).expect("Invalid leaderboard");
     let mut leaderboard = PolyLeaderBoard::default();
-    let blacklist: Vec<String> = fs::read_to_string(BLACKLIST_FILE)
-        .await
-        .expect("Failed to read file")
-        .lines()
-        .map(std::string::ToString::to_string)
-        .collect();
-    let alt_file: Vec<String> = fs::read_to_string(ALT_ACCOUNT_FILE)
-        .await
-        .expect("Failed to read file")
-        .lines()
-        .map(std::string::ToString::to_string)
-        .collect();
-    let mut alt_list: HashMap<String, String> = HashMap::new();
-    for line in alt_file {
-        const SPLIT_CHAR: &str = "<|>";
-        for entry in line.split(SPLIT_CHAR).skip(1) {
-            alt_list.insert(
-                entry.to_string(),
-                line.split(SPLIT_CHAR)
-                    .next()
-                    .expect("Invalid alt list file")
-                    .to_string(),
-            );
-        }
-    }
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
-        let name = alt_list.get(&entry.name).unwrap_or(&entry.name).clone();
-        if has_time.contains(&name) || blacklist.contains(&name) {
-            continue;
+        let name = get_alt(ALT_ACCOUNT_FILE, &entry.name)
+            .await
+            .expect("should be able to get alt");
+        if !has_time.contains(&name)
+            && check_blacklist(BLACKLIST_FILE, &name)
+                .await
+                .expect("should be able to get blacklist")
+        {
+            rank += 1;
+            leaderboard.push_entry(PolyLeaderBoardEntry::new(
+                rank,
+                name.clone(),
+                if entry.frames < 60000 {
+                    (f64::from(entry.frames) / 1000.0).to_string()
+                } else {
+                    format!(
+                        "{}:{}.{}",
+                        entry.frames / 60000,
+                        entry.frames % 60000 / 1000,
+                        entry.frames % 1000
+                    )
+                },
+            ));
+            has_time.push(name);
         }
-        rank += 1;
-        leaderboard.push_entry(PolyLeaderBoardEntry::new(
-            rank,
-            name.clone(),
-            if entry.frames < 60000 {
-                (f64::from(entry.frames) / 1000.0).to_string()
-            } else {
-                format!(
-                    "{}:{}.{}",
-                    entry.frames / 60000,
-                    entry.frames % 60000 / 1000,
-                    entry.frames % 1000
-                )
-            },
-        ));
-        has_time.push(name);
     }
     leaderboard
 }
