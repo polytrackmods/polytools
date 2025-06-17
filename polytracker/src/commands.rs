@@ -516,11 +516,10 @@ pub async fn list(
             .collect();
         results.sort_by_key(|(i, _)| *i);
         let responses: Vec<String> = results.into_iter().map(|(_, res)| res).collect();
-        let blacklist_file = fs::read_to_string(match tracks {
+        let blacklist_file = match tracks {
             LeaderboardChoice::Hof => HOF_BLACKLIST_FILE,
             _ => BLACKLIST_FILE,
-        })
-        .await?;
+        };
         let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
         let mut headers = vec!["Track", "Ranking", "Time"];
         let mut inlines = vec![true, true, true];
