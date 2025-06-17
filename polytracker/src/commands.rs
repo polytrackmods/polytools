@@ -7,7 +7,8 @@ use dotenvy::dotenv;
 use poise::serenity_prelude as serenity;
 use poise::{builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, Modal};
 use polymanager::{
-    community_update, global_rankings_update, hof_update, PolyLeaderBoard, ALT_ACCOUNT_FILE,
+    check_blacklist, community_update, global_rankings_update, hof_update, read_altlist,
+    read_blacklist, write_altlist, write_blacklist, PolyLeaderBoard, ALT_ACCOUNT_FILE,
     BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
     HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE,
     HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
@@ -520,7 +521,6 @@ pub async fn list(
             _ => BLACKLIST_FILE,
         })
         .await?;
-        let blacklist: Vec<_> = blacklist_file.lines().collect();
         let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
         let mut headers = vec!["Track", "Ranking", "Time"];
         let mut inlines = vec![true, true, true];
@@ -546,7 +546,7 @@ pub async fn list(
                             }
                             if entry.verified_state == 1
                                 && !found.contains(&entry.name)
-                                && !blacklist.contains(&entry.name.as_str())
+                                && check_blacklist(&blacklist_file, &entry.name).await?
                             {
                                 found.push(entry.name);
                             }
@@ -1072,14 +1072,18 @@ pub async fn edit_lists(
             HOFAlt => HOF_ALT_ACCOUNT_FILE,
         }
     };
-    let list = fs::read_to_string(list_file).await?;
-    let modal_defaults = EditModal { list };
+    let list_content = match list {
+        Black | HOFBlack => read_blacklist(list_file).await?,
+        Alt | HOFAlt => read_altlist(list_file).await?,
+    };
+    let modal_defaults = EditModal { list: list_content };
     let modal_returned = EditModal::execute_with_defaults(ctx, modal_defaults.clone())
         .await?
         .unwrap_or(modal_defaults);
-    fs::write(list_file, modal_returned.list)
-        .await
-        .expect("Failed to write file");
+    match list {
+        Black | HOFBlack => write_blacklist(list_file, modal_returned.list).await?,
+        Alt | HOFAlt => write_altlist(list_file, modal_returned.list).await?,
+    }
     Ok(())
 }
 
