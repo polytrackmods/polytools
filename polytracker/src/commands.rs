@@ -545,7 +545,7 @@ pub async fn list(
                             }
                             if entry.verified_state == 1
                                 && !found.contains(&entry.name)
-                                && check_blacklist(&blacklist_file, &entry.name).await?
+                                && check_blacklist(blacklist_file, &entry.name).await?
                             {
                                 found.push(entry.name);
                             }
