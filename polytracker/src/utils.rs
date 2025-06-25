@@ -6,7 +6,9 @@ use poise::serenity_prelude::{self as serenity, CacheHttp};
 use poise::{CreateReply, Modal};
 use polymanager::db::{Admin, NewAdmin, NewUser, User};
 use polymanager::{
-    COMMUNITY_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, VERSION,
+    check_blacklist, get_alt, ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_TRACK_FILE,
+    HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
+    VERSION,
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -486,7 +488,7 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error
     let client = Client::new();
     let mut wr_amounts: HashMap<String, u32> = HashMap::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=true",
+        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=true",
             43273,
             VERSION,
             id,
@@ -504,7 +506,21 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error
             frames: 69420.0,
             verified_state: 1,
         };
-        let winner = leaderboard.entries.first().unwrap_or(&default_winner);
+        let blacklist_file = match tracks {
+            LeaderboardChoice::Hof => HOF_BLACKLIST_FILE,
+            _ => BLACKLIST_FILE,
+        };
+        let altlist_file = match tracks {
+            LeaderboardChoice::Hof => HOF_ALT_ACCOUNT_FILE,
+            _ => ALT_ACCOUNT_FILE,
+        };
+        let mut winner = &default_winner;
+        for entry in &leaderboard.entries {
+            if check_blacklist(blacklist_file, &get_alt(altlist_file, &entry.name).await?).await? {
+                winner = entry;
+                break;
+            }
+        }
         let winner_name = winner.name.clone();
         let winner_time = winner.frames / 1000.0;
         *wr_amounts.entry(winner_name.clone()).or_default() += 1;
