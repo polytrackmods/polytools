@@ -16,6 +16,7 @@ use polymanager::{
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
+use sha256::digest;
 use std::fmt::Write as _;
 use std::time::Duration;
 use std::{collections::HashMap, env};
@@ -178,6 +179,19 @@ pub async fn assign(
     let mut user_id = id;
     if user_id.starts_with("User ID: ") {
         user_id = user_id.trim_start_matches("User ID: ").to_string();
+    }
+    let client = Client::new();
+    let response = client
+        .get(format!(
+            "https://vps.kodub.com:43273/user?version={}&userToken={}",
+            VERSION, user_id
+        ))
+        .send()
+        .await?
+        .text()
+        .await?;
+    if response != "null" {
+        user_id = digest(user_id);
     }
     if ctx
         .data()
