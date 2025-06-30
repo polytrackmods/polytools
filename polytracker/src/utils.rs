@@ -2,7 +2,7 @@ use crate::commands::LeaderboardChoice;
 use crate::{Context, MAX_MSG_AGE};
 use anyhow::Error;
 use diesel::prelude::*;
-use poise::serenity_prelude::{self as serenity, CacheHttp};
+use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter};
 use poise::{CreateReply, Modal};
 use polymanager::db::{Admin, NewAdmin, NewUser, User};
 use polymanager::{
@@ -243,11 +243,43 @@ impl WriteEmbed {
     }
 }
 
+#[derive(Clone)]
+struct PagedEmbed {
+    title: String,
+    description: String,
+    pages: Vec<EmbedPage>,
+}
+#[derive(Clone)]
+struct EmbedPage {
+    columns: Vec<EmbedColumn>,
+}
+impl IntoIterator for EmbedPage {
+    type Item = (String, String, bool);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.columns
+            .into_iter()
+            .map(|c| (c.header, c.content, c.inline))
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+}
+#[derive(Clone)]
+struct EmbedColumn {
+    header: String,
+    content: String,
+    inline: bool,
+}
+
 // output function using embeds
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
 #[allow(clippy::too_many_lines)]
-pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Result<(), Error> {
+pub async fn write_embed(
+    ctx: Context<'_>,
+    write_embeds: Vec<WriteEmbed>,
+    // mobile_friendly: bool,
+) -> Result<(), Error> {
     if write_embeds
         .iter()
         .all(|e| e.headers.len() == e.contents.len() && e.headers.len() == e.inlines.len())
@@ -258,8 +290,12 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
         let start_id = format!("{ctx_id}start");
         let mut embeds = Vec::new();
         for (i, write_embed) in write_embeds.iter().enumerate() {
-            let mut pages: Vec<Vec<String>> = Vec::new();
-            let max_len = write_embed
+            let mut paged_embed: PagedEmbed = PagedEmbed {
+                title: write_embed.title.clone(),
+                description: write_embed.description.clone(),
+                pages: Vec::new(),
+            };
+            let max_page_amt = write_embed
                 .contents
                 .iter()
                 .max_by_key(|content| content.lines().count())
@@ -267,47 +303,60 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
                 .lines()
                 .count()
                 .div_ceil(EMBED_PAGE_LEN);
-            for content in &write_embed.contents {
-                pages.push(if content.lines().count() < EMBED_PAGE_LEN {
-                    vec![content.to_string(); max_len]
-                } else {
-                    content
-                        .lines()
-                        .collect::<Vec<&str>>()
-                        .chunks(EMBED_PAGE_LEN)
-                        .map(|chunk| chunk.join("\n"))
-                        .collect()
-                });
+            for page in 0..max_page_amt {
+                let new_page = EmbedPage {
+                    columns: write_embed
+                        .contents
+                        .iter()
+                        .enumerate()
+                        .map(|(c, content)| EmbedColumn {
+                            header: write_embed
+                                .headers
+                                .get(c)
+                                .expect("should have that embed")
+                                .clone(),
+                            content: {
+                                if content.lines().count() > 1 {
+                                    content
+                                        .lines()
+                                        .skip(EMBED_PAGE_LEN * page)
+                                        .take(EMBED_PAGE_LEN)
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
+                                } else {
+                                    content.to_string()
+                                }
+                            },
+                            inline: *write_embed.inlines.get(c).expect("should have that embed"),
+                        })
+                        .collect(),
+                };
+                paged_embed.pages.push(new_page);
             }
-            let fields = write_embed.headers.iter().enumerate().map(|(i, h)| {
-                (
-                    h.to_string(),
-                    pages
-                        .get(i)
-                        .expect("should find page")
-                        .first()
-                        .expect("should have first entry")
-                        .clone(),
-                    write_embed.inlines[i],
-                )
-            });
             let mut embed = CreateEmbed::default()
                 .title(write_embed.title.clone())
                 .description(write_embed.description.clone())
-                .fields(fields.clone())
-                .color(Color::from_rgb(0, 128, 128));
+                .fields(
+                    paged_embed
+                        .pages
+                        .first()
+                        .expect("should have first page")
+                        .clone(),
+                )
+                .color(Color::from_rgb(0, 128, 128))
+                .footer(CreateEmbedFooter::new(format!("Page 1/{max_page_amt}")));
             if i == 0 {
                 embed = embed.url("https://polyweb.ireo.xyz");
             }
-            embeds.push((embed, pages, write_embed));
+            embeds.push((embed, paged_embed));
         }
         let mut reply = CreateReply::default();
         reply
             .embeds
-            .append(&mut embeds.iter().map(|(embed, _, _)| embed.clone()).collect());
+            .append(&mut embeds.iter().map(|(embed, _)| embed.clone()).collect());
         if embeds
             .iter()
-            .any(|(_, pages, _)| pages.first().expect("should have a page").len() > 1)
+            .any(|(_, paged_embed)| paged_embed.pages.len() > 1)
         {
             let components = CreateActionRow::Buttons(vec![
                 CreateButton::new(&prev_id).emoji('◀'),
@@ -319,7 +368,7 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
         ctx.send(reply).await?;
         if embeds
             .iter()
-            .any(|(_, pages, _)| pages.first().expect("should have a page").len() > 1)
+            .any(|(_, paged_embed)| paged_embed.pages.len() > 1)
         {
             let mut current_page: i32 = 0;
             while let Some(press) = ComponentInteractionCollector::new(ctx)
@@ -336,39 +385,48 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
                 } else {
                     continue;
                 }
-                for (i, (embed, pages, write_embed)) in embeds.iter_mut().enumerate() {
-                    let pages1_len =
-                        i32::try_from(pages.first().expect("should have a page").len())?;
-                    let fields = write_embed.headers.iter().enumerate().map(|(i, h)| {
-                        (
-                            h.to_string(),
-                            pages
-                                .get(i)
-                                .expect("should have that page")
-                                .get(
-                                    usize::try_from(
-                                        (current_page % pages1_len + pages1_len) % pages1_len,
-                                    )
-                                    .expect("should not have that many pages"),
-                                )
-                                .expect("should have that entry")
-                                .clone(),
-                            *write_embed.inlines.get(i).expect("should have that page"),
-                        )
-                    });
+                for (i, (embed, paged_embed)) in embeds.iter_mut().enumerate() {
+                    let pages_len = i32::try_from(paged_embed.pages.len())?;
+                    let page_id =
+                        usize::try_from((current_page % pages_len + pages_len) % pages_len)
+                            .expect("should not have that many pages");
+                    let fields = paged_embed
+                        .pages
+                        .get(page_id)
+                        .expect("should have that page");
+                    *embed = CreateEmbed::default()
+                        .title(&paged_embed.title)
+                        .description(&paged_embed.description)
+                        .fields(fields.clone())
+                        .color(Color::from_rgb(0, 128, 128))
+                        .footer(CreateEmbedFooter::new(format!(
+                            "Page {}/{}",
+                            page_id + 1,
+                            paged_embed.pages.len(),
+                        )));
                     if i == 0 {
                         *embed = CreateEmbed::default()
-                            .title(&write_embed.title)
-                            .description(&write_embed.description)
-                            .fields(fields)
+                            .title(&paged_embed.title)
+                            .description(&paged_embed.description)
+                            .fields(fields.clone())
                             .color(Color::from_rgb(0, 128, 128))
-                            .url("https://polyweb.ireo.xyz");
+                            .url("https://polyweb.ireo.xyz")
+                            .footer(CreateEmbedFooter::new(format!(
+                                "Page {}/{}",
+                                page_id + 1,
+                                paged_embed.pages.len()
+                            )));
                     } else {
                         *embed = CreateEmbed::default()
-                            .title(&write_embed.title)
-                            .description(&write_embed.description)
-                            .fields(fields)
-                            .color(Color::from_rgb(0, 128, 128));
+                            .title(&paged_embed.title)
+                            .description(&paged_embed.description)
+                            .fields(fields.clone())
+                            .color(Color::from_rgb(0, 128, 128))
+                            .footer(CreateEmbedFooter::new(format!(
+                                "Page {}/{}",
+                                page_id + 1,
+                                paged_embed.pages.len()
+                            )));
                     }
                 }
                 press
@@ -376,7 +434,7 @@ pub async fn write_embed(ctx: Context<'_>, write_embeds: Vec<WriteEmbed>) -> Res
                         ctx.serenity_context(),
                         CreateInteractionResponse::UpdateMessage(
                             CreateInteractionResponseMessage::new()
-                                .embeds(embeds.iter().map(|(embed, _, _)| embed.clone()).collect()),
+                                .embeds(embeds.iter().map(|(embed, _)| embed.clone()).collect()),
                         ),
                     )
                     .await?;

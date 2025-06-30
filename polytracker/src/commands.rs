@@ -183,8 +183,7 @@ pub async fn assign(
     let client = Client::new();
     let response = client
         .get(format!(
-            "https://vps.kodub.com:43273/user?version={}&userToken={}",
-            VERSION, user_id
+            "https://vps.kodub.com:43273/user?version={VERSION}&userToken={user_id}",
         ))
         .send()
         .await?
