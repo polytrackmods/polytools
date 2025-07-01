@@ -251,6 +251,22 @@ struct PagedEmbed {
     description: String,
     pages: Vec<EmbedPage>,
 }
+impl PagedEmbed {
+    fn to_create_embed(&self, page: usize, max_page_amt: usize) -> CreateEmbed {
+        let mut create_embed = CreateEmbed::default()
+            .title(self.title.clone())
+            .description(self.description.clone())
+            .colour(Color::from_rgb(0, 128, 128))
+            .fields(self.pages.get(page).expect("should have that page").clone());
+        if max_page_amt > 1 {
+            create_embed = create_embed.footer(CreateEmbedFooter::new(format!(
+                "Page {}/{max_page_amt}",
+                page + 1
+            )));
+        }
+        create_embed
+    }
+}
 #[derive(Clone, Debug)]
 struct EmbedPage {
     columns: Vec<EmbedColumn>,
@@ -480,18 +496,7 @@ pub async fn write_embed(
                 };
                 paged_embed.pages.push(new_page);
             }
-            let mut embed = CreateEmbed::default()
-                .title(write_embed.title.clone())
-                .description(write_embed.description.clone())
-                .fields(
-                    paged_embed
-                        .pages
-                        .first()
-                        .expect("should have first page")
-                        .clone(),
-                )
-                .color(Color::from_rgb(0, 128, 128))
-                .footer(CreateEmbedFooter::new(format!("Page 1/{max_page_amt}")));
+            let mut embed = paged_embed.to_create_embed(0, max_page_amt);
             if i == 0 {
                 embed = embed.url("https://polyweb.ireo.xyz");
             }
@@ -537,44 +542,19 @@ pub async fn write_embed(
                     let page_id =
                         usize::try_from((current_page % pages_len + pages_len) % pages_len)
                             .expect("should not have that many pages");
-                    let fields = paged_embed
-                        .pages
-                        .get(page_id)
-                        .expect("should have that page");
-                    *embed = CreateEmbed::default()
-                        .title(&paged_embed.title)
-                        .description(&paged_embed.description)
-                        .fields(fields.clone())
-                        .color(Color::from_rgb(0, 128, 128))
-                        .footer(CreateEmbedFooter::new(format!(
+                    let mut new_embed =
+                        paged_embed.to_create_embed(page_id, paged_embed.pages.len());
+                    if i == 0 {
+                        new_embed = new_embed.url("https://polyweb.ireo.xyz");
+                    }
+                    if paged_embed.pages.len() > 1 {
+                        new_embed = new_embed.footer(CreateEmbedFooter::new(format!(
                             "Page {}/{}",
                             page_id + 1,
                             paged_embed.pages.len(),
                         )));
-                    if i == 0 {
-                        *embed = CreateEmbed::default()
-                            .title(&paged_embed.title)
-                            .description(&paged_embed.description)
-                            .fields(fields.clone())
-                            .color(Color::from_rgb(0, 128, 128))
-                            .url("https://polyweb.ireo.xyz")
-                            .footer(CreateEmbedFooter::new(format!(
-                                "Page {}/{}",
-                                page_id + 1,
-                                paged_embed.pages.len()
-                            )));
-                    } else {
-                        *embed = CreateEmbed::default()
-                            .title(&paged_embed.title)
-                            .description(&paged_embed.description)
-                            .fields(fields.clone())
-                            .color(Color::from_rgb(0, 128, 128))
-                            .footer(CreateEmbedFooter::new(format!(
-                                "Page {}/{}",
-                                page_id + 1,
-                                paged_embed.pages.len()
-                            )));
                     }
+                    *embed = new_embed;
                 }
                 press
                     .create_response(
