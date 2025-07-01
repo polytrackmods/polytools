@@ -495,7 +495,6 @@ pub async fn write_embed(
             if i == 0 {
                 embed = embed.url("https://polyweb.ireo.xyz");
             }
-            dbg!(&embed);
             embeds.push((embed, paged_embed));
         }
         let mut reply = CreateReply::default();

@@ -185,7 +185,7 @@ pub async fn global_rankings_update() -> Result<()> {
         let mut has_time: Vec<String> = Vec::new();
         for entry in leaderboard {
             let name = get_alt(ALT_ACCOUNT_FILE, &entry.name).await?;
-            if !has_time.contains(&name) && check_blacklist(BLACKLIST_FILE, &entry.name).await? {
+            if !has_time.contains(&name) && check_blacklist(BLACKLIST_FILE, &name).await? {
                 player_times
                     .entry(name.clone())
                     .or_default()
@@ -257,9 +257,7 @@ pub async fn hof_update() -> Result<()> {
                 break;
             }
             let name = get_alt(HOF_ALT_ACCOUNT_FILE, &entry.name).await?;
-            if !has_ranking.contains(&name)
-                && check_blacklist(HOF_BLACKLIST_FILE, &entry.name).await?
-            {
+            if !has_ranking.contains(&name) && check_blacklist(HOF_BLACKLIST_FILE, &name).await? {
                 player_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings
                     .entry(name.clone())
@@ -395,7 +393,7 @@ pub async fn community_update() -> Result<()> {
                 break;
             }
             let name = get_alt(ALT_ACCOUNT_FILE, &entry.name).await?;
-            if !has_ranking.contains(&name) && check_blacklist(BLACKLIST_FILE, &entry.name).await? {
+            if !has_ranking.contains(&name) && check_blacklist(BLACKLIST_FILE, &name).await? {
                 player_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings
                     .entry(name.clone())
