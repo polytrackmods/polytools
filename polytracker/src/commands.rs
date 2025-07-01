@@ -349,7 +349,9 @@ pub async fn request(
     user: String,
     #[description = "Track"] track: String,
     #[description = "Hidden"] hidden: Option<bool>,
+    #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<(), Error> {
+    let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -420,6 +422,7 @@ pub async fn request(
                                     .title("Leaderboard")
                                     .headers(&["Ranking", "Time", "Unique"])
                                     .contents(contents)],
+                                mobile_friendly,
                             )
                             .await?;
                         } else {
@@ -432,6 +435,7 @@ pub async fn request(
                                     .title("Leaderboard")
                                     .headers(&["Ranking", "Time"])
                                     .contents(contents)],
+                                mobile_friendly,
                             )
                             .await?;
                         }
@@ -462,7 +466,9 @@ pub async fn list(
     user: String,
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
+    #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<(), Error> {
+    let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -598,6 +604,7 @@ pub async fn list(
                 .headers(&headers)
                 .contents(contents)
                 .inlines(inlines)],
+            mobile_friendly,
         )
         .await?;
     }
@@ -803,8 +810,10 @@ pub async fn compare(
 pub async fn update_rankings(
     ctx: Context<'_>,
     #[description = "Updated Leaderboard"] leaderboard: LeaderboardChoice,
+    #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<(), Error> {
     use LeaderboardChoice::{Community, Global, Hof};
+    let mobile_friendly = mobile_friendly.unwrap_or(false);
     ctx.defer_ephemeral().await?;
     let (is_admin, is_admin_msg) = is_admin(&ctx, 2).await;
     if !is_admin {
@@ -848,6 +857,7 @@ pub async fn update_rankings(
             .headers(&headers)
             .contents(contents)
             .inlines(inlines)],
+        mobile_friendly,
     )
     .await?;
     Ok(())
@@ -855,7 +865,11 @@ pub async fn update_rankings(
 
 #[allow(clippy::too_many_lines)]
 #[poise::command(slash_command, prefix_command, category = "Query")]
-pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn roles(
+    ctx: Context<'_>,
+    #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
+) -> Result<(), Error> {
+    let mobile_friendly = mobile_friendly.unwrap_or(false);
     ctx.defer_ephemeral().await?;
     let mut embeds: Vec<WriteEmbed> = Vec::new();
     let champion_contents = {
@@ -962,7 +976,7 @@ pub async fn roles(ctx: Context<'_>) -> Result<(), Error> {
         .headers(&["User"])
         .contents(vec![global_grandmaster_contents]);
     embeds.push(global_grandmaster_embed);
-    write_embed(ctx, embeds).await?;
+    write_embed(ctx, embeds, mobile_friendly).await?;
     Ok(())
 }
 
@@ -973,8 +987,10 @@ pub async fn rankings(
     #[description = "Leaderboard"] leaderboard: Option<LeaderboardChoice>,
     #[description = "Mode (HOF/community only)"] time_based: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
+    #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<(), Error> {
     use LeaderboardChoice::{Community, Global, Hof};
+    let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -1059,6 +1075,7 @@ pub async fn rankings(
             .headers(&headers)
             .contents(contents)
             .inlines(inlines)],
+        mobile_friendly,
     )
     .await?;
     Ok(())
@@ -1138,8 +1155,10 @@ pub async fn players(
     ctx: Context<'_>,
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
+    #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<(), Error> {
     use LeaderboardChoice::{Community, Global, Hof};
+    let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -1191,6 +1210,7 @@ pub async fn players(
             .title("Player numbers")
             .headers(&["Track", "Players"])
             .contents(contents)],
+        mobile_friendly,
     )
     .await?;
     Ok(())
@@ -1201,7 +1221,9 @@ pub async fn records(
     ctx: Context<'_>,
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
+    #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<(), Error> {
+    let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -1232,7 +1254,7 @@ pub async fn records(
         .title("WR Amounts")
         .headers(&["Player", "Amount"])
         .contents(contents);
-    write_embed(ctx, vec![embed1, embed2]).await?;
+    write_embed(ctx, vec![embed1, embed2], mobile_friendly).await?;
     Ok(())
 }
 
@@ -1242,8 +1264,10 @@ pub async fn top(
     #[description = "Position"] position: u32,
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
+    #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<(), Error> {
     use LeaderboardChoice::{Community, Global, Hof};
+    let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -1309,6 +1333,7 @@ pub async fn top(
             .title(&format!("Top {position}"))
             .headers(&["Track", "Player", "Time"])
             .contents(contents)],
+        mobile_friendly,
     )
     .await?;
     Ok(())

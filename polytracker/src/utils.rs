@@ -17,12 +17,14 @@ use serenity::{
     CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
 };
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::fs;
 use tokio::time::sleep;
 
 const EMBED_PAGE_LEN: usize = 20;
+const MAX_COL_WIDTH: usize = 25;
 
 // structs for deserializing leaderboards
 #[derive(Deserialize, Serialize)]
@@ -243,13 +245,13 @@ impl WriteEmbed {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct PagedEmbed {
     title: String,
     description: String,
     pages: Vec<EmbedPage>,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct EmbedPage {
     columns: Vec<EmbedColumn>,
 }
@@ -264,7 +266,7 @@ impl IntoIterator for EmbedPage {
             .into_iter()
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct EmbedColumn {
     header: String,
     content: String,
@@ -278,7 +280,7 @@ struct EmbedColumn {
 pub async fn write_embed(
     ctx: Context<'_>,
     write_embeds: Vec<WriteEmbed>,
-    // mobile_friendly: bool,
+    mobile_friendly: bool,
 ) -> Result<(), Error> {
     if write_embeds
         .iter()
@@ -305,31 +307,176 @@ pub async fn write_embed(
                 .div_ceil(EMBED_PAGE_LEN);
             for page in 0..max_page_amt {
                 let new_page = EmbedPage {
-                    columns: write_embed
-                        .contents
-                        .iter()
-                        .enumerate()
-                        .map(|(c, content)| EmbedColumn {
-                            header: write_embed
-                                .headers
-                                .get(c)
-                                .expect("should have that embed")
-                                .clone(),
-                            content: {
-                                if content.lines().count() > 1 {
-                                    content
+                    columns: if mobile_friendly {
+                        let col_lens = write_embed
+                            .inlines
+                            .iter()
+                            .enumerate()
+                            .map(|(i, inline)| {
+                                if *inline {
+                                    let max_len = write_embed
+                                        .contents
+                                        .get(i)
+                                        .expect("should have that column")
                                         .lines()
                                         .skip(EMBED_PAGE_LEN * page)
                                         .take(EMBED_PAGE_LEN)
-                                        .collect::<Vec<_>>()
-                                        .join("\n")
+                                        .max_by_key(|l| l.len())
+                                        .expect("column shouldn't be empty")
+                                        .len();
+                                    Some(
+                                        (max_len.max(
+                                            write_embed
+                                                .headers
+                                                .get(i)
+                                                .expect("should have that header")
+                                                .len(),
+                                        ) + 2)
+                                            .min(MAX_COL_WIDTH),
+                                    )
                                 } else {
-                                    content.to_string()
+                                    None
                                 }
-                            },
-                            inline: *write_embed.inlines.get(c).expect("should have that embed"),
-                        })
-                        .collect(),
+                            })
+                            .collect::<Vec<_>>();
+                        let mut joined_columns =
+                            vec![
+                                EmbedColumn {
+                                    header: String::new(),
+                                    content: String::new(),
+                                    inline: false,
+                                };
+                                col_lens.iter().filter(|l| l.is_none()).count()
+                                    + usize::from(
+                                        col_lens.iter().any(std::option::Option::is_some)
+                                    )
+                            ];
+                        for row in 0..write_embed
+                            .contents
+                            .first()
+                            .expect("should have first column")
+                            .lines()
+                            .skip(EMBED_PAGE_LEN * page)
+                            .take(EMBED_PAGE_LEN)
+                            .count()
+                        {
+                            for (i, col_len) in col_lens
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, l)| l.is_some())
+                                .map(|(i, l)| (i, l.expect("filtered out earlier")))
+                            {
+                                write!(
+                                    joined_columns
+                                        .first_mut()
+                                        .expect("should have first column")
+                                        .content,
+                                    "{:<width$}",
+                                    write_embed
+                                        .contents
+                                        .get(i)
+                                        .expect("should have that column")
+                                        .lines()
+                                        .nth(row + EMBED_PAGE_LEN * page)
+                                        .expect("should have that many rows")
+                                        .chars()
+                                        .take(col_len)
+                                        .collect::<String>(),
+                                    width = col_len
+                                )?;
+                            }
+                            joined_columns
+                                .first_mut()
+                                .expect("should have first column")
+                                .content
+                                .push('\n');
+                        }
+                        for (i, col_len) in col_lens
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, l)| l.is_some())
+                            .map(|(i, l)| (i, l.expect("filtered out earlier")))
+                        {
+                            write!(
+                                joined_columns
+                                    .first_mut()
+                                    .expect("should have first column")
+                                    .header,
+                                "{:<width$}",
+                                write_embed.headers.get(i).expect("should have that header"),
+                                width = col_len
+                            )?;
+                        }
+                        if col_lens.iter().any(std::option::Option::is_some) {
+                            joined_columns
+                                .first_mut()
+                                .expect("should have first column")
+                                .content = format!(
+                                "```{}\n{}```",
+                                joined_columns[0].header, joined_columns[0].content
+                            );
+                            joined_columns
+                                .first_mut()
+                                .expect("should have first column")
+                                .header = String::new();
+                        }
+                        for (result_col, (input_col, _)) in col_lens
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, l)| l.is_none())
+                            .enumerate()
+                        {
+                            joined_columns
+                                .get_mut(result_col + 1)
+                                .expect("should have that column")
+                                .content = write_embed
+                                .contents
+                                .get(input_col)
+                                .expect("should have that column")
+                                .lines()
+                                .skip(EMBED_PAGE_LEN * page)
+                                .take(EMBED_PAGE_LEN)
+                                .collect::<String>();
+                            joined_columns
+                                .get_mut(result_col + 1)
+                                .expect("should have that column")
+                                .header = write_embed
+                                .headers
+                                .get(input_col)
+                                .expect("should have that column")
+                                .to_string();
+                        }
+                        joined_columns
+                    } else {
+                        write_embed
+                            .contents
+                            .iter()
+                            .enumerate()
+                            .map(|(c, content)| EmbedColumn {
+                                header: write_embed
+                                    .headers
+                                    .get(c)
+                                    .expect("should have that embed")
+                                    .clone(),
+                                content: {
+                                    if content.lines().count() > 1 {
+                                        content
+                                            .lines()
+                                            .skip(EMBED_PAGE_LEN * page)
+                                            .take(EMBED_PAGE_LEN)
+                                            .collect::<Vec<_>>()
+                                            .join("\n")
+                                    } else {
+                                        content.to_string()
+                                    }
+                                },
+                                inline: *write_embed
+                                    .inlines
+                                    .get(c)
+                                    .expect("should have that embed"),
+                            })
+                            .collect()
+                    },
                 };
                 paged_embed.pages.push(new_page);
             }
@@ -348,6 +495,7 @@ pub async fn write_embed(
             if i == 0 {
                 embed = embed.url("https://polyweb.ireo.xyz");
             }
+            dbg!(&embed);
             embeds.push((embed, paged_embed));
         }
         let mut reply = CreateReply::default();
