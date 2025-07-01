@@ -420,7 +420,7 @@ pub async fn request(
                                 ctx,
                                 vec![WriteEmbed::new(3)
                                     .title("Leaderboard")
-                                    .headers(&["Ranking", "Time", "Unique"])
+                                    .headers(&["Rank", "Time", "Unique"])
                                     .contents(contents)],
                                 mobile_friendly,
                             )
@@ -433,7 +433,7 @@ pub async fn request(
                                 ctx,
                                 vec![WriteEmbed::new(2)
                                     .title("Leaderboard")
-                                    .headers(&["Ranking", "Time"])
+                                    .headers(&["Rank", "Time"])
                                     .contents(contents)],
                                 mobile_friendly,
                             )
@@ -540,7 +540,7 @@ pub async fn list(
             _ => BLACKLIST_FILE,
         };
         let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
-        let mut headers = vec!["Track", "Ranking", "Time"];
+        let mut headers = vec!["Track", "Rank", "Time"];
         let mut inlines = vec![true, true, true];
         for response in responses {
             if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&response) {
@@ -826,7 +826,7 @@ pub async fn update_rankings(
         Hof => hof_update().await,
     }?;
     let headers: Vec<&str> = vec![
-        "Ranking",
+        "Rank",
         {
             match leaderboard {
                 Global => "Time",
@@ -1032,7 +1032,7 @@ pub async fn rankings(
     }
     .as_millis();
     let headers: Vec<&str> = vec![
-        "Ranking",
+        "Rank",
         {
             match leaderboard {
                 Global => "Time",
