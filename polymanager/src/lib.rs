@@ -210,7 +210,7 @@ pub async fn global_rankings_update() -> Result<()> {
                     i + 1,
                     name,
                     format!(
-                        "{:>2}:{:0>2}.{:0>3}",
+                        "{}:{:0>2}.{:0>3}",
                         frames / 60000,
                         frames % 60000 / 1000,
                         frames % 1000
@@ -348,7 +348,7 @@ pub async fn hof_update() -> Result<()> {
                     i + 1,
                     name,
                     format!(
-                        "{:>2}:{:0>2}.{:0>3}",
+                        "{}:{:0>2}.{:0>3}",
                         frames / 60000,
                         frames % 60000 / 1000,
                         frames % 1000
@@ -482,7 +482,7 @@ pub async fn community_update() -> Result<()> {
                     i + 1,
                     name,
                     format!(
-                        "{:>2}:{:0>2}.{:0>3}",
+                        "{}:{:0>2}.{:0>3}",
                         frames / 60000,
                         frames % 60000 / 1000,
                         frames % 1000
