@@ -8,7 +8,7 @@ use dotenvy::dotenv;
 use poise::serenity_prelude::{
     self as serenity, ComponentInteractionCollector, ComponentInteractionDataKind, CreateActionRow,
     CreateAttachment, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind,
-    CreateSelectMenuOption, EditMessage,
+    CreateSelectMenuOption,
 };
 use poise::{
     builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, Modal,
@@ -1133,7 +1133,7 @@ pub async fn tracks(
         {
             if let ComponentInteractionDataKind::StringSelect { ref values } = interaction.data.kind
             {
-                let selection = values.first().unwrap();
+                let selection = values.first().expect("guaranteed to exist");
                 let code = codes
                     .get(selection.parse::<usize>().expect("should be integer"))
                     .expect("should be in range");
@@ -1149,7 +1149,7 @@ pub async fn tracks(
                                     .ephemeral(true)
                             } else {
                                 CreateInteractionResponseMessage::new()
-                                    .content(format!("Track Code:\n{}", code))
+                                    .content(format!("Track Code:\n{code}"))
                                     .ephemeral(true)
                             },
                         ),
