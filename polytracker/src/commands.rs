@@ -1159,6 +1159,7 @@ pub async fn tracks(
             }
         }
     } else {
+        ctx.defer_ephemeral().await?;
         write(
             &ctx,
             format!("Could not find track list for {}", tracks.name()),
