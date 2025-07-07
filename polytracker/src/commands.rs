@@ -8,7 +8,7 @@ use dotenvy::dotenv;
 use poise::serenity_prelude::{
     self as serenity, ComponentInteractionCollector, ComponentInteractionDataKind, CreateActionRow,
     CreateAttachment, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind,
-    CreateSelectMenuOption,
+    CreateSelectMenuOption, EditMessage,
 };
 use poise::{
     builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, Modal,
@@ -1118,14 +1118,14 @@ pub async fn tracks(
             codes.push(code);
             options.push(CreateSelectMenuOption::new(name, i.to_string()));
         }
-        let mut reply = CreateReply::default();
+        let mut reply = CreateReply::default().ephemeral(true);
         let select_menu =
             CreateSelectMenu::new("track_selector", CreateSelectMenuKind::String { options })
                 .min_values(1)
                 .max_values(1);
         let action_row = CreateActionRow::SelectMenu(select_menu);
         reply = reply.components(vec![action_row]);
-        ctx.send(reply).await?;
+        let reply_handle = ctx.send(reply).await?;
         if let Some(interaction) = ComponentInteractionCollector::new(ctx)
             .filter(move |select| select.data.custom_id == "track_selector")
             .timeout(Duration::from_secs(60))
@@ -1155,10 +1155,7 @@ pub async fn tracks(
                         ),
                     )
                     .await?;
-                interaction
-                    .message
-                    .delete(ctx.serenity_context().http.clone())
-                    .await?;
+                reply_handle.delete(ctx).await?;
             }
         }
     } else {
