@@ -19,6 +19,7 @@ pub const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
 pub const RANKINGS_FILE: &str = "data/poly_rankings.txt";
 const LB_SIZE: u32 = 20;
 pub const TRACK_FILE: &str = "lists/official_tracks.txt";
+pub const HOF_CODE_FILE: &str = "lists/hof_codes.txt";
 pub const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
 pub const HOF_ALL_TRACK_FILE: &str = "lists/hof_tracks_all.txt";
 pub const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";

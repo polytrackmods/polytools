@@ -5,15 +5,22 @@ use crate::utils::{
 use crate::{Context, Error};
 use anyhow::Result;
 use dotenvy::dotenv;
-use poise::serenity_prelude as serenity;
-use poise::{builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, Modal};
+use poise::serenity_prelude::{
+    self as serenity, ComponentInteractionCollector, ComponentInteractionDataKind, CreateActionRow,
+    CreateAttachment, CreateInteractionResponseMessage, CreateSelectMenu, CreateSelectMenuKind,
+    CreateSelectMenuOption,
+};
+use poise::{
+    builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, Modal,
+};
 use polymanager::{
     check_blacklist, community_update, et_rankings_update, global_rankings_update, hof_update,
     read_altlist, read_blacklist, write_altlist, write_blacklist, PolyLeaderBoard,
     ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
-    COMMUNITY_TRACK_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
-    HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE,
-    HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, UPDATE_CYCLE_LEN, VERSION,
+    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
+    HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
+    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
+    UPDATE_CYCLE_LEN, VERSION,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -1088,6 +1095,79 @@ pub async fn rankings(
         mobile_friendly,
     )
     .await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, category = "Query")]
+pub async fn tracks(
+    ctx: Context<'_>,
+    #[description = "Tracks"] tracks: LeaderboardChoice,
+) -> Result<()> {
+    use LeaderboardChoice::{Et, Hof};
+    let track_file = match tracks {
+        Et => Some(ET_CODE_FILE),
+        Hof => Some(HOF_CODE_FILE),
+        _ => None,
+    };
+    if let Some(track_file) = track_file {
+        let content = fs::read_to_string(track_file).await?;
+        let mut codes = Vec::new();
+        let mut options: Vec<CreateSelectMenuOption> = Vec::new();
+        for (i, line) in content.lines().enumerate() {
+            let (code, name) = line.split_once(' ').unwrap_or_default();
+            codes.push(code);
+            options.push(CreateSelectMenuOption::new(name, i.to_string()));
+        }
+        let mut reply = CreateReply::default();
+        let select_menu =
+            CreateSelectMenu::new("track_selector", CreateSelectMenuKind::String { options })
+                .min_values(1)
+                .max_values(1);
+        let action_row = CreateActionRow::SelectMenu(select_menu);
+        reply = reply.components(vec![action_row]);
+        ctx.send(reply).await?;
+        if let Some(interaction) = ComponentInteractionCollector::new(ctx)
+            .filter(move |select| select.data.custom_id == "track_selector")
+            .timeout(Duration::from_secs(60))
+            .await
+        {
+            if let ComponentInteractionDataKind::StringSelect { ref values } = interaction.data.kind
+            {
+                let selection = values.first().unwrap();
+                let code = codes
+                    .get(selection.parse::<usize>().expect("should be integer"))
+                    .expect("should be in range");
+                interaction
+                    .create_response(
+                        ctx.serenity_context().http.clone(),
+                        serenity::CreateInteractionResponse::Message(
+                            if code.len() + "Track Code:\n".len() > 1024 {
+                                let attachment =
+                                    CreateAttachment::bytes(code.as_bytes(), "track_code.txt");
+                                CreateInteractionResponseMessage::new()
+                                    .add_file(attachment)
+                                    .ephemeral(true)
+                            } else {
+                                CreateInteractionResponseMessage::new()
+                                    .content(format!("Track Code:\n{}", code))
+                                    .ephemeral(true)
+                            },
+                        ),
+                    )
+                    .await?;
+                interaction
+                    .message
+                    .delete(ctx.serenity_context().http.clone())
+                    .await?;
+            }
+        }
+    } else {
+        write(
+            &ctx,
+            format!("Could not find track list for {}", tracks.name()),
+        )
+        .await?;
+    }
     Ok(())
 }
 
