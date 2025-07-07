@@ -2,6 +2,7 @@ mod commands;
 pub mod utils;
 
 use anyhow::Error;
+use chrono::Utc;
 use commands::{admins, roles, update_admins};
 use commands::{
     assign, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
@@ -12,15 +13,18 @@ use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::{EditTracker, Framework, FrameworkOptions, Prefix, PrefixFrameworkOptions};
 use polymanager::db::establish_connection;
-use polymanager::get_datetime;
+use polymanager::{get_datetime, recent_et_period};
 use serenity::{ClientBuilder, GatewayIntents};
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use utils::BotData;
+use tokio::task;
+use tokio::time::{sleep_until, Instant};
+use utils::{et_tracks_update, BotData};
 
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
+pub const ET_PERIOD_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
 
 type Context<'a> = poise::Context<'a, BotData, Error>;
 
@@ -95,12 +99,29 @@ async fn main() {
         })
         .build();
 
-    let client = ClientBuilder::new(token, intents)
+    let mut client = ClientBuilder::new(token, intents)
         .framework(framework)
-        .await;
-    client
-        .expect("Failed to create client")
-        .start()
         .await
-        .expect("Failed to start client");
+        .expect("Failed to create client");
+    let http = client.http.clone();
+    let updater = task::spawn(async move {
+        loop {
+            et_tracks_update(http.clone())
+                .await
+                .unwrap_or_else(|_| println!("failed to update ET tracks"));
+            let next_run = recent_et_period(Utc::now()) + ET_PERIOD_DURATION;
+            let duration_until = next_run.timestamp_millis() - Utc::now().timestamp_millis();
+            let sleep_duration =
+                Duration::from_millis(u64::try_from(duration_until).unwrap_or_default().max(1) + 1);
+            let wakeup_time = Instant::now() + sleep_duration;
+            sleep_until(wakeup_time).await;
+        }
+    });
+    let client_task = task::spawn(async move {
+        client.start().await.expect("Failed to start client");
+    });
+    tokio::select! {
+        _ = updater => println!("Updater task finished unexpectedly."),
+        _ = client_task => println!("Client stopped."),
+    }
 }

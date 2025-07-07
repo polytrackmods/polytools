@@ -3,16 +3,17 @@ use crate::utils::{
     EditAdminModal, EditModal, LeaderBoard, LeaderBoardEntry, RemoveAdminModal, WriteEmbed,
 };
 use crate::{Context, Error};
+use anyhow::Result;
 use dotenvy::dotenv;
 use poise::serenity_prelude as serenity;
 use poise::{builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, Modal};
 use polymanager::{
-    check_blacklist, community_update, global_rankings_update, hof_update, read_altlist,
-    read_blacklist, write_altlist, write_blacklist, PolyLeaderBoard, ALT_ACCOUNT_FILE,
-    BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
-    HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE,
-    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
-    UPDATE_CYCLE_LEN, VERSION,
+    check_blacklist, community_update, et_rankings_update, global_rankings_update, hof_update,
+    read_altlist, read_blacklist, write_altlist, write_blacklist, PolyLeaderBoard,
+    ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
+    COMMUNITY_TRACK_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
+    HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE,
+    HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, UPDATE_CYCLE_LEN, VERSION,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -29,12 +30,13 @@ pub enum LeaderboardChoice {
     Global,
     Community,
     Hof,
+    Et,
 }
 
 impl ChoiceParameter for LeaderboardChoice {
     fn list() -> Vec<CommandParameterChoice> {
-        use LeaderboardChoice::{Community, Global, Hof};
-        [Global, Community, Hof]
+        use LeaderboardChoice::{Community, Et, Global, Hof};
+        [Global, Community, Hof, Et]
             .iter()
             .map(|c| CommandParameterChoice {
                 name: c.name().to_string(),
@@ -44,26 +46,28 @@ impl ChoiceParameter for LeaderboardChoice {
             .collect()
     }
     fn name(&self) -> &'static str {
-        use LeaderboardChoice::{Community, Global, Hof};
+        use LeaderboardChoice::{Community, Et, Global, Hof};
         match self {
             Global => "Global",
             Community => "Community",
             Hof => "HOF",
+            Et => "ET",
         }
     }
     fn from_index(index: usize) -> Option<Self> {
-        use LeaderboardChoice::{Community, Global, Hof};
-        [Global, Community, Hof].get(index).cloned()
+        use LeaderboardChoice::{Community, Et, Global, Hof};
+        [Global, Community, Hof, Et].get(index).cloned()
     }
     fn localized_name(&self, _: &str) -> Option<&'static str> {
         Some(self.name())
     }
     fn from_name(name: &str) -> Option<Self> {
-        use LeaderboardChoice::{Community, Global, Hof};
+        use LeaderboardChoice::{Community, Et, Global, Hof};
         match name.to_lowercase().as_str() {
             "global" => Some(Global),
             "community" => Some(Community),
             "hof" => Some(Hof),
+            "et" => Some(Et),
             _ => None,
         }
     }
@@ -174,7 +178,7 @@ pub async fn assign(
     ctx: Context<'_>,
     #[description = "Username"] user: String,
     #[description = "Player ID"] id: String,
-) -> Result<(), Error> {
+) -> Result<()> {
     ctx.defer_ephemeral().await?;
     let mut user_id = id;
     if user_id.starts_with("User ID: ") {
@@ -225,7 +229,7 @@ pub async fn delete(
     #[description = "Username"]
     #[autocomplete = "autocomplete_users"]
     user: String,
-) -> Result<(), Error> {
+) -> Result<()> {
     ctx.defer_ephemeral().await?;
     let (is_admin, is_admin_msg) = is_admin(&ctx, 1).await;
     if !is_admin {
@@ -258,7 +262,7 @@ pub async fn delete(
 pub async fn update_admins(
     ctx: ApplicationContext<'_, BotData, Error>,
     #[description = "Operation"] operation: UpdateAdminsChoice,
-) -> Result<(), Error> {
+) -> Result<()> {
     use UpdateAdminsChoice::{Add, Edit, Remove};
     let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 0).await;
     if !is_admin {
@@ -350,7 +354,7 @@ pub async fn request(
     #[description = "Track"] track: String,
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
-) -> Result<(), Error> {
+) -> Result<()> {
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
@@ -467,7 +471,7 @@ pub async fn list(
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
-) -> Result<(), Error> {
+) -> Result<()> {
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
@@ -476,11 +480,12 @@ pub async fn list(
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_file = {
-        use LeaderboardChoice::{Community, Global, Hof};
+        use LeaderboardChoice::{Community, Et, Global, Hof};
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
             Hof => HOF_TRACK_FILE,
+            Et => ET_TRACK_FILE,
         }
     };
     let mut id = String::new();
@@ -624,7 +629,7 @@ pub async fn compare(
     user2: String,
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
-) -> Result<(), Error> {
+) -> Result<()> {
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
@@ -633,11 +638,12 @@ pub async fn compare(
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
     let track_ids: Vec<(String, String)> = fs::read_to_string({
-        use LeaderboardChoice::{Community, Global, Hof};
+        use LeaderboardChoice::{Community, Et, Global, Hof};
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
             Hof => HOF_TRACK_FILE,
+            Et => ET_TRACK_FILE,
         }
     })
     .await?
@@ -811,8 +817,8 @@ pub async fn update_rankings(
     ctx: Context<'_>,
     #[description = "Updated Leaderboard"] leaderboard: LeaderboardChoice,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
-) -> Result<(), Error> {
-    use LeaderboardChoice::{Community, Global, Hof};
+) -> Result<()> {
+    use LeaderboardChoice::{Community, Et, Global, Hof};
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     ctx.defer_ephemeral().await?;
     let (is_admin, is_admin_msg) = is_admin(&ctx, 2).await;
@@ -824,6 +830,7 @@ pub async fn update_rankings(
         Global => global_rankings_update().await,
         Community => community_update().await,
         Hof => hof_update().await,
+        Et => et_rankings_update().await,
     }?;
     let headers: Vec<&str> = vec![
         "Rank",
@@ -840,6 +847,7 @@ pub async fn update_rankings(
         Global => RANKINGS_FILE,
         Community => COMMUNITY_RANKINGS_FILE,
         Hof => HOF_RANKINGS_FILE,
+        Et => ET_RANKINGS_FILE,
     })
     .await?;
     let line = content.lines().next().expect("Should have next line");
@@ -868,7 +876,7 @@ pub async fn update_rankings(
 pub async fn roles(
     ctx: Context<'_>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
-) -> Result<(), Error> {
+) -> Result<()> {
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     ctx.defer_ephemeral().await?;
     let mut embeds: Vec<WriteEmbed> = Vec::new();
@@ -988,8 +996,8 @@ pub async fn rankings(
     #[description = "Mode (HOF/community only)"] time_based: Option<bool>,
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
-) -> Result<(), Error> {
-    use LeaderboardChoice::{Community, Global, Hof};
+) -> Result<()> {
+    use LeaderboardChoice::{Community, Et, Global, Hof};
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
@@ -1014,6 +1022,7 @@ pub async fn rankings(
                 HOF_RANKINGS_FILE
             }
         }
+        Et => ET_RANKINGS_FILE,
     };
     let duration = if fs::try_exists(rankings_file).await? {
         let age = fs::metadata(rankings_file).await?.modified()?.elapsed()?;
@@ -1027,6 +1036,7 @@ pub async fn rankings(
             Global => global_rankings_update().await?,
             Community => community_update().await?,
             Hof => hof_update().await?,
+            Et => et_rankings_update().await?,
         }
         UPDATE_CYCLE_LEN
     }
@@ -1086,7 +1096,7 @@ pub async fn rankings(
 pub async fn edit_lists(
     ctx: ApplicationContext<'_, BotData, Error>,
     #[description = "List to edit"] list: EditModalChoice,
-) -> Result<(), Error> {
+) -> Result<()> {
     use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
     let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 2).await;
     if !is_admin {
@@ -1118,7 +1128,7 @@ pub async fn edit_lists(
 
 /// Lists currently registered users and their IDs
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
-pub async fn users(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn users(ctx: Context<'_>) -> Result<()> {
     let bot_data = ctx.data();
     let mut users = String::new();
     for (user, id) in bot_data
@@ -1134,7 +1144,7 @@ pub async fn users(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 #[poise::command(slash_command, prefix_command, category = "Administration", ephemeral)]
-pub async fn admins(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn admins(ctx: Context<'_>) -> Result<()> {
     let bot_data = ctx.data();
     let mut admins = String::new();
     for (admin, privilege) in bot_data
@@ -1156,8 +1166,8 @@ pub async fn players(
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
-) -> Result<(), Error> {
-    use LeaderboardChoice::{Community, Global, Hof};
+) -> Result<()> {
+    use LeaderboardChoice::{Community, Et, Global, Hof};
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
@@ -1170,6 +1180,7 @@ pub async fn players(
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
             Hof => HOF_ALL_TRACK_FILE,
+            Et => ET_TRACK_FILE,
         }
     })
     .await
@@ -1222,7 +1233,7 @@ pub async fn records(
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
-) -> Result<(), Error> {
+) -> Result<()> {
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
@@ -1265,8 +1276,8 @@ pub async fn top(
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
-) -> Result<(), Error> {
-    use LeaderboardChoice::{Community, Global, Hof};
+) -> Result<()> {
+    use LeaderboardChoice::{Community, Et, Global, Hof};
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
@@ -1279,6 +1290,7 @@ pub async fn top(
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
             Hof => HOF_ALL_TRACK_FILE,
+            Et => ET_TRACK_FILE,
         }
     })
     .await
@@ -1341,7 +1353,7 @@ pub async fn top(
 
 /// Links the privacy policy
 #[poise::command(slash_command, prefix_command, category = "Info", ephemeral)]
-pub async fn policy(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn policy(ctx: Context<'_>) -> Result<()> {
     dotenv().ok();
     let url = format!(
         "https://{}/policy",
@@ -1353,10 +1365,7 @@ pub async fn policy(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Displays help
 #[poise::command(slash_command, prefix_command, track_edits, category = "Info")]
-pub async fn help(
-    ctx: Context<'_>,
-    #[description = "Command"] cmd: Option<String>,
-) -> Result<(), Error> {
+pub async fn help(ctx: Context<'_>, #[description = "Command"] cmd: Option<String>) -> Result<()> {
     let config = builtins::HelpConfiguration {
         extra_text_at_bottom: "\
             Type /help <cmd> for more detailed help.",

@@ -1,15 +1,18 @@
 use crate::commands::LeaderboardChoice;
-use crate::{Context, MAX_MSG_AGE};
-use anyhow::Error;
+use crate::{Context, ET_PERIOD_DURATION, MAX_MSG_AGE};
+use anyhow::Result;
+use chrono::Utc;
 use diesel::prelude::*;
-use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter};
+use poise::serenity::{ChannelId, GuildId};
+use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polymanager::db::{Admin, NewAdmin, NewUser, User};
 use polymanager::{
-    check_blacklist, get_alt, ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_TRACK_FILE,
-    HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
-    VERSION,
+    check_blacklist, export_to_id, get_alt, recent_et_period, ALT_ACCOUNT_FILE, BLACKLIST_FILE,
+    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE,
+    HOF_BLACKLIST_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, VERSION,
 };
+use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serenity::{
@@ -18,13 +21,15 @@ use serenity::{
 };
 use std::collections::HashMap;
 use std::fmt::Write;
-use std::sync::Mutex;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::fs;
 use tokio::time::sleep;
 
 const EMBED_PAGE_LEN: usize = 20;
 const MAX_COL_WIDTH: usize = 25;
+const TRACK_CODE_STARTS: [&str; 2] = ["PolyTrack14p", "v3"];
 
 // structs for deserializing leaderboards
 #[derive(Deserialize, Serialize)]
@@ -171,7 +176,7 @@ impl BotData {
 // non-embed output function
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
-pub async fn write(ctx: &Context<'_>, mut text: String) -> Result<(), Error> {
+pub async fn write(ctx: &Context<'_>, mut text: String) -> Result<()> {
     if text.chars().count() > 2000 {
         if text.chars().next().expect("Guaranteed to be there")
             == text.chars().nth(1).expect("Guaranteed to be there")
@@ -297,7 +302,7 @@ pub async fn write_embed(
     ctx: Context<'_>,
     write_embeds: Vec<WriteEmbed>,
     mobile_friendly: bool,
-) -> Result<(), Error> {
+) -> Result<()> {
     if write_embeds
         .iter()
         .all(|e| e.headers.len() == e.contents.len() && e.headers.len() == e.inlines.len())
@@ -652,13 +657,14 @@ pub struct PolyRecords {
 
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
-pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error> {
-    use LeaderboardChoice::{Community, Global, Hof};
+pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords> {
+    use LeaderboardChoice::{Community, Et, Global, Hof};
     let track_ids: Vec<(String, String)> = fs::read_to_string({
         match tracks {
             Global => TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
             Hof => HOF_ALL_TRACK_FILE,
+            Et => ET_TRACK_FILE,
         }
     })
     .await
@@ -727,4 +733,170 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords, Error
         wr_amounts,
     };
     Ok(poly_records)
+}
+
+#[allow(clippy::missing_errors_doc)]
+pub async fn et_tracks_update(http: Arc<Http>) -> Result<()> {
+    let codes = get_ets(http).await?;
+    fs::write(
+        ET_CODE_FILE,
+        codes
+            .iter()
+            .map(|track_info| track_info.join(" "))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+    .await?;
+    let ids = codes
+        .into_iter()
+        .map(|[code, name]| [export_to_id(&code).unwrap_or_default(), name].join(" "))
+        .collect::<Vec<_>>();
+    fs::write(ET_TRACK_FILE, ids.join("\n")).await?;
+    Ok(())
+}
+
+async fn get_ets(http: Arc<Http>) -> Result<Vec<[String; 2]>> {
+    let mut tracks = Vec::new();
+    // #elite-tracks channel
+    let et_channel_id = ChannelId::new(1_291_381_174_358_511_719);
+    // PolyTrack guild
+    let pt_guild_id = GuildId::new(1_115_776_502_592_708_720);
+    let active_threads = pt_guild_id.get_active_threads(http.clone()).await?;
+    let archived_threads = et_channel_id
+        .get_archived_public_threads(http.clone(), None, None)
+        .await?
+        .threads;
+    let mut period_threads = Vec::new();
+    let period_end = recent_et_period(Utc::now()).timestamp();
+    let period_start = period_end.saturating_sub_unsigned(ET_PERIOD_DURATION.as_secs());
+    let period = period_start..period_end;
+    for active_thread in active_threads.threads {
+        if active_thread.parent_id == Some(et_channel_id) {
+            if let Some(thread_metadata) = active_thread.thread_metadata {
+                if period.contains(
+                    &thread_metadata
+                        .create_timestamp
+                        .unwrap_or_default()
+                        .timestamp(),
+                ) {
+                    period_threads.push(active_thread);
+                }
+            }
+        }
+    }
+    for archived_thread in archived_threads {
+        if let Some(thread_metadata) = archived_thread.thread_metadata {
+            if period.contains(
+                &thread_metadata
+                    .create_timestamp
+                    .unwrap_or_default()
+                    .timestamp(),
+            ) {
+                period_threads.push(archived_thread);
+            }
+        }
+    }
+    let client = Client::new();
+    for thread in period_threads {
+        let mut messages = Vec::new();
+        let mut oldest_id = thread
+            .messages(http.clone(), GetMessages::new().limit(1))
+            .await?
+            .first()
+            .expect("guaranteed to have at least one message")
+            .id;
+        messages.push(thread.message(http.clone(), oldest_id).await?);
+        loop {
+            let page = thread
+                .messages(
+                    http.clone(),
+                    GetMessages::new().before(oldest_id).limit(100),
+                )
+                .await?;
+            messages.append(&mut page.clone());
+            if page.len() < 100 {
+                break;
+            }
+            oldest_id = page.last().expect("should have 100 messages").id;
+        }
+        messages.reverse();
+        for message in messages {
+            if let Some(code) = message
+                .content
+                .split_whitespace()
+                .find(|word| TRACK_CODE_STARTS.iter().any(|part| word.starts_with(part)))
+            {
+                tracks.push([code.to_string(), thread.name]);
+                break;
+            }
+            if let Some(txt_file) = message.attachments.iter().find(|a| {
+                Path::new(&a.filename)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
+            }) {
+                let file_url = &txt_file.url;
+                let content = client.get(file_url).send().await?.text().await?;
+                if TRACK_CODE_STARTS
+                    .iter()
+                    .any(|start| content.starts_with(start))
+                {
+                    tracks.push([content, thread.name]);
+                    break;
+                }
+            }
+            if let Some(code) = find_pastebin_content(message.content).await {
+                tracks.push([code, thread.name]);
+                break;
+            }
+        }
+    }
+    Ok(tracks)
+}
+
+async fn find_pastebin_content(message: String) -> Option<String> {
+    let client = Client::new();
+    let pastebins = vec![
+        (
+            r"https://pastes.dev/([0-9a-zA-Z]+)/?",
+            "https://api.pastes.dev/",
+        ),
+        (
+            r"https://pastebin.com/([0-9a-zA-Z]+)/?",
+            "https://pastebin.com/raw/",
+        ),
+    ];
+    for (regex_str, api_url) in pastebins {
+        let regex = Regex::new(regex_str).expect("failed to create Regex");
+        if let Some(captures) = regex.captures(&message) {
+            let (_full, [paste_id]) = captures.extract();
+            let url = format!("{api_url}{paste_id}");
+            if let Ok(response) = client.get(url).send().await {
+                if let Ok(text) = response.text().await {
+                    return Some(text);
+                }
+            }
+        }
+    }
+    // stupid pastecode.dev API forces me to do this
+    let reg_last =
+        Regex::new(r"https://pastecode.dev/s/([0-9a-zA-Z]+)/?").expect("failed to create Regex");
+    if let Some(reg_match) = reg_last.find(&message) {
+        let url = reg_match.as_str();
+        if let Ok(response) = client.get(url).send().await {
+            if let Ok(text) = response.text().await {
+                let code_regex = Regex::new(r#"<div class="hljs-ln-line">([0-9a-zA-Z]+)</div>"#)
+                    .expect("failed to create Regex");
+                if let Some(captures) = code_regex.captures(&text) {
+                    let (_full, [code]) = captures.extract();
+                    if TRACK_CODE_STARTS
+                        .iter()
+                        .any(|start| code.starts_with(start))
+                    {
+                        return Some(code.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
 }
