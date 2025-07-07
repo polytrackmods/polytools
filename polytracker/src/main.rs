@@ -3,7 +3,7 @@ pub mod utils;
 
 use anyhow::Error;
 use chrono::Utc;
-use commands::{admins, roles, update_admins};
+use commands::{admins, roles, tracks, update_admins};
 use commands::{
     assign, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
     top, update_rankings, users,
@@ -59,6 +59,7 @@ async fn main() {
                 update_rankings(),
                 records(),
                 top(),
+                tracks(),
                 rankings(),
                 roles(),
                 policy(),
