@@ -3,7 +3,6 @@ use crate::{Context, ET_PERIOD_DURATION, MAX_MSG_AGE};
 use anyhow::Result;
 use chrono::Utc;
 use diesel::prelude::*;
-use poise::serenity::{ChannelId, GuildId};
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polymanager::db::{Admin, NewAdmin, NewUser, User};
@@ -16,8 +15,9 @@ use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serenity::{
-    Color, ComponentInteractionCollector, CreateActionRow, CreateAttachment, CreateButton,
-    CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
+    ChannelId, Color, ComponentInteractionCollector, CreateActionRow, CreateAttachment,
+    CreateButton, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
+    GuildId,
 };
 use std::collections::HashMap;
 use std::fmt::Write;
