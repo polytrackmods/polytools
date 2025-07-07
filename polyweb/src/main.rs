@@ -8,9 +8,7 @@ use parsers::{
     parse_leaderboard_with_records,
 };
 use polymanager::{
-    community_update, global_rankings_update, hof_update, COMMUNITY_RANKINGS_FILE,
-    COMMUNITY_TRACK_FILE, CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
-    UPDATE_CYCLE_LEN, UPDATE_LB_COUNT,
+    community_update, et_rankings_update, global_rankings_update, hof_update, COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE, UPDATE_CYCLE_LEN, UPDATE_LB_COUNT
 };
 use rocket::form::Context;
 use rocket::fs::FileServer;
@@ -183,6 +181,16 @@ async fn main() -> Result<(), Box<rocket::Error>> {
             println!("Cycle done");
             join!(
                 global_rankings_update(),
+                sleep(
+                    UPDATE_CYCLE_LEN
+                        / u32::try_from(UPDATE_LB_COUNT).expect("shouldn't have that many lbs")
+                )
+            )
+            .0
+            .unwrap_or_else(|_| println!("Failed update"));
+            println!("Cycle done");
+            join!(
+                et_rankings_update(),
                 sleep(
                     UPDATE_CYCLE_LEN
                         / u32::try_from(UPDATE_LB_COUNT).expect("shouldn't have that many lbs")

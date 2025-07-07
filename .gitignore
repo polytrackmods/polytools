@@ -1,6 +1,7 @@
 /target
 .env
 /.cargo
+*/Cargo.lock
 
 *.db
 **/schema.rs
