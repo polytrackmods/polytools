@@ -177,13 +177,8 @@ impl BotData {
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
 pub async fn write(ctx: &Context<'_>, mut text: String) -> Result<()> {
-    if text.chars().count() > 2000 {
-        if text.chars().next().expect("Guaranteed to be there")
-            == text.chars().nth(1).expect("Guaranteed to be there")
-            && text.chars().nth(1).expect("Guaranteed to be there")
-                == text.chars().nth(2).expect("Guaranteed to be there")
-            && text.chars().nth(2).expect("Guaranteed to be there") == '`'
-        {
+    if text.len() > 2000 {
+        if text.starts_with("```") {
             for _ in 0..3 {
                 text.remove(0);
                 text.pop();
