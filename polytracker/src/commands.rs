@@ -399,9 +399,9 @@ pub async fn request(
             let track_id = track_ids
                 .get(track.parse::<usize>()? - 1)
                 .expect("Couldn't find track");
-            format!("https://vps.kodub.com:43273/leaderboard?version=0.5.0&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",track_id.0)
+            format!("https://vps.kodub.com:43273/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",track_id.0)
         } else {
-            format!("https://vps.kodub.com:43273/leaderboard?version=0.5.0&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}")
+            format!("https://vps.kodub.com:43273/leaderboard?version={VERSION}&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}")
         };
         let contents: Vec<String>;
         if let Ok(response) = client.get(url).send().await {
