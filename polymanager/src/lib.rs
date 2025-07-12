@@ -259,17 +259,17 @@ pub async fn hof_update() -> Result<()> {
         let mut has_ranking: Vec<String> = Vec::new();
         let mut pos = 0;
         for entry in leaderboard {
-            if pos + 1 > point_values.len() {
-                break;
-            }
             let name = get_alt(HOF_ALT_ACCOUNT_FILE, &entry.name).await?;
             if !has_ranking.contains(&name) && check_blacklist(HOF_BLACKLIST_FILE, &name).await? {
-                player_rankings.entry(name.clone()).or_default().push(pos);
+                has_ranking.push(name.clone());
                 time_rankings
                     .entry(name.clone())
                     .or_default()
                     .push(entry.frames);
-                has_ranking.push(name);
+                if pos + 1 > point_values.len() {
+                    continue;
+                }
+                player_rankings.entry(name).or_default().push(pos);
                 pos += 1;
             }
         }
