@@ -529,11 +529,11 @@ async fn tracks_leaderboards(
             let mut res = Vec::new();
             for url in urls {
                 let mut att = 0;
-                sleep(Duration::from_millis(200)).await;
+                sleep(Duration::from_millis(500)).await;
                 let mut response = client.get(&url).send().await?.text().await?;
                 while response.is_empty() && att < REQUEST_RETRY_COUNT {
                     att += 1;
-                    sleep(Duration::from_millis(1000)).await;
+                    sleep(Duration::from_millis(3000)).await;
                     response = client.get(&url).send().await?.text().await?;
                 }
                 res.push(response);
