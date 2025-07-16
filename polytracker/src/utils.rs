@@ -674,8 +674,7 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords> {
     let client = Client::new();
     let mut wr_amounts: HashMap<String, u32> = HashMap::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=true",
-            43273,
+        let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=true",
             VERSION,
             id,
         );

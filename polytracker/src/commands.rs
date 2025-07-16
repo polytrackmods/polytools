@@ -194,7 +194,7 @@ pub async fn assign(
     let client = Client::new();
     let response = client
         .get(format!(
-            "https://vps.kodub.com:43273/user?version={VERSION}&userToken={user_id}",
+            "https://vps.kodub.com/user?version={VERSION}&userToken={user_id}",
         ))
         .send()
         .await?
@@ -399,9 +399,9 @@ pub async fn request(
             let track_id = track_ids
                 .get(track.parse::<usize>()? - 1)
                 .expect("Couldn't find track");
-            format!("https://vps.kodub.com:43273/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",track_id.0)
+            format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",track_id.0)
         } else {
-            format!("https://vps.kodub.com:43273/leaderboard?version={VERSION}&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}")
+            format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}")
         };
         let contents: Vec<String>;
         if let Ok(response) = client.get(url).send().await {
@@ -522,8 +522,7 @@ pub async fn list(
             .collect();
         let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
-            let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
-            43273,
+            let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
             VERSION,
             track_id.0,
             id);
@@ -681,8 +680,7 @@ pub async fn compare(
             let mut display_total = true;
             let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
                 let client = client.clone();
-                let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
-                    43273,
+                let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
                     VERSION,
                     track_id.0,
                     id
@@ -1272,8 +1270,7 @@ pub async fn players(
     let mut contents = vec![String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false",
-            43273,
+        let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false",
             VERSION,
             id);
         let mut att = 0;
@@ -1382,8 +1379,7 @@ pub async fn top(
     let mut contents = vec![String::new(), String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=1&onlyVerified=true",
-            43273,
+        let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip={}&amount=1&onlyVerified=true",
             VERSION,
             id,
             position - 1,

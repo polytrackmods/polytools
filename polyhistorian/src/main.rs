@@ -122,7 +122,7 @@ impl Record {
         let client = Client::new();
         if let Ok(send_result) = client
             .get(format!(
-                "https://vps.kodub.com:43273/recordings?version={VERSION}&recordingIds={}",
+                "https://vps.kodub.com/recordings?version={VERSION}&recordingIds={}",
                 self.id
             ))
             .send()
@@ -200,7 +200,7 @@ async fn main() -> Result<(), Error> {
         println!("Checking records! ({})", get_datetime());
         for (id, name) in tracks.clone() {
             let url = format!(
-                "https://vps.kodub.com:43273/leaderboard?version={VERSION}&skip=0&onlyVerified=true&amount=5&trackId={id}"
+                "https://vps.kodub.com/leaderboard?version={VERSION}&skip=0&onlyVerified=true&amount=5&trackId={id}"
             );
             let mut response_text = String::new();
             while response_text.is_empty() {

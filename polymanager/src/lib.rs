@@ -518,8 +518,7 @@ async fn tracks_leaderboards(
         let mut urls = Vec::new();
         for i in 0..lb_size {
             urls.push(format!(
-                "https://vps.kodub.com:{}/leaderboard?version={}&trackId={}&skip={}&amount=500",
-                43273,
+                "https://vps.kodub.com/leaderboard?version={}&trackId={}&skip={}&amount=500",
                 VERSION,
                 track_id,
                 i * 500,
