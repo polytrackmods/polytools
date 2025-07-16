@@ -34,7 +34,7 @@ const COMMUNITY_LB_SIZE: u32 = 20;
 pub const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 pub const VERSION: &str = "0.5.1";
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
-pub const REQUEST_RETRY_COUNT: u32 = 10;
+pub const REQUEST_RETRY_COUNT: u32 = 5;
 pub const ET_CODE_FILE: &str = "data/et_codes.txt";
 pub const ET_TRACK_FILE: &str = "data/et_tracks.txt";
 pub const ET_RANKINGS_FILE: &str = "data/et_rankings.txt";
@@ -513,7 +513,7 @@ async fn tracks_leaderboards(
     lb_size: u32,
 ) -> Result<Vec<Vec<LeaderBoardEntry>>> {
     let client = Client::new();
-    let futures = track_ids.iter().map(|track_id| {
+    let futures = track_ids.iter().enumerate().map(|(o, track_id)| {
         let client = client.clone();
         let mut urls = Vec::new();
         for i in 0..lb_size {
@@ -526,14 +526,15 @@ async fn tracks_leaderboards(
         }
         task::spawn(async move {
             let mut res = Vec::new();
-            for url in urls {
+            for (u, url) in urls.iter().enumerate() {
                 let mut att = 0;
-                sleep(Duration::from_millis(1000)).await;
-                let mut response = client.get(&url).send().await?.text().await?;
+                sleep(Duration::from_millis(30000)).await;
+                let mut response = client.get(url).send().await?.text().await?;
                 while response.is_empty() && att < REQUEST_RETRY_COUNT {
                     att += 1;
-                    sleep(Duration::from_millis(5000)).await;
-                    response = client.get(&url).send().await?.text().await?;
+                    sleep(Duration::from_millis(30000)).await;
+                    println!("Track {:>2}, Page {:>2} Retry", o, u);
+                    response = client.get(url).send().await?.text().await?;
                 }
                 res.push(response);
             }
