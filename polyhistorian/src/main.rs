@@ -185,11 +185,14 @@ async fn main() -> Result<(), Error> {
             .expect("Couldn't create directory");
     }
     for (_, name) in tracks.clone() {
-        let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
+        let path = format!("{HISTORY_FILE_LOCATION}HISTORY_{}.txt", filenamify(name));
         if fs::try_exists(path.clone()).await.unwrap_or(false) {
             let text = fs::read_to_string(path).await.expect("Couldn't read file");
-            let line = text.lines().last().expect("Should have a last record");
-            let record: FileRecord = serde_json::from_str(line).expect("Error deserializing line");
+            let record: FileRecord = if let Some(line_last) = text.lines().last() {
+                serde_json::from_str(line_last).expect("Error deserializing line")
+            } else {
+                FileRecord::new()
+            };
             prior_records.insert(name, record);
         } else {
             fs::write(path, "").await.expect("Couldn't create file");
