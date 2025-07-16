@@ -80,11 +80,11 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, PolyLeaderBoard)
     }
     let url = if real_track_id.is_empty() {
         format!(
-            "https://vps.kodub.com:43273/leaderboard?version={VERSION}&trackId={track_id}&skip=0&amount=500",
+            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track_id}&skip=0&amount=500",
         )
     } else {
         format!(
-            "https://vps.kodub.com:43273/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500",
+            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500",
             track_ids.get(&real_track_id).expect("Couldn't find track id")
         )
     };
@@ -149,7 +149,7 @@ pub async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
         })
         .collect();
     let url = format!(
-        "https://vps.kodub.com:43273/leaderboard?version={}&trackId={}&skip=0&amount=500",
+        "https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=500",
         VERSION,
         track_ids.get(track_id).expect("Couldn't find track id")
     );
