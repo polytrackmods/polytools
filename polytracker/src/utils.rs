@@ -313,14 +313,14 @@ pub async fn write_embed(
                 description: write_embed.description.clone(),
                 pages: Vec::new(),
             };
-            let max_page_amt = write_embed
+            let mut max_page_amt = write_embed
                 .contents
                 .iter()
-                .max_by_key(|content| content.lines().count())
-                .expect("should have contents")
-                .lines()
-                .count()
+                .map(|content| content.lines().count())
+                .max()
+                .expect("should have content")
                 .div_ceil(EMBED_PAGE_LEN);
+            max_page_amt += if max_page_amt == 0 { 1 } else { 0 };
             for page in 0..max_page_amt {
                 let new_page = EmbedPage {
                     columns: if mobile_friendly {
