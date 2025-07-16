@@ -182,7 +182,7 @@ async fn main() -> Result<(), Box<rocket::Error>> {
             .unwrap_or_else(|_| println!("Failed update"));
             println!("Cycle done");
             join!(
-                global_rankings_update(),
+                et_rankings_update(),
                 sleep(
                     UPDATE_CYCLE_LEN
                         / u32::try_from(UPDATE_LB_COUNT).expect("shouldn't have that many lbs")
@@ -192,7 +192,7 @@ async fn main() -> Result<(), Box<rocket::Error>> {
             .unwrap_or_else(|_| println!("Failed update"));
             println!("Cycle done");
             join!(
-                et_rankings_update(),
+                global_rankings_update(),
                 sleep(
                     UPDATE_CYCLE_LEN
                         / u32::try_from(UPDATE_LB_COUNT).expect("shouldn't have that many lbs")
