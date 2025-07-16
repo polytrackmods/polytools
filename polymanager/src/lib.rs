@@ -40,7 +40,7 @@ pub const ET_TRACK_FILE: &str = "data/et_tracks.txt";
 pub const ET_RANKINGS_FILE: &str = "data/et_rankings.txt";
 
 pub const UPDATE_LB_COUNT: u64 = 4;
-pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT * 7 * 60);
+pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT * 15 * 60);
 
 const UPDATE_LOCK_FILE: &str = "data/update.lock";
 const MAX_LOCK_TIME: Duration = Duration::from_secs(300);
@@ -529,11 +529,11 @@ async fn tracks_leaderboards(
             let mut res = Vec::new();
             for url in urls {
                 let mut att = 0;
-                sleep(Duration::from_millis(500)).await;
+                sleep(Duration::from_millis(1000)).await;
                 let mut response = client.get(&url).send().await?.text().await?;
                 while response.is_empty() && att < REQUEST_RETRY_COUNT {
                     att += 1;
-                    sleep(Duration::from_millis(3000)).await;
+                    sleep(Duration::from_millis(5000)).await;
                     response = client.get(&url).send().await?.text().await?;
                 }
                 res.push(response);
