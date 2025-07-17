@@ -3,7 +3,7 @@ use axum::{
     Json, Router,
     extract::{ConnectInfo, State},
     response::IntoResponse,
-    routing::post,
+    routing::{get, post},
 };
 use reqwest::Client;
 use reqwest::StatusCode;
@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/submit", post(handle_submit))
+        .route("/queue", get(get_queue))
         .with_state(queue);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -61,6 +62,16 @@ async fn main() -> Result<()> {
     )
     .await?;
     Ok(())
+}
+
+#[allow(clippy::significant_drop_tightening)]
+async fn get_queue(State(queue): State<SharedQueue>) -> impl IntoResponse {
+    let queue = queue.lock().expect("other threads should not panic");
+    let queue_out: Vec<_> = queue
+        .iter()
+        .map(|entry| (entry.ip.clone(), entry.url.clone()))
+        .collect();
+    Json(queue_out)
 }
 
 async fn handle_submit(
@@ -103,22 +114,25 @@ async fn dispatcher(queue: SharedQueue, mut limiter: RateLimiter, client: Client
         };
 
         if let Some(entry) = task_opt {
-            let res = client.get(entry.url).send().await;
-            let response = match res {
-                Ok(resp) => {
-                    let status = resp.status();
-                    let text = resp.text().await.unwrap_or_default();
-                    (status, text)
-                }
-                Err(e) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Request error: {e}"),
-                ),
-            };
-            entry
-                .responder
-                .send(response)
-                .unwrap_or_else(|_| eprintln!("Receiver dropped"));
+            let client = client.clone();
+            task::spawn(async move {
+                let res = client.get(entry.url).send().await;
+                let response = match res {
+                    Ok(resp) => {
+                        let status = resp.status();
+                        let text = resp.text().await.unwrap_or_default();
+                        (status, text)
+                    }
+                    Err(e) => (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Request error: {e}"),
+                    ),
+                };
+                entry
+                    .responder
+                    .send(response)
+                    .unwrap_or_else(|_| eprintln!("Receiver dropped"));
+            });
         } else {
             sleep(Duration::from_millis(100)).await;
         }
