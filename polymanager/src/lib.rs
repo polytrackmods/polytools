@@ -40,7 +40,7 @@ pub const ET_TRACK_FILE: &str = "data/et_tracks.txt";
 pub const ET_RANKINGS_FILE: &str = "data/et_rankings.txt";
 
 pub const UPDATE_LB_COUNT: u64 = 4;
-pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT * 15 * 60);
+pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT * 10 * 60);
 
 const UPDATE_LOCK_FILE: &str = "data/update.lock";
 const MAX_LOCK_TIME: Duration = Duration::from_secs(300);
