@@ -14,8 +14,8 @@ use poise::{
     builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, Modal,
 };
 use polymanager::{
-    check_blacklist, community_update, et_rankings_update, global_rankings_update, hof_update,
-    read_altlist, read_blacklist, write_altlist, write_blacklist, PolyLeaderBoard,
+    check_blacklist, community_update, et_rankings_update, get_alt, global_rankings_update,
+    hof_update, read_altlist, read_blacklist, write_altlist, write_blacklist, PolyLeaderBoard,
     ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
     COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
     HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
@@ -550,6 +550,10 @@ pub async fn list(
             LeaderboardChoice::Hof => HOF_BLACKLIST_FILE,
             _ => BLACKLIST_FILE,
         };
+        let altlist_file = match tracks {
+            LeaderboardChoice::Hof => HOF_ALT_ACCOUNT_FILE,
+            _ => ALT_ACCOUNT_FILE,
+        };
         let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
         let mut headers = vec!["Track", "Rank", "Time"];
         let mut inlines = vec![true, true, true];
@@ -573,11 +577,12 @@ pub async fn list(
                             if i == position {
                                 break;
                             }
+                            let name = get_alt(altlist_file, &entry.name).await?;
                             if entry.verified_state == 1
-                                && !found.contains(&entry.name)
-                                && check_blacklist(blacklist_file, &entry.name).await?
+                                && !found.contains(&name)
+                                && check_blacklist(blacklist_file, &name).await?
                             {
-                                found.push(entry.name);
+                                found.push(name);
                             }
                         }
                         writeln!(contents[1], "{position} [{}]", (found.len() + 1))?;
