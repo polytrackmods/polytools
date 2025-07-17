@@ -15,12 +15,12 @@ use poise::{
 };
 use polymanager::{
     check_blacklist, community_update, et_rankings_update, get_alt, global_rankings_update,
-    hof_update, read_altlist, read_blacklist, write_altlist, write_blacklist, PolyLeaderBoard,
-    ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
-    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
-    HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
-    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT, TRACK_FILE,
-    UPDATE_CYCLE_LEN, VERSION,
+    hof_update, read_altlist, read_blacklist, send_to_networker, write_altlist, write_blacklist,
+    PolyLeaderBoard, ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE,
+    COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_RANKINGS_FILE,
+    ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_CODE_FILE,
+    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT,
+    TRACK_FILE, UPDATE_CYCLE_LEN, VERSION,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -404,63 +404,60 @@ pub async fn request(
             format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}")
         };
         let contents: Vec<String>;
-        if let Ok(response) = client.get(url).send().await {
-            if let Ok(body) = response.text().await {
-                if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&body) {
-                    if let Some(user_entry) = leaderboard.user_entry {
-                        let position = user_entry.position;
-                        let frames = user_entry.frames;
-                        if position <= 501 {
-                            let entries = leaderboard.entries;
-                            let mut found: Vec<String> = Vec::new();
-                            let mut i = 0;
-                            for entry in entries {
-                                i += 1;
-                                if i == position {
-                                    break;
-                                }
-                                if !found.contains(&entry.name) && entry.verified_state == 1 {
-                                    found.push(entry.name);
-                                }
+        if let Ok(text) = send_to_networker(&client, &url).await {
+            if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&text) {
+                if let Some(user_entry) = leaderboard.user_entry {
+                    let position = user_entry.position;
+                    let frames = user_entry.frames;
+                    if position <= 501 {
+                        let entries = leaderboard.entries;
+                        let mut found: Vec<String> = Vec::new();
+                        let mut i = 0;
+                        for entry in entries {
+                            i += 1;
+                            if i == position {
+                                break;
                             }
-                            let mut time = (f64::from(frames) / 1000.0).to_string();
-                            time.push('s');
-                            contents =
-                                vec![position.to_string(), time, (found.len() + 1).to_string()];
-                            write_embed(
-                                ctx,
-                                vec![WriteEmbed::new(3)
-                                    .title("Leaderboard")
-                                    .headers(&["Rank", "Time", "Unique"])
-                                    .contents(contents)],
-                                mobile_friendly,
-                            )
-                            .await?;
-                        } else {
-                            let mut time = (f64::from(frames) / 1000.0).to_string();
-                            time.push('s');
-                            contents = vec![position.to_string(), time];
-                            write_embed(
-                                ctx,
-                                vec![WriteEmbed::new(2)
-                                    .title("Leaderboard")
-                                    .headers(&["Rank", "Time"])
-                                    .contents(contents)],
-                                mobile_friendly,
-                            )
-                            .await?;
+                            if !found.contains(&entry.name) && entry.verified_state == 1 {
+                                found.push(entry.name);
+                            }
                         }
+                        let mut time = (f64::from(frames) / 1000.0).to_string();
+                        time.push('s');
+                        contents = vec![position.to_string(), time, (found.len() + 1).to_string()];
+                        write_embed(
+                            ctx,
+                            vec![WriteEmbed::new(3)
+                                .title("Leaderboard")
+                                .headers(&["Rank", "Time", "Unique"])
+                                .contents(contents)],
+                            mobile_friendly,
+                        )
+                        .await?;
                     } else {
-                        write(&ctx, "`Record not found!`".to_string()).await?;
+                        let mut time = (f64::from(frames) / 1000.0).to_string();
+                        time.push('s');
+                        contents = vec![position.to_string(), time];
+                        write_embed(
+                            ctx,
+                            vec![WriteEmbed::new(2)
+                                .title("Leaderboard")
+                                .headers(&["Rank", "Time"])
+                                .contents(contents)],
+                            mobile_friendly,
+                        )
+                        .await?;
                     }
                 } else {
-                    write(
-                        &ctx,
-                        "`Leaderboard servers could not be accessed.`".to_string(),
-                    )
-                    .await?;
-                    return Ok(());
+                    write(&ctx, "`Record not found!`".to_string()).await?;
                 }
+            } else {
+                write(
+                    &ctx,
+                    "`Leaderboard servers could not be accessed.`".to_string(),
+                )
+                .await?;
+                return Ok(());
             }
         }
     }
@@ -522,20 +519,18 @@ pub async fn list(
             .collect();
         let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
-            let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={}",
-            VERSION,
-            track_id.0,
-            id);
+            let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",
+            track_id.0);
             task::spawn(
             async move {
                 let mut att = 0;
-                let mut res = client.get(&url).send().await?.text().await?;
-                    while res.is_empty() && att < REQUEST_RETRY_COUNT {
-                        att += 1;
-                        sleep(Duration::from_millis(500)).await;
-                        res = client.get(&url).send().await?.text().await?;
-                    }
-                Ok::<(usize, String), reqwest::Error>((i, res))
+                let mut res = String::new();
+                while res.is_empty() && att <= REQUEST_RETRY_COUNT {
+                    res = send_to_networker(&client, &url).await?;
+                    sleep(Duration::from_millis(500)).await;
+                    att += 1;
+                }
+                Ok::<(usize, String), Error>((i, res))
             })
         });
         let mut results: Vec<(usize, String)> = join_all(futures)
@@ -685,21 +680,19 @@ pub async fn compare(
             let mut display_total = true;
             let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
                 let client = client.clone();
-                let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={}",
-                    VERSION,
+                let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={id}",
                     track_id.0,
-                    id
                 );
                 task::spawn(
                     async move {
                         let mut att = 0;
-                        let mut res = client.get(&url).send().await?.text().await?;
-                        while res.is_empty() && att < REQUEST_RETRY_COUNT {
-                            att += 1;
+                        let mut res = String::new();
+                        while res.is_empty() && att <= REQUEST_RETRY_COUNT {
+                            res = send_to_networker(&client, &url).await?;
                             sleep(Duration::from_millis(500)).await;
-                            res = client.get(&url).send().await?.text().await?;
+                            att += 1;
                         }
-                        Ok::<(usize, String), reqwest::Error>((i, res))
+                        Ok::<(usize, String), Error>((i, res))
                     }
                 )
             });
@@ -1277,11 +1270,11 @@ pub async fn players(
     for (id, name) in track_ids {
         let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=1&onlyVerified=false");
         let mut att = 0;
-        let mut res = client.get(&url).send().await?.text().await?;
-        while res.is_empty() && att < REQUEST_RETRY_COUNT {
-            att += 1;
+        let mut res = String::new();
+        while res.is_empty() && att <= REQUEST_RETRY_COUNT {
+            res = send_to_networker(&client, &url).await?;
             sleep(Duration::from_millis(500)).await;
-            res = client.get(&url).send().await?.text().await?;
+            att += 1;
         }
         let number = serde_json::from_str::<LeaderBoard>(&res)?.total;
         writeln!(
@@ -1382,17 +1375,15 @@ pub async fn top(
     let mut contents = vec![String::new(), String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip={}&amount=1&onlyVerified=true",
-            VERSION,
-            id,
+        let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip={}&amount=1&onlyVerified=true",
             position - 1,
         );
         let mut att = 0;
-        let mut res = client.get(&url).send().await?.text().await?;
-        while res.is_empty() && att < REQUEST_RETRY_COUNT {
-            att += 1;
+        let mut res = String::new();
+        while res.is_empty() && att <= REQUEST_RETRY_COUNT {
+            res = send_to_networker(&client, &url).await?;
             sleep(Duration::from_millis(1000)).await;
-            res = client.get(&url).send().await?.text().await?;
+            att += 1;
         }
         let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {

@@ -7,9 +7,9 @@ use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, Ge
 use poise::{CreateReply, Modal};
 use polymanager::db::{Admin, NewAdmin, NewUser, User};
 use polymanager::{
-    check_blacklist, export_to_id, get_alt, recent_et_period, ALT_ACCOUNT_FILE, BLACKLIST_FILE,
-    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE,
-    HOF_BLACKLIST_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, VERSION,
+    check_blacklist, export_to_id, get_alt, recent_et_period, send_to_networker, ALT_ACCOUNT_FILE,
+    BLACKLIST_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
+    HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, VERSION,
 };
 use regex::Regex;
 use reqwest::Client;
@@ -676,11 +676,11 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords> {
     for (id, name) in track_ids {
         let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified=true");
         let mut att = 0;
-        let mut res = client.get(&url).send().await?.text().await?;
-        while res.is_empty() && att < REQUEST_RETRY_COUNT {
-            att += 1;
+        let mut res = String::new();
+        while res.is_empty() && att <= REQUEST_RETRY_COUNT {
+            res = send_to_networker(&client, &url).await?;
             sleep(Duration::from_millis(1000)).await;
-            res = client.get(&url).send().await?.text().await?;
+            att += 1;
         }
         let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {

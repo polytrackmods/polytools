@@ -192,17 +192,12 @@ async fn main() -> Result<(), Error> {
             );
             let mut response_text = String::new();
             while response_text.is_empty() {
-                response_text = if let Ok(response) = client.get(&url).send().await {
-                    if let Ok(text) = response.text().await {
-                        text
-                    } else {
-                        sleep(Duration::from_millis(500)).await;
-                        String::new()
-                    }
+                response_text = if let Ok(text) = send_to_networker(&client, &url).await {
+                    text
                 } else {
                     sleep(Duration::from_secs(60 * 5)).await;
                     continue;
-                };
+                }
             }
             if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response_text) {
                 if let Some(new_record) = new_lb.entries.first() {
