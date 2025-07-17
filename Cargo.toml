@@ -4,5 +4,6 @@ members = [
     "polytracker",
     "polyweb",
     "polyhistorian",
+    "polynetworker",
 ]
 resolver = "2"

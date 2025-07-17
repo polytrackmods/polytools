@@ -85,7 +85,9 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, PolyLeaderBoard)
     } else {
         format!(
             "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500",
-            track_ids.get(&real_track_id).expect("Couldn't find track id")
+            track_ids
+                .get(&real_track_id)
+                .expect("Couldn't find track id")
         )
     };
     let result = client

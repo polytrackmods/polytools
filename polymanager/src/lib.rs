@@ -3,7 +3,7 @@ pub mod schema;
 
 use std::{collections::HashMap, io::Read as _, time::Duration};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Error, Result, anyhow};
 use chrono::{DateTime, Datelike as _, Utc};
 use dotenvy::dotenv;
 use flate2::read::ZlibDecoder;
@@ -508,37 +508,57 @@ pub fn get_datetime() -> String {
     now.format("%Y/%m/%d %H:%M:%S").to_string()
 }
 
+#[derive(Serialize)]
+struct UrlRequest {
+    url: String,
+}
+impl UrlRequest {
+    fn new(url: &str) -> Self {
+        Self {
+            url: url.to_string(),
+        }
+    }
+}
+const POLYNETWORKER_URL: &str = "http://127.0.0.1:3000/submit";
+
+#[allow(clippy::missing_errors_doc)]
+pub async fn send_to_networker(client: &Client, url: &str) -> Result<String> {
+    Ok(client
+        .post(POLYNETWORKER_URL)
+        .json(&UrlRequest::new(url))
+        .send()
+        .await?
+        .text()
+        .await?)
+}
+
 async fn tracks_leaderboards(
     track_ids: Vec<String>,
     lb_size: u32,
 ) -> Result<Vec<Vec<LeaderBoardEntry>>> {
     let client = Client::new();
-    let futures = track_ids.iter().enumerate().map(|(o, track_id)| {
+    let futures = track_ids.iter().map(|track_id| {
         let client = client.clone();
         let mut urls = Vec::new();
         for i in 0..lb_size {
             urls.push(format!(
-                "https://vps.kodub.com/leaderboard?version={}&trackId={}&skip={}&amount=500",
-                VERSION,
-                track_id,
+                "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track_id}&skip={}&amount=500",
                 i * 500,
             ));
         }
         task::spawn(async move {
             let mut res = Vec::new();
-            for (u, url) in urls.iter().enumerate() {
+            for url in &urls {
                 let mut att = 0;
-                sleep(Duration::from_millis(30000)).await;
-                let mut response = client.get(url).send().await?.text().await?;
-                while response.is_empty() && att < REQUEST_RETRY_COUNT {
+                let mut response = String::new();
+                while response.is_empty() && att <= REQUEST_RETRY_COUNT {
+                    response = send_to_networker(&client, url).await?;
+                    sleep(Duration::from_millis(500)).await;
                     att += 1;
-                    sleep(Duration::from_millis(30000)).await;
-                    println!("Track {:>2}, Page {:>2} Retry", o, u);
-                    response = client.get(url).send().await?.text().await?;
                 }
                 res.push(response);
             }
-            Ok::<Vec<String>, reqwest::Error>(res)
+            Ok::<Vec<String>, Error>(res)
         })
     });
     if fs::try_exists(UPDATE_LOCK_FILE).await? {
