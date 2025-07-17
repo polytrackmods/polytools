@@ -320,7 +320,7 @@ pub async fn write_embed(
                 .max()
                 .expect("should have content")
                 .div_ceil(EMBED_PAGE_LEN);
-            max_page_amt += if max_page_amt == 0 { 1 } else { 0 };
+            max_page_amt += usize::from(max_page_amt == 0);
             for page in 0..max_page_amt {
                 let new_page = EmbedPage {
                     columns: if mobile_friendly {
@@ -674,10 +674,7 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords> {
     let client = Client::new();
     let mut wr_amounts: HashMap<String, u32> = HashMap::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=500&onlyVerified=true",
-            VERSION,
-            id,
-        );
+        let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified=true");
         let mut att = 0;
         let mut res = client.get(&url).send().await?.text().await?;
         while res.is_empty() && att < REQUEST_RETRY_COUNT {

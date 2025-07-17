@@ -11,7 +11,10 @@ use tokio::{
 
 use filenamify::filenamify;
 
-use polymanager::{COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION, get_datetime};
+use polymanager::{
+    COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION, get_datetime,
+    send_to_networker,
+};
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
@@ -120,37 +123,21 @@ impl Record {
     }
     async fn get_recording(&self) -> String {
         let client = Client::new();
-        if let Ok(send_result) = client
-            .get(format!(
+        send_to_networker(
+            &client,
+            &format!(
                 "https://vps.kodub.com/recordings?version={VERSION}&recordingIds={}",
                 self.id
-            ))
-            .send()
-            .await
-        {
-            send_result.text().await.map_or_else(
-                |_| String::new(),
-                |response| {
-                    serde_json::from_str::<Vec<Recording>>(&response).map_or_else(
-                        |_| String::new(),
-                        |recordings| {
-                            if recordings.is_empty() {
-                                String::new()
-                            } else {
-                                recordings
-                                    .first()
-                                    .expect("Checked for empty")
-                                    .recording
-                                    .trim_matches('"')
-                                    .to_string()
-                            }
-                        },
-                    )
-                },
-            )
-        } else {
-            String::new()
-        }
+            ),
+        )
+        .await
+        .map_or(String::new(), |response| {
+            serde_json::from_str::<Vec<Recording>>(&response).map_or(String::new(), |recordings| {
+                recordings.first().map_or(String::new(), |recording| {
+                    recording.recording.trim_matches('"').to_string()
+                })
+            })
+        })
     }
 }
 
@@ -188,11 +175,9 @@ async fn main() -> Result<(), Error> {
         let path = format!("{HISTORY_FILE_LOCATION}HISTORY_{}.txt", filenamify(name));
         if fs::try_exists(path.clone()).await.unwrap_or(false) {
             let text = fs::read_to_string(path).await.expect("Couldn't read file");
-            let record: FileRecord = if let Some(line_last) = text.lines().last() {
+            let record: FileRecord = text.lines().last().map_or(FileRecord::new(), |line_last| {
                 serde_json::from_str(line_last).expect("Error deserializing line")
-            } else {
-                FileRecord::new()
-            };
+            });
             prior_records.insert(name, record);
         } else {
             fs::write(path, "").await.expect("Couldn't create file");

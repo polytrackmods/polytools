@@ -1275,9 +1275,7 @@ pub async fn players(
     let mut contents = vec![String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=false",
-            VERSION,
-            id);
+        let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=1&onlyVerified=false");
         let mut att = 0;
         let mut res = client.get(&url).send().await?.text().await?;
         while res.is_empty() && att < REQUEST_RETRY_COUNT {
