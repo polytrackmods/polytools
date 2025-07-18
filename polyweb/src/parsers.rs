@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use chrono::DateTime;
 
 use polymanager::{
-    check_blacklist, get_alt, PolyLeaderBoard, PolyLeaderBoardEntry, ALT_ACCOUNT_FILE,
-    BLACKLIST_FILE, CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
+    check_blacklist, get_alt, send_to_networker, PolyLeaderBoard, PolyLeaderBoardEntry,
+    ALT_ACCOUNT_FILE, BLACKLIST_FILE, CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE,
+    VERSION,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
@@ -90,14 +91,9 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, PolyLeaderBoard)
                 .expect("Couldn't find track id")
         )
     };
-    let result = client
-        .get(&url)
-        .send()
+    let result = send_to_networker(&client, &url)
         .await
-        .expect("Failed to send request")
-        .text()
-        .await
-        .expect("Failed to get request text");
+        .expect("Failed to complete request");
     let response: LeaderBoard = serde_json::from_str(&result).expect("Invalid leaderboard");
     let mut leaderboard = PolyLeaderBoard::default();
     let mut rank = 0;
@@ -155,14 +151,9 @@ pub async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
         VERSION,
         track_ids.get(track_id).expect("Couldn't find track id")
     );
-    let result = client
-        .get(&url)
-        .send()
+    let result = send_to_networker(&client, &url)
         .await
-        .expect("Failed to send request")
-        .text()
-        .await
-        .expect("Failed to get request text");
+        .expect("Failed to complete request");
     let response: LeaderBoard = serde_json::from_str(&result).expect("Invalid leaderboard");
     let mut leaderboard = PolyLeaderBoard::default();
     let mut rank = 0;

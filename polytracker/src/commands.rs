@@ -1388,12 +1388,12 @@ pub async fn top(
         let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {
             name: "unknown".to_string(),
-            frames: 69420.0,
+            frames: 0.0,
             verified_state: 1,
         };
         let winner = leaderboard.entries.first().unwrap_or(&default_winner);
         let winner_name = winner.name.clone();
-        let winner_time = winner.frames / 1000.0;
+        let winner_time = format!("{:.3}", winner.frames / 1000.0);
         writeln!(
             contents.get_mut(0).expect("Should have first entry"),
             "{name}",
@@ -1410,7 +1410,7 @@ pub async fn top(
     write_embed(
         ctx,
         vec![WriteEmbed::new(3)
-            .title(&format!("Top {position}"))
+            .title(&format!("Rank {position}"))
             .headers(&["Track", "Player", "Time"])
             .contents(contents)],
         mobile_friendly,
