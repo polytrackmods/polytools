@@ -277,7 +277,7 @@ impl IntoIterator for EmbedPage {
     fn into_iter(self) -> Self::IntoIter {
         self.columns
             .into_iter()
-            .map(|c| (c.header, c.content, c.inline))
+            .map(|c| (c.header, c.content.join("\n"), c.inline))
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -285,7 +285,7 @@ impl IntoIterator for EmbedPage {
 #[derive(Clone, Debug)]
 struct EmbedColumn {
     header: String,
-    content: String,
+    content: Vec<String>,
     inline: bool,
 }
 
@@ -368,7 +368,7 @@ pub async fn write_embed(
                             vec![
                                 EmbedColumn {
                                     header: String::new(),
-                                    content: String::new(),
+                                    content: Vec::new(),
                                     inline: false,
                                 };
                                 col_lens.iter().filter(|l| l.is_none()).count()
@@ -389,6 +389,11 @@ pub async fn write_embed(
                             })
                             .len()
                         {
+                            joined_columns
+                                .first_mut()
+                                .expect("should have first column")
+                                .content
+                                .push(String::new());
                             for (i, col_len) in col_lens
                                 .iter()
                                 .enumerate()
@@ -399,7 +404,9 @@ pub async fn write_embed(
                                     joined_columns
                                         .first_mut()
                                         .expect("should have first column")
-                                        .content,
+                                        .content
+                                        .last_mut()
+                                        .expect("should have last row"),
                                     "{:<width$}",
                                     content_columns
                                         .get(i)
@@ -412,11 +419,6 @@ pub async fn write_embed(
                                     width = col_len
                                 )?;
                             }
-                            joined_columns
-                                .first_mut()
-                                .expect("should have first column")
-                                .content
-                                .push('\n');
                         }
                         for (i, col_len) in col_lens
                             .iter()
@@ -438,10 +440,11 @@ pub async fn write_embed(
                             joined_columns
                                 .first_mut()
                                 .expect("should have first column")
-                                .content = format!(
+                                .content = vec![format!(
                                 "```{}\n{}```",
-                                joined_columns[0].header, joined_columns[0].content
-                            );
+                                joined_columns[0].header,
+                                joined_columns[0].content.join("\n")
+                            )];
                             joined_columns
                                 .first_mut()
                                 .expect("should have first column")
@@ -453,26 +456,24 @@ pub async fn write_embed(
                             .filter(|(_, l)| l.is_none())
                             .enumerate()
                         {
+                            let content_column = content_columns
+                                .get(input_col)
+                                .expect("should have that column");
                             joined_columns
                                 .get_mut(result_col + 1)
                                 .expect("should have that column")
-                                .content = content_columns
-                                .get(input_col)
-                                .expect("should have that column")
+                                .content = vec![content_column
                                 .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
                                 .unwrap_or_else(|| {
-                                    let column = content_columns
-                                        .get(input_col)
-                                        .expect("should have that column");
-                                    if column.len() > EMBED_PAGE_LEN {
-                                        column
+                                    if content_column.len() > EMBED_PAGE_LEN {
+                                        content_column
                                             .get(EMBED_PAGE_LEN * page..)
                                             .expect("should have that many rows")
                                     } else {
-                                        column
+                                        content_column
                                     }
                                 })
-                                .concat();
+                                .join("\n")];
                             joined_columns
                                 .get_mut(result_col + 1)
                                 .expect("should have that column")
@@ -505,7 +506,9 @@ pub async fn write_embed(
                                     } else {
                                         column
                                     }
-                                    .join("\n")
+                                    .iter()
+                                    .map(std::string::ToString::to_string)
+                                    .collect()
                                 },
                                 inline: *write_embed
                                     .inlines
