@@ -1,7 +1,7 @@
 use anyhow::Result;
 use axum::{
     Json, Router,
-    extract::{ConnectInfo, State},
+    extract::State,
     response::IntoResponse,
     routing::{get, post},
 };
@@ -9,15 +9,15 @@ use reqwest::Client;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     net::SocketAddr,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio::{net::TcpListener, sync::oneshot::Sender, task, time::sleep};
 
-// current Kodub rate limit value, adapted to be safe
-const MAX_PER_MINUTE: f64 = 50.0;
+// current Kodub rate limit value, slightly adapted to be safe
+const MAX_PER_MINUTE: f64 = 55.0;
 const WINDOW_SECONDS: f64 = 300.0;
 
 #[derive(Deserialize)]
@@ -27,7 +27,6 @@ struct UrlRequest {
 
 #[derive(Debug)]
 struct QueueEntry {
-    ip: String,
     url: String,
     responder: Sender<(StatusCode, String)>,
 }
@@ -56,35 +55,25 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(addr).await?;
     println!("Listening on http://{addr}");
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    axum::serve(listener, app).await?;
     Ok(())
 }
 
 #[allow(clippy::significant_drop_tightening)]
 async fn get_queue(State(queue): State<SharedQueue>) -> impl IntoResponse {
     let queue = queue.lock().expect("other threads should not panic");
-    let queue_out: Vec<_> = queue
-        .iter()
-        .map(|entry| (entry.ip.clone(), entry.url.clone()))
-        .collect();
+    let queue_out: Vec<_> = queue.iter().map(|entry| (entry.url.clone())).collect();
     Json(queue_out)
 }
 
 async fn handle_submit(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(queue): State<SharedQueue>,
     Json(payload): Json<UrlRequest>,
 ) -> impl IntoResponse {
-    let ip = addr.ip().to_string();
     let (tx, rx) = tokio::sync::oneshot::channel();
     {
         let mut q = queue.lock().expect("other threads should not panic");
         q.push_back(QueueEntry {
-            ip,
             url: payload.url,
             responder: tx,
         });
@@ -99,11 +88,10 @@ async fn handle_submit(
 
 async fn dispatcher(queue: SharedQueue, mut limiter: RateLimiter, client: Client) {
     loop {
-        #[allow(clippy::option_if_let_else)]
         let task_opt = {
             let mut queue = queue.lock().expect("other threads should not panic");
-            if let Some(entry) = queue.front() {
-                if limiter.is_limited(&entry.ip) {
+            if queue.front().is_some() {
+                if limiter.is_limited() {
                     None
                 } else {
                     queue.pop_front()
@@ -142,8 +130,7 @@ async fn dispatcher(queue: SharedQueue, mut limiter: RateLimiter, client: Client
 struct RateLimiter {
     max_per_minute: f64,
     window_seconds: f64,
-    start_time: Instant,
-    clients: HashMap<String, ClientQuota>,
+    client: ClientQuota,
 }
 
 struct ClientQuota {
@@ -156,28 +143,25 @@ impl RateLimiter {
         Self {
             max_per_minute,
             window_seconds,
-            start_time: Instant::now(),
-            clients: HashMap::new(),
+            client: ClientQuota {
+                quota: 0.0,
+                last_update: Instant::now(),
+            },
         }
     }
 
-    fn is_limited(&mut self, ip: &str) -> bool {
+    fn is_limited(&mut self) -> bool {
         let now = Instant::now();
         let cost = 60.0 / self.max_per_minute / self.window_seconds;
 
-        let client = self.clients.entry(ip.to_string()).or_insert(ClientQuota {
-            quota: 0.0,
-            last_update: self.start_time,
-        });
+        let elapsed = now.duration_since(self.client.last_update).as_secs_f64();
+        self.client.quota = (self.client.quota + elapsed / self.window_seconds).min(1.0);
+        self.client.last_update = now;
 
-        let elapsed = now.duration_since(client.last_update).as_secs_f64();
-        client.quota = (client.quota + elapsed / self.window_seconds).min(1.0);
-        client.last_update = now;
-
-        if client.quota < cost {
+        if self.client.quota < cost {
             true
         } else {
-            client.quota -= cost;
+            self.client.quota -= cost;
             false
         }
     }

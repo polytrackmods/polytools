@@ -987,6 +987,51 @@ pub async fn roles(
         .headers(&["User"])
         .contents(vec![global_grandmaster_contents]);
     embeds.push(global_grandmaster_embed);
+    let grandmaster_contents = {
+        let mut grandmasters = Vec::new();
+        let mut main_leaderboard =
+            serde_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)?
+                .entries
+                .iter()
+                .take_while(|entry| entry.rank < 6)
+                .map(|e| e.name.clone())
+                .collect();
+        grandmasters.append(&mut main_leaderboard);
+        let mut community_leaderboard = serde_json::from_str::<PolyLeaderBoard>(
+            fs::read_to_string(COMMUNITY_RANKINGS_FILE)
+                .await?
+                .lines()
+                .next()
+                .expect("Should have first line"),
+        )?
+        .entries
+        .iter()
+        .take_while(|entry| entry.rank < 21)
+        .map(|e| e.name.clone())
+        .collect();
+        grandmasters.append(&mut community_leaderboard);
+        let mut hof_leaderboard = serde_json::from_str::<PolyLeaderBoard>(
+            fs::read_to_string(HOF_RANKINGS_FILE)
+                .await?
+                .lines()
+                .next()
+                .expect("Should have first line"),
+        )?
+        .entries
+        .iter()
+        .take_while(|entry| entry.rank < 21)
+        .map(|e| e.name.clone())
+        .collect();
+        grandmasters.append(&mut hof_leaderboard);
+        grandmasters.sort();
+        grandmasters.dedup();
+        grandmasters.join("\n")
+    };
+    let grandmaster_embed = WriteEmbed::new(1)
+        .title("Grandmaster (incomplete)")
+        .headers(&["User"])
+        .contents(vec![grandmaster_contents]);
+    embeds.push(grandmaster_embed);
     write_embed(ctx, embeds, mobile_friendly).await?;
     Ok(())
 }
