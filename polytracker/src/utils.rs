@@ -502,10 +502,10 @@ pub async fn write_embed(
                                                     .get(EMBED_PAGE_LEN * page..)
                                                     .expect("should have that many rows")
                                             })
-                                            .join("\n")
                                     } else {
-                                        (*column.first().expect("made sure earlier")).to_string()
+                                        column
                                     }
+                                    .join("\n")
                                 },
                                 inline: *write_embed
                                     .inlines
