@@ -338,7 +338,13 @@ pub async fn write_embed(
                                         .get(i)
                                         .expect("should have that column")
                                         .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
-                                        .expect("column should be that long")
+                                        .unwrap_or_else(|| {
+                                            content_columns
+                                                .get(i)
+                                                .expect("should have that column")
+                                                .get(EMBED_PAGE_LEN * page..)
+                                                .expect("should have that many rows")
+                                        })
                                         .iter()
                                         .max_by_key(|l| l.len())
                                         .expect("column shouldn't be empty")
@@ -374,7 +380,13 @@ pub async fn write_embed(
                             .first()
                             .expect("should have first column")
                             .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
-                            .expect("should have that many rows")
+                            .unwrap_or_else(|| {
+                                content_columns
+                                    .first()
+                                    .expect("should have first column")
+                                    .get(EMBED_PAGE_LEN * page..)
+                                    .expect("should have that many rows")
+                            })
                             .len()
                         {
                             for (i, col_len) in col_lens
@@ -448,7 +460,18 @@ pub async fn write_embed(
                                 .get(input_col)
                                 .expect("should have that column")
                                 .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
-                                .expect("should have that many rows")
+                                .unwrap_or_else(|| {
+                                    let column = content_columns
+                                        .get(input_col)
+                                        .expect("should have that column");
+                                    if column.len() > EMBED_PAGE_LEN {
+                                        column
+                                            .get(EMBED_PAGE_LEN * page..)
+                                            .expect("should have that many rows")
+                                    } else {
+                                        column
+                                    }
+                                })
                                 .concat();
                             joined_columns
                                 .get_mut(result_col + 1)
@@ -471,7 +494,7 @@ pub async fn write_embed(
                                     .expect("should have that embed")
                                     .clone(),
                                 content: {
-                                    if column.len() > 1 {
+                                    if column.len() > EMBED_PAGE_LEN {
                                         column
                                             .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
                                             .unwrap_or_else(|| {
