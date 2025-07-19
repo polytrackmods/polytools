@@ -308,15 +308,19 @@ pub async fn write_embed(
         let start_id = format!("{ctx_id}start");
         let mut embeds = Vec::new();
         for (i, write_embed) in write_embeds.iter().enumerate() {
+            let content_columns: Vec<Vec<&str>> = write_embed
+                .contents
+                .iter()
+                .map(|col| col.lines().collect::<Vec<_>>())
+                .collect();
             let mut paged_embed: PagedEmbed = PagedEmbed {
                 title: write_embed.title.clone(),
                 description: write_embed.description.clone(),
                 pages: Vec::new(),
             };
-            let mut max_page_amt = write_embed
-                .contents
+            let mut max_page_amt = content_columns
                 .iter()
-                .map(|content| content.lines().count())
+                .map(std::vec::Vec::len)
                 .max()
                 .expect("should have content")
                 .div_ceil(EMBED_PAGE_LEN);
@@ -330,13 +334,12 @@ pub async fn write_embed(
                             .enumerate()
                             .map(|(i, inline)| {
                                 if *inline {
-                                    let max_len = write_embed
-                                        .contents
+                                    let max_len = content_columns
                                         .get(i)
                                         .expect("should have that column")
-                                        .lines()
-                                        .skip(EMBED_PAGE_LEN * page)
-                                        .take(EMBED_PAGE_LEN)
+                                        .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
+                                        .expect("column should be that long")
+                                        .iter()
                                         .max_by_key(|l| l.len())
                                         .expect("column shouldn't be empty")
                                         .len();
@@ -367,14 +370,12 @@ pub async fn write_embed(
                                         col_lens.iter().any(std::option::Option::is_some)
                                     )
                             ];
-                        for row in 0..write_embed
-                            .contents
+                        for row in 0..content_columns
                             .first()
                             .expect("should have first column")
-                            .lines()
-                            .skip(EMBED_PAGE_LEN * page)
-                            .take(EMBED_PAGE_LEN)
-                            .count()
+                            .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
+                            .expect("should have that many rows")
+                            .len()
                         {
                             for (i, col_len) in col_lens
                                 .iter()
@@ -388,12 +389,10 @@ pub async fn write_embed(
                                         .expect("should have first column")
                                         .content,
                                     "{:<width$}",
-                                    write_embed
-                                        .contents
+                                    content_columns
                                         .get(i)
                                         .expect("should have that column")
-                                        .lines()
-                                        .nth(row + EMBED_PAGE_LEN * page)
+                                        .get(row + EMBED_PAGE_LEN * page)
                                         .expect("should have that many rows")
                                         .chars()
                                         .take(col_len)
@@ -445,14 +444,12 @@ pub async fn write_embed(
                             joined_columns
                                 .get_mut(result_col + 1)
                                 .expect("should have that column")
-                                .content = write_embed
-                                .contents
+                                .content = content_columns
                                 .get(input_col)
                                 .expect("should have that column")
-                                .lines()
-                                .skip(EMBED_PAGE_LEN * page)
-                                .take(EMBED_PAGE_LEN)
-                                .collect::<String>();
+                                .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
+                                .expect("should have that many rows")
+                                .concat();
                             joined_columns
                                 .get_mut(result_col + 1)
                                 .expect("should have that column")
@@ -464,26 +461,27 @@ pub async fn write_embed(
                         }
                         joined_columns
                     } else {
-                        write_embed
-                            .contents
+                        content_columns
                             .iter()
                             .enumerate()
-                            .map(|(c, content)| EmbedColumn {
+                            .map(|(c, column)| EmbedColumn {
                                 header: write_embed
                                     .headers
                                     .get(c)
                                     .expect("should have that embed")
                                     .clone(),
                                 content: {
-                                    if content.lines().count() > 1 {
-                                        content
-                                            .lines()
-                                            .skip(EMBED_PAGE_LEN * page)
-                                            .take(EMBED_PAGE_LEN)
-                                            .collect::<Vec<_>>()
+                                    if column.len() > 1 {
+                                        column
+                                            .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
+                                            .unwrap_or_else(|| {
+                                                column
+                                                    .get(EMBED_PAGE_LEN * page..)
+                                                    .expect("should have that many rows")
+                                            })
                                             .join("\n")
                                     } else {
-                                        content.to_string()
+                                        (*column.first().expect("made sure earlier")).to_string()
                                     }
                                 },
                                 inline: *write_embed
