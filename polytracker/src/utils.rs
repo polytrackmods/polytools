@@ -26,6 +26,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::fs;
 use tokio::time::sleep;
+use unicode_width::UnicodeWidthStr;
 
 const EMBED_PAGE_LEN: usize = 20;
 const MAX_COL_WIDTH: usize = 25;
@@ -193,6 +194,22 @@ pub async fn write(ctx: &Context<'_>, mut text: String) -> Result<()> {
         ctx.say(text).await?;
     }
     Ok(())
+}
+
+fn fix_to_width(s: &str, total_width: usize) -> String {
+    let mut out = String::new();
+    let mut width = 0;
+    for ch in s.chars() {
+        let w = UnicodeWidthStr::width(ch.to_string().as_str());
+        if width + w > total_width {
+            break;
+        }
+        width += w;
+        out.push(ch);
+    }
+    let display_width = UnicodeWidthStr::width(out.as_str());
+    let padding = total_width.saturating_sub(display_width);
+    format!("{}{}", out, " ".repeat(padding))
 }
 
 #[derive(Default, Debug)]
@@ -400,24 +417,20 @@ pub async fn write_embed(
                                 .filter(|(_, l)| l.is_some())
                                 .map(|(i, l)| (i, l.expect("filtered out earlier")))
                             {
-                                write!(
-                                    joined_columns
-                                        .first_mut()
-                                        .expect("should have first column")
-                                        .content
-                                        .last_mut()
-                                        .expect("should have last row"),
-                                    "{:<width$}",
-                                    content_columns
-                                        .get(i)
-                                        .expect("should have that column")
-                                        .get(row + EMBED_PAGE_LEN * page)
-                                        .expect("should have that many rows")
-                                        .chars()
-                                        .take(col_len)
-                                        .collect::<String>(),
-                                    width = col_len
-                                )?;
+                                joined_columns
+                                    .first_mut()
+                                    .expect("should have first column")
+                                    .content
+                                    .last_mut()
+                                    .expect("should have last row")
+                                    .push_str(&fix_to_width(
+                                        content_columns
+                                            .get(i)
+                                            .expect("should have that column")
+                                            .get(row + EMBED_PAGE_LEN * page)
+                                            .expect("should have that many rows"),
+                                        col_len,
+                                    ));
                             }
                         }
                         for (i, col_len) in col_lens
