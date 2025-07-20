@@ -1,10 +1,10 @@
-name: Rust
+name: Rust CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,59 +12,74 @@ env:
 
 jobs:
   build:
-    name: Build
+    name: Build & Test
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout source code
-      uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        profile: minimal
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
 
-    - name: Install dependencies (SQLite + pkg-config)
-      run: sudo apt install -y libsqlite3-dev pkg-config
+      - name: Install sccache
+        run: cargo install sccache
 
-    - name: Install sqlx
-      run: cargo install sqlx-cli --no-default-features --features sqlite
+      - name: Configure sccache as rustc wrapper
+        run: echo "RUSTC_WRAPPER=$(which sccache)" >> $GITHUB_ENV
 
-    - name: Set up project
-      run: |
-        ./setup.sh
+      - name: Cache sccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sccache
+          key: sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            sccache-${{ runner.os }}-
+            sccache-
 
-    - name: Cache Cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-        key: cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          cargo-registry-
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: rust-deps-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            rust-deps-${{ runner.os }}-
+            rust-deps-
 
-    - name: Cache build artifacts
-      uses: actions/cache@v4
-      with:
-        path: target/poly*
-        key: cargo-target-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          cargo-target-
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/
+          key: target-build-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            target-build-${{ runner.os }}-
+            target-build-
 
-    - name: Build the project
-      run: cargo build --release
+      - name: Install SQLX CLI
+        run: cargo install sqlx-cli --no-default-features --features sqlite
 
-    - name: Run tests
-      run: cargo test
+      - name: Run setup script
+        run: |
+          ./setup.sh
 
-    - name: Upload release binaries
-      uses: actions/upload-artifact@v4
-      with:
-        name: binaries
-        path: |
-          target/release/poly*
-          !target/release/*.d
-          !target/release/*.rlib
-        if-no-files-found: error
+      - name: Build the project
+        run: cargo build --release
+
+      - name: Run tests
+        run: cargo test --release
+
+      - name: Upload release binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: |
+            target/release/poly*
+            !target/release/*.d
+            !target/release/*.rlib
+          if-no-files-found: error
