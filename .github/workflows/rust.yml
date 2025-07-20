@@ -27,8 +27,8 @@ jobs:
     - name: Install dependencies (SQLite + pkg-config)
       run: sudo apt install -y libsqlite3-dev pkg-config
 
-    - name: Install diesel-cli
-      run: cargo install diesel_cli --no-default-features --features sqlite
+    - name: Install sqlx
+      run: cargo install sqlx-cli --no-default-features --features sqlite
 
     - name: Set up project
       run: |
