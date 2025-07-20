@@ -902,7 +902,7 @@ pub async fn roles(
         .clone();
         writeln!(champions[0], "{hof_champion}")?;
         champions[1].push_str("HOF Champion\n");
-        let wr_champion = get_records(LeaderboardChoice::Global)
+        let wr_champion = get_records(LeaderboardChoice::Global, true)
             .await?
             .wr_amounts
             .iter()
@@ -921,7 +921,7 @@ pub async fn roles(
     embeds.push(champion_embed);
     let wr_holder_contents = {
         let mut wr_holders = vec![String::new(); 2];
-        let hof_poly_records = get_records(LeaderboardChoice::Hof).await?;
+        let hof_poly_records = get_records(LeaderboardChoice::Hof, true).await?;
         let hof_records = hof_poly_records
             .wr_amounts
             .keys()
@@ -929,7 +929,7 @@ pub async fn roles(
         let hof_record_amount = hof_records.clone().count();
         wr_holders[0].push_str(&hof_records.fold(String::new(), |acc, k| acc + &format!("{k}\n")));
         wr_holders[1].push_str(&"HOF WR Holder\n".repeat(hof_record_amount));
-        let ct_poly_records = get_records(LeaderboardChoice::Community).await?;
+        let ct_poly_records = get_records(LeaderboardChoice::Community, true).await?;
         let ct_records = ct_poly_records
             .wr_amounts
             .keys()
@@ -1330,15 +1330,17 @@ pub async fn records(
     #[description = "Tracks"] tracks: Option<LeaderboardChoice>,
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
+    #[description = "Show only verified (default: true)"] verified_only: Option<bool>,
 ) -> Result<()> {
     let mobile_friendly = mobile_friendly.unwrap_or(false);
+    let verified_only = verified_only.unwrap_or(true);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
         ctx.defer().await?;
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
-    let poly_records = get_records(tracks).await?;
+    let poly_records = get_records(tracks, verified_only).await?;
     let contents = poly_records.records.iter().map(|v| v.join("\n")).collect();
     let embed1 = WriteEmbed::new(3)
         .title("World Records")
