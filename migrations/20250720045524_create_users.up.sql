@@ -1,4 +1,4 @@
-ALTER TABLE users RENAME TO beta_users;
+-- Add up migration script here
 CREATE TABLE users (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     name VARCHAR NOT NULL,

@@ -1,6 +1,3 @@
-pub mod db;
-pub mod schema;
-
 use std::{collections::HashMap, io::Read as _, time::Duration};
 
 use anyhow::{Error, Result, anyhow};

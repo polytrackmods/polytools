@@ -1,7 +1,7 @@
 mod commands;
 pub mod utils;
 
-use anyhow::Error;
+use anyhow::{Error, Result};
 use chrono::Utc;
 use commands::{admins, roles, tracks, update_admins};
 use commands::{
@@ -12,9 +12,10 @@ use dotenvy::dotenv;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::{EditTracker, Framework, FrameworkOptions, Prefix, PrefixFrameworkOptions};
-use polymanager::db::establish_connection;
 use polymanager::{get_datetime, recent_et_period};
 use serenity::{ClientBuilder, GatewayIntents};
+use sqlx::migrate;
+use sqlx::sqlite::SqlitePoolOptions;
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
@@ -29,18 +30,23 @@ pub const ET_PERIOD_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
 type Context<'a> = poise::Context<'a, BotData, Error>;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     dotenv().ok();
-    let conn = Mutex::new(establish_connection().expect("Failed to establish DB connection"));
+    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://poly.db".to_string());
+    let pool = SqlitePoolOptions::new()
+        .max_connections(10)
+        .connect(&db_url)
+        .await?;
+    migrate!("../migrations").run(&pool).await?;
     let token = env::var("DISCORD_TOKEN").expect("Token missing");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS;
 
     let bot_data = BotData {
         user_ids: Mutex::new(HashMap::new()),
         admins: Mutex::new(HashMap::new()),
-        conn,
+        pool: Arc::new(pool),
     };
-    bot_data.load();
+    bot_data.load().await?;
 
     let framework = Framework::builder()
         .options(FrameworkOptions {
@@ -125,4 +131,5 @@ async fn main() {
         _ = updater => println!("Updater task finished unexpectedly."),
         _ = client_task => println!("Client stopped."),
     }
+    Ok(())
 }

@@ -1,15 +1,14 @@
 /target
 .env
-/.cargo
+.cargo
 */Cargo.lock
 
 *.db
-**/schema.rs
+.sqlx
 
+/histories/*
 /data/*
 
 /templates/privacy_policy.html.tera
 
 !*/.keep
-
-/histories/*

@@ -15,5 +15,4 @@ test -e .env || cp .env.example .env
 touch templates/privacy_policy.html.tera
 echo "Add your Privacy Policy in templates/privacy_policy.html.tera"
 
-eval "$(cat .env)"
-diesel migration run
+sqlx database setup
