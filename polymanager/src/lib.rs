@@ -19,8 +19,6 @@ pub const TRACK_FILE: &str = "lists/official_tracks.txt";
 pub const HOF_CODE_FILE: &str = "lists/hof_codes.txt";
 pub const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
 pub const HOF_ALL_TRACK_FILE: &str = "lists/hof_tracks_all.txt";
-pub const HOF_BLACKLIST_FILE: &str = "data/hof_blacklist.txt";
-pub const HOF_ALT_ACCOUNT_FILE: &str = "data/hof_alt_accounts.txt";
 const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
 pub const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
 pub const HOF_TIME_RANKINGS_FILE: &str = "data/hof_time_rankings.txt";
@@ -102,8 +100,8 @@ struct AltListEntry {
 }
 
 #[allow(clippy::missing_errors_doc)]
-pub async fn check_blacklist(list_file: &str, name: &str) -> Result<bool> {
-    let content = fs::read_to_string(list_file).await?;
+pub async fn check_blacklist(name: &str) -> Result<bool> {
+    let content = fs::read_to_string(BLACKLIST_FILE).await?;
     let blacklist_file: BlackListFile = serde_json::from_str(&content)?;
     for regex in blacklist_file.regexes {
         if regex.is_match(name) {
@@ -113,8 +111,8 @@ pub async fn check_blacklist(list_file: &str, name: &str) -> Result<bool> {
     Ok(true)
 }
 #[allow(clippy::missing_errors_doc)]
-pub async fn get_alt(list_file: &str, name: &str) -> Result<String> {
-    let content = fs::read_to_string(list_file).await?;
+pub async fn get_alt(name: &str) -> Result<String> {
+    let content = fs::read_to_string(ALT_ACCOUNT_FILE).await?;
     let altlist_file: AltListFile = serde_json::from_str(&content)?;
     for entry in altlist_file.entries {
         if name == entry.name {
@@ -129,8 +127,8 @@ pub async fn get_alt(list_file: &str, name: &str) -> Result<String> {
     Ok(name.to_string())
 }
 #[allow(clippy::missing_errors_doc)]
-pub async fn read_blacklist(list_file: &str) -> Result<String> {
-    let content = fs::read_to_string(list_file).await?;
+pub async fn read_blacklist() -> Result<String> {
+    let content = fs::read_to_string(BLACKLIST_FILE).await?;
     let blacklist_file: BlackListFile = serde_json::from_str(&content).unwrap_or_default();
     Ok(blacklist_file
         .regexes
@@ -141,7 +139,7 @@ pub async fn read_blacklist(list_file: &str) -> Result<String> {
 }
 #[allow(clippy::missing_errors_doc)]
 #[allow(clippy::missing_panics_doc)]
-pub async fn write_blacklist(list_file: &str, regexes: String) -> Result<()> {
+pub async fn write_blacklist(regexes: String) -> Result<()> {
     let blacklist_file: BlackListFile = BlackListFile {
         regexes: regexes
             .lines()
@@ -149,20 +147,20 @@ pub async fn write_blacklist(list_file: &str, regexes: String) -> Result<()> {
             .collect(),
     };
     let content = serde_json::to_string(&blacklist_file)?;
-    fs::write(list_file, content).await?;
+    fs::write(BLACKLIST_FILE, content).await?;
     Ok(())
 }
 #[allow(clippy::missing_errors_doc)]
-pub async fn read_altlist(list_file: &str) -> Result<String> {
-    let content = fs::read_to_string(list_file).await?;
+pub async fn read_altlist() -> Result<String> {
+    let content = fs::read_to_string(ALT_ACCOUNT_FILE).await?;
     Ok(serde_json::to_string_pretty(
         &serde_json::from_str::<AltListFile>(&content).unwrap_or_default(),
     )?)
 }
 #[allow(clippy::missing_errors_doc)]
-pub async fn write_altlist(list_file: &str, content: String) -> Result<()> {
+pub async fn write_altlist(content: String) -> Result<()> {
     let content = serde_json::to_string(&serde_json::from_str::<AltListFile>(&content)?)?;
-    fs::write(list_file, content).await?;
+    fs::write(ALT_ACCOUNT_FILE, content).await?;
     Ok(())
 }
 
@@ -187,8 +185,8 @@ pub async fn global_rankings_update() -> Result<()> {
     for leaderboard in leaderboards {
         let mut has_time: Vec<String> = Vec::new();
         for entry in leaderboard {
-            let name = get_alt(ALT_ACCOUNT_FILE, &entry.name).await?;
-            if !has_time.contains(&name) && check_blacklist(BLACKLIST_FILE, &name).await? {
+            let name = get_alt(&entry.name).await?;
+            if !has_time.contains(&name) && check_blacklist(&name).await? {
                 player_times
                     .entry(name.clone())
                     .or_default()
@@ -256,8 +254,8 @@ pub async fn hof_update() -> Result<()> {
         let mut has_ranking: Vec<String> = Vec::new();
         let mut pos = 0;
         for entry in leaderboard {
-            let name = get_alt(HOF_ALT_ACCOUNT_FILE, &entry.name).await?;
-            if !has_ranking.contains(&name) && check_blacklist(HOF_BLACKLIST_FILE, &name).await? {
+            let name = get_alt(&entry.name).await?;
+            if !has_ranking.contains(&name) && check_blacklist(&name).await? {
                 has_ranking.push(name.clone());
                 time_rankings
                     .entry(name.clone())
@@ -395,8 +393,8 @@ pub async fn community_update() -> Result<()> {
             if pos + 1 > COMMUNITY_LB_SIZE as usize * 500 {
                 break;
             }
-            let name = get_alt(ALT_ACCOUNT_FILE, &entry.name).await?;
-            if !has_ranking.contains(&name) && check_blacklist(BLACKLIST_FILE, &name).await? {
+            let name = get_alt(&entry.name).await?;
+            if !has_ranking.contains(&name) && check_blacklist(&name).await? {
                 player_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings
                     .entry(name.clone())
@@ -729,8 +727,8 @@ pub async fn et_rankings_update() -> Result<()> {
             if pos + 1 > point_values.len() {
                 break;
             }
-            let name = get_alt(ALT_ACCOUNT_FILE, &entry.name).await?;
-            if !has_ranking.contains(&name) && check_blacklist(BLACKLIST_FILE, &name).await? {
+            let name = get_alt(&entry.name).await?;
+            if !has_ranking.contains(&name) && check_blacklist(&name).await? {
                 player_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings
                     .entry(name.clone())
