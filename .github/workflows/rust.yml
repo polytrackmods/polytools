@@ -25,11 +25,15 @@ jobs:
           override: true
           profile: minimal
 
-      - name: Install sccache
-        run: cargo install sccache
+      - name: Install sccache (prebuilt)
+        run: |
+          curl -L https://github.com/mozilla/sccache/releases/download/v0.10.0/sccache-dist-v0.10.0-x86_64-unknown-linux-musl.tar.gz -o sccache.tar.gz
+          tar -xzf sccache.tar.gz
+          sudo mv sccache-v0.10.0-x86_64-unknown-linux-musl/sccache /usr/local/bin/.
+          sudo chmod +x /usr/local/bin/sccache
 
       - name: Configure sccache as rustc wrapper
-        run: echo "RUSTC_WRAPPER=$(which sccache)" >> $GITHUB_ENV
+        run: echo "RUSTC_WRAPPER=/usr/local/bin/sccache" >> $GITHUB_ENV
 
       - name: Cache sccache
         uses: actions/cache@v4
