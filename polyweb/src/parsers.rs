@@ -4,8 +4,7 @@ use chrono::DateTime;
 
 use polymanager::{
     check_blacklist, get_alt, send_to_networker, PolyLeaderBoard, PolyLeaderBoardEntry,
-    ALT_ACCOUNT_FILE, BLACKLIST_FILE, CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE,
-    VERSION,
+    CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
@@ -99,11 +98,11 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, PolyLeaderBoard)
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
-        let name = get_alt(ALT_ACCOUNT_FILE, &entry.name)
+        let name = get_alt(&entry.name)
             .await
             .expect("should be able to get alt");
         if !has_time.contains(&name)
-            && check_blacklist(BLACKLIST_FILE, &name)
+            && check_blacklist(&name)
                 .await
                 .expect("should be able to get blacklist")
         {
@@ -159,11 +158,11 @@ pub async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
-        let name = get_alt(ALT_ACCOUNT_FILE, &entry.name)
+        let name = get_alt(&entry.name)
             .await
             .expect("should be able to get alt");
         if !has_time.contains(&name)
-            && check_blacklist(BLACKLIST_FILE, &name)
+            && check_blacklist(&name)
                 .await
                 .expect("should be able to get blacklist")
         {

@@ -5,9 +5,9 @@ use chrono::Utc;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polymanager::{
-    check_blacklist, export_to_id, get_alt, recent_et_period, send_to_networker, ALT_ACCOUNT_FILE,
-    BLACKLIST_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
-    HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, VERSION,
+    check_blacklist, export_to_id, get_alt, recent_et_period, send_to_networker,
+    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT,
+    TRACK_FILE, VERSION,
 };
 use regex::Regex;
 use reqwest::Client;
@@ -721,17 +721,9 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords> {
             frames: 69420.0,
             verified_state: 1,
         };
-        let blacklist_file = match tracks {
-            LeaderboardChoice::Hof => HOF_BLACKLIST_FILE,
-            _ => BLACKLIST_FILE,
-        };
-        let altlist_file = match tracks {
-            LeaderboardChoice::Hof => HOF_ALT_ACCOUNT_FILE,
-            _ => ALT_ACCOUNT_FILE,
-        };
         let mut winner = &default_winner;
         for entry in &leaderboard.entries {
-            if check_blacklist(blacklist_file, &get_alt(altlist_file, &entry.name).await?).await? {
+            if check_blacklist(&get_alt(&entry.name).await?).await? {
                 winner = entry;
                 break;
             }

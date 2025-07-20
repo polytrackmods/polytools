@@ -16,9 +16,8 @@ use poise::{
 use polymanager::{
     check_blacklist, community_update, et_rankings_update, get_alt, global_rankings_update,
     hof_update, read_altlist, read_blacklist, send_to_networker, write_altlist, write_blacklist,
-    PolyLeaderBoard, ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE,
-    COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_RANKINGS_FILE,
-    ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_ALT_ACCOUNT_FILE, HOF_BLACKLIST_FILE, HOF_CODE_FILE,
+    PolyLeaderBoard, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
+    ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE,
     HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT,
     TRACK_FILE, UPDATE_CYCLE_LEN, VERSION,
 };
@@ -85,13 +84,11 @@ impl ChoiceParameter for LeaderboardChoice {
 pub enum EditModalChoice {
     Black,
     Alt,
-    HOFBlack,
-    HOFAlt,
 }
 
 impl ChoiceParameter for EditModalChoice {
     fn list() -> Vec<CommandParameterChoice> {
-        let names = ["Black List", "Alt List", "HOF Black List", "HOF Alt List"];
+        let names = ["Black List", "Alt List"];
         names
             .iter()
             .map(|n| CommandParameterChoice {
@@ -102,30 +99,26 @@ impl ChoiceParameter for EditModalChoice {
             .collect()
     }
     fn from_index(index: usize) -> Option<Self> {
-        use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
-        let values = [Black, Alt, HOFBlack, HOFAlt];
+        use EditModalChoice::{Alt, Black};
+        let values = [Black, Alt];
         values.get(index).cloned()
     }
     fn localized_name(&self, _: &str) -> Option<&'static str> {
         Some(self.name())
     }
     fn from_name(name: &str) -> Option<Self> {
-        use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
+        use EditModalChoice::{Alt, Black};
         match name {
             "Black List" => Some(Black),
             "Alt List" => Some(Alt),
-            "HOF Black List" => Some(HOFBlack),
-            "HOF Alt List" => Some(HOFAlt),
             _ => None,
         }
     }
     fn name(&self) -> &'static str {
-        use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
+        use EditModalChoice::{Alt, Black};
         match self {
             Black => "Blacklist",
             Alt => "Alt-List",
-            HOFBlack => "HOF Blacklist",
-            HOFAlt => "HOF Alt-List",
         }
     }
 }
@@ -545,14 +538,6 @@ pub async fn list(
             .collect();
         results.sort_by_key(|(i, _)| *i);
         let responses: Vec<String> = results.into_iter().map(|(_, res)| res).collect();
-        let blacklist_file = match tracks {
-            LeaderboardChoice::Hof => HOF_BLACKLIST_FILE,
-            _ => BLACKLIST_FILE,
-        };
-        let altlist_file = match tracks {
-            LeaderboardChoice::Hof => HOF_ALT_ACCOUNT_FILE,
-            _ => ALT_ACCOUNT_FILE,
-        };
         let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
         let mut headers = vec!["Track", "Rank", "Time"];
         let mut inlines = vec![true, true, true];
@@ -576,10 +561,10 @@ pub async fn list(
                             if i == position {
                                 break;
                             }
-                            let name = get_alt(altlist_file, &entry.name).await?;
+                            let name = get_alt(&entry.name).await?;
                             if entry.verified_state == 1
                                 && !found.contains(&name)
-                                && check_blacklist(blacklist_file, &name).await?
+                                && check_blacklist(&name).await?
                             {
                                 found.push(name);
                             }
@@ -1220,31 +1205,23 @@ pub async fn edit_lists(
     ctx: ApplicationContext<'_, BotData, Error>,
     #[description = "List to edit"] list: EditModalChoice,
 ) -> Result<()> {
-    use EditModalChoice::{Alt, Black, HOFAlt, HOFBlack};
+    use EditModalChoice::{Alt, Black};
     let (is_admin, is_admin_msg) = is_admin(&ctx.into(), 2).await;
     if !is_admin {
         write(&ctx.into(), is_admin_msg).await?;
         return Ok(());
     }
-    let list_file = {
-        match list {
-            Black => BLACKLIST_FILE,
-            Alt => ALT_ACCOUNT_FILE,
-            HOFBlack => HOF_BLACKLIST_FILE,
-            HOFAlt => HOF_ALT_ACCOUNT_FILE,
-        }
-    };
     let list_content = match list {
-        Black | HOFBlack => read_blacklist(list_file).await?,
-        Alt | HOFAlt => read_altlist(list_file).await?,
+        Black => read_blacklist().await?,
+        Alt => read_altlist().await?,
     };
     let modal_defaults = EditModal { list: list_content };
     let modal_returned = EditModal::execute_with_defaults(ctx, modal_defaults.clone())
         .await?
         .unwrap_or(modal_defaults);
     match list {
-        Black | HOFBlack => write_blacklist(list_file, modal_returned.list).await?,
-        Alt | HOFAlt => write_altlist(list_file, modal_returned.list).await?,
+        Black => write_blacklist(modal_returned.list).await?,
+        Alt => write_altlist(modal_returned.list).await?,
     }
     Ok(())
 }
