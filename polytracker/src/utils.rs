@@ -685,7 +685,7 @@ pub struct PolyRecords {
 
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
-pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords> {
+pub async fn get_records(tracks: LeaderboardChoice, only_verified: bool) -> Result<PolyRecords> {
     use LeaderboardChoice::{Community, Et, Global, Hof};
     let track_ids: Vec<(String, String)> = fs::read_to_string({
         match tracks {
@@ -707,7 +707,7 @@ pub async fn get_records(tracks: LeaderboardChoice) -> Result<PolyRecords> {
     let client = Client::new();
     let mut wr_amounts: HashMap<String, u32> = HashMap::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified=true");
+        let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified={only_verified}");
         let mut att = 0;
         let mut res = String::new();
         while res.is_empty() && att <= REQUEST_RETRY_COUNT {
