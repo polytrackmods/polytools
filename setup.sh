@@ -15,5 +15,5 @@ test -e .env || cp .env.example .env
 touch templates/privacy_policy.html.tera
 echo "Add your Privacy Policy in templates/privacy_policy.html.tera"
 
-DATABASE_URL="${DATABASE_URL:-sqlite://poly.db}"
-sqlx database setup
+export DATABASE_URL="${DATABASE_URL:-sqlite://poly.db}"
+sqlx database setup --no-dotenv
