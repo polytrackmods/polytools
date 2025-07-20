@@ -222,7 +222,7 @@ pub async fn assign(
         .lock()
         .expect("Failed to acquire Mutex")
         .insert(user.clone(), user_id.clone());
-    ctx.data().add(user.as_str(), user_id.as_str());
+    ctx.data().add(user, user_id).await?;
     write(&ctx, response).await?;
     Ok(())
 }
@@ -256,7 +256,7 @@ pub async fn delete(
             .expect("Failed to acquire Mutex")
             .remove(&user)
             .expect("Checked for user earlier");
-        ctx.data().delete(user.as_str());
+        ctx.data().delete(user.clone()).await?;
         format!("`Removed user '{user}' with ID '{id}'`")
     } else {
         "`User not found!`".to_string()
@@ -288,7 +288,9 @@ pub async fn update_admins(
                 .lock()
                 .expect("Failed to acquire Mutex")
                 .insert(discord.clone(), privilege);
-            ctx.data().add_admin(&discord, i32::try_from(privilege)?);
+            ctx.data()
+                .add_admin(discord.clone(), i64::from(privilege))
+                .await?;
             format!("Added admin {discord} with privilege level {privilege}")
         }
         Remove => {
@@ -310,7 +312,7 @@ pub async fn update_admins(
                     .expect("Failed to acquire Mutex")
                     .remove(&discord)
                     .expect("Failed to remove entry");
-                ctx.data().remove_admin(&discord);
+                ctx.data().remove_admin(discord.clone()).await?;
                 format!("Removed admin {discord} with former privilege level {privilege}")
             } else {
                 format!("Admin {discord} does not exist")
@@ -334,7 +336,9 @@ pub async fn update_admins(
                     .lock()
                     .expect("Failed to acquire Mutex")
                     .insert(discord.clone(), privilege);
-                ctx.data().edit_admin(&discord, i32::try_from(privilege)?);
+                ctx.data()
+                    .edit_admin(discord.clone(), i64::from(privilege))
+                    .await?;
                 format!("Updated admin {discord} to privilege level {privilege}")
             } else {
                 format!("Admin {discord} does not exist")

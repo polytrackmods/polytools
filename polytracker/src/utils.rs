@@ -2,10 +2,8 @@ use crate::commands::LeaderboardChoice;
 use crate::{Context, ET_PERIOD_DURATION, MAX_MSG_AGE};
 use anyhow::Result;
 use chrono::Utc;
-use diesel::prelude::*;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
-use polymanager::db::{Admin, NewAdmin, NewUser, User};
 use polymanager::{
     check_blacklist, export_to_id, get_alt, recent_et_period, send_to_networker, ALT_ACCOUNT_FILE,
     BLACKLIST_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
@@ -19,6 +17,7 @@ use serenity::{
     CreateButton, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
     GuildId,
 };
+use sqlx::{query, query_as, Pool, Sqlite};
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::Path;
@@ -92,85 +91,82 @@ pub struct EditAdminModal {
 pub struct BotData {
     pub user_ids: Mutex<HashMap<String, String>>,
     pub admins: Mutex<HashMap<String, u32>>,
-    pub conn: Mutex<SqliteConnection>,
+    pub pool: Arc<Pool<Sqlite>>,
+}
+
+#[derive(sqlx::FromRow)]
+#[allow(dead_code)]
+struct DbUser {
+    id: i64,
+    name: String,
+    game_id: String,
+    discord: Option<String>,
 }
 
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::cast_sign_loss)]
+#[allow(clippy::missing_errors_doc)]
 impl BotData {
-    pub fn load(&self) {
-        use polymanager::schema::admins::dsl::admins;
-        use polymanager::schema::users::dsl::users;
-        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
-        let results = users
-            .select(User::as_select())
-            .load(connection)
-            .expect("Error loading users");
-        let mut user_ids = self.user_ids.lock().expect("Failed to acquire Mutex");
+    #[allow(clippy::significant_drop_tightening)]
+    pub async fn load(&self) -> Result<()> {
+        let pool = self.pool.as_ref();
+        let results: Vec<DbUser> = query_as!(DbUser, "SELECT * FROM users")
+            .fetch_all(pool)
+            .await?;
+        let mut user_ids = self.user_ids.lock().expect("failed to acquite Mutex");
         user_ids.clear();
         for user in results {
             user_ids.insert(user.name, user.game_id);
         }
-        drop(user_ids);
-        let results = admins
-            .select(Admin::as_select())
-            .load(connection)
-            .expect("Error loading users");
-        let mut admin_ids = self.admins.lock().expect("Failed to acquire Mutex");
-        admin_ids.clear();
-        for admin in results {
-            admin_ids.insert(admin.discord, admin.privilege as u32);
-        }
+        Ok(())
     }
-    pub fn add(&self, name: &str, game_id: &str) {
-        use polymanager::schema::users;
-        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
-        let new_user = NewUser {
+    pub async fn add(&self, name: String, game_id: String) -> Result<()> {
+        let pool = self.pool.as_ref();
+        query!(
+            "INSERT INTO users (name, game_id, discord) VALUES ($1, $2, $3)",
             name,
             game_id,
-            discord: None,
-        };
-        diesel::insert_into(users::table)
-            .values(&new_user)
-            .returning(User::as_returning())
-            .get_result(connection)
-            .expect("Error saving new user");
+            None::<String>
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
     }
-    pub fn delete(&self, delete_name: &str) {
-        use polymanager::schema::users::dsl::{name, users};
-        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
-        diesel::delete(users.filter(name.eq(delete_name)))
-            .execute(connection)
-            .expect("Error deleting user");
+    pub async fn delete(&self, delete_name: String) -> Result<()> {
+        let pool = self.pool.as_ref();
+        query!("DELETE FROM users WHERE name = $1", delete_name)
+            .execute(pool)
+            .await?;
+        Ok(())
     }
-    pub fn add_admin(&self, discord: &str, privilege: i32) {
-        use polymanager::schema::admins;
-        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
-        let new_admin = NewAdmin {
+    pub async fn add_admin(&self, discord: String, privilege: i64) -> Result<()> {
+        let pool = self.pool.as_ref();
+        query!(
+            "INSERT INTO admins (discord, privilege) VALUES ($1, $2)",
             discord,
-            privilege: &privilege,
-        };
-        diesel::insert_into(admins::table)
-            .values(new_admin)
-            .returning(Admin::as_returning())
-            .get_result(connection)
-            .expect("Error adding new admin");
+            privilege
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
     }
-    pub fn remove_admin(&self, admin_discord: &str) {
-        use polymanager::schema::admins::dsl::{admins, discord};
-        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
-        diesel::delete(admins.filter(discord.eq(admin_discord)))
-            .execute(connection)
-            .expect("Error deleting admin");
+    pub async fn remove_admin(&self, discord: String) -> Result<()> {
+        let pool = self.pool.as_ref();
+        query!("DELETE FROM admins WHERE discord = $1", discord)
+            .execute(pool)
+            .await?;
+        Ok(())
     }
-    pub fn edit_admin(&self, admin_discord: &str, new_privilege: i32) {
-        use polymanager::schema::admins::dsl::{admins, discord, privilege};
-        let connection = &mut *self.conn.lock().expect("Failed to acquire Mutex");
-        diesel::update(admins.filter(discord.eq(admin_discord)))
-            .set(privilege.eq(new_privilege))
-            .returning(Admin::as_returning())
-            .get_result(connection)
-            .expect("Error editing admin");
+    pub async fn edit_admin(&self, discord: String, privilege: i64) -> Result<()> {
+        let pool = self.pool.as_ref();
+        query!(
+            "UPDATE admins SET privilege = $1 WHERE discord = $2",
+            privilege,
+            discord
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
     }
 }
 
