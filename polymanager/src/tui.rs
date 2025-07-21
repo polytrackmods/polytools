@@ -185,7 +185,13 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                             if preset_index > 0 {
                                 preset_index -= 1;
                             } else {
-                                preset_index = manager.config.services.len().saturating_sub(1);
+                                preset_index = manager
+                                    .config
+                                    .presets
+                                    .clone()
+                                    .unwrap_or_default()
+                                    .len()
+                                    .saturating_sub(1);
                             }
                         }
                     },
@@ -198,7 +204,15 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                             }
                         }
                         ViewMode::Presets => {
-                            if preset_index < manager.config.services.len().saturating_sub(1) {
+                            if preset_index
+                                < manager
+                                    .config
+                                    .presets
+                                    .clone()
+                                    .unwrap_or_default()
+                                    .len()
+                                    .saturating_sub(1)
+                            {
                                 preset_index += 1;
                             } else {
                                 preset_index = 0;
