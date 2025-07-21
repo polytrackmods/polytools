@@ -10,6 +10,7 @@
 
 /histories/*
 /data/*
+/logs/*
 
 /templates/privacy_policy.html.tera
 

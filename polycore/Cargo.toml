@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.98"
 chrono = "0.4.41"
-diesel = { version = "2.2.11", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
 dotenvy = "0.15.7"
 flate2 = "1.1.2"
 futures = "0.3.31"

@@ -16,4 +16,4 @@ serde_json = "1.0.140"
 sha256 = "1.6.0"
 sqlx = { version = "0.8.6", features = ["macros", "runtime-tokio", "sqlite"] }
 tokio = { version = "1.46.1", features = ["rt-multi-thread", "macros"] }
-unicode-width = "0.2.1"
+unicode-width = "0.2.0"

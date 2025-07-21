@@ -1,0 +1,33 @@
+default_preset = "Full"
+
+[logging]
+log_dir = "logs"
+level = "Info"
+
+[[services]]
+name = "polytracker"
+binary = "target/release/polytracker"
+
+[[services]]
+name = "polyweb"
+binary = "target/release/polyweb"
+
+[[services]]
+name = "polynetworker"
+binary = "target/release/polynetworker"
+
+[[services]]
+name = "polyhistorian"
+binary = "target/release/polyhistorian"
+
+[[presets]]
+name = "Full"
+services = ["polytracker", "polyweb", "polynetworker", "polyhistorian"]
+
+[[presets]]
+name = "Discord"
+services = ["polytracker", "polynetworker"]
+
+[[presets]]
+name = "Web"
+services = ["polyweb", "polynetworker"]
