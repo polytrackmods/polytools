@@ -4,7 +4,7 @@ use anyhow::Result;
 use chrono::Utc;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
-use polymanager::{
+use polycore::{
     check_blacklist, export_to_id, get_alt, recent_et_period, send_to_networker,
     COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT,
     TRACK_FILE, VERSION,
