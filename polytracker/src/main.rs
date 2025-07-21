@@ -12,7 +12,7 @@ use dotenvy::dotenv;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::{EditTracker, Framework, FrameworkOptions, Prefix, PrefixFrameworkOptions};
-use polymanager::{get_datetime, recent_et_period};
+use polycore::{get_datetime, recent_et_period};
 use serenity::{ClientBuilder, GatewayIntents};
 use sqlx::migrate;
 use sqlx::sqlite::SqlitePoolOptions;

@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "polymanager",
+    "polycore",
     "polytracker",
     "polyweb",
     "polyhistorian",

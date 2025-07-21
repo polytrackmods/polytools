@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::DateTime;
 
-use polymanager::{
+use polycore::{
     check_blacklist, get_alt, send_to_networker, PolyLeaderBoard, PolyLeaderBoardEntry,
     CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
 };

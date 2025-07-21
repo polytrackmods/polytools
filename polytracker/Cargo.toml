@@ -8,7 +8,7 @@ anyhow = "1.0.98"
 chrono = "0.4.41"
 dotenvy = "0.15.7"
 poise = "0.6.1"
-polymanager = { version = "0.1.0", path = "../polymanager" }
+polycore = { version = "0.1.0", path = "../polycore" }
 regex = "1.11.1"
 reqwest = { version = "0.12.22", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }

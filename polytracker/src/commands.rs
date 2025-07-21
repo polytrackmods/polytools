@@ -13,7 +13,7 @@ use poise::serenity_prelude::{
 use poise::{
     builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, Modal,
 };
-use polymanager::{
+use polycore::{
     check_blacklist, community_update, et_rankings_update, get_alt, global_rankings_update,
     hof_update, read_altlist, read_blacklist, send_to_networker, write_altlist, write_blacklist,
     PolyLeaderBoard, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
