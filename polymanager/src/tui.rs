@@ -145,6 +145,9 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
             let service_log_text = service_log_lines
                 .iter()
                 .cloned()
+                .rev()
+                .take(log_layout[0].height as usize - 2)
+                .rev()
                 .collect::<Vec<_>>()
                 .join("\n");
             let service_log_widget = Paragraph::new(service_log_text)
@@ -155,6 +158,9 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
             let manager_log_text = manager_log_lines
                 .iter()
                 .cloned()
+                .rev()
+                .take(log_layout[0].height as usize - 2)
+                .rev()
                 .collect::<Vec<_>>()
                 .join("\n");
             let manager_log_widget = Paragraph::new(manager_log_text)
