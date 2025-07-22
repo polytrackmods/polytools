@@ -3,7 +3,9 @@ use crossterm::event::{self, Event, KeyCode};
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::widgets::{
+    Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+};
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -23,6 +25,9 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
     let mut view_mode = ViewMode::Services;
     let mut service_log_lines: VecDeque<String> = VecDeque::with_capacity(100);
     let mut manager_log_lines: VecDeque<String> = VecDeque::with_capacity(100);
+
+    let mut max_log_scroll = 0;
+    let mut scroll_pos = 0;
 
     loop {
         if view_mode == ViewMode::Services {
@@ -141,11 +146,26 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(layout[4]);
+            max_log_scroll = service_log_lines
+                .len()
+                .max(manager_log_lines.len())
+                .saturating_sub(log_layout[0].height as usize - 2);
+            let service_skip = scroll_pos.min(
+                service_log_lines
+                    .len()
+                    .saturating_sub(log_layout[0].height as usize - 2),
+            );
+            let manager_skip = scroll_pos.min(
+                manager_log_lines
+                    .len()
+                    .saturating_sub(log_layout[1].height as usize - 2),
+            );
             // Service logs
             let service_log_text = service_log_lines
                 .iter()
                 .cloned()
                 .rev()
+                .skip(service_skip)
                 .take(log_layout[0].height as usize - 2)
                 .rev()
                 .collect::<Vec<_>>()
@@ -159,7 +179,8 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                 .iter()
                 .cloned()
                 .rev()
-                .take(log_layout[0].height as usize - 2)
+                .skip(manager_skip)
+                .take(log_layout[1].height as usize - 2)
                 .rev()
                 .collect::<Vec<_>>()
                 .join("\n");
@@ -167,6 +188,10 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                 .block(Block::default().borders(Borders::ALL).title("Manager logs"))
                 .style(Style::default().fg(Color::Gray));
             f.render_widget(manager_log_widget, log_layout[1]);
+            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
+            let mut scrollbar_state = ScrollbarState::new(max_log_scroll)
+                .position(max_log_scroll.saturating_sub(scroll_pos));
+            f.render_stateful_widget(scrollbar, layout[4], &mut scrollbar_state);
         })?;
 
         if event::poll(Duration::from_millis(250))? {
@@ -225,6 +250,14 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                             }
                         }
                     },
+                    KeyCode::Char('K') => {
+                        scroll_pos = scroll_pos.saturating_add(1).min(max_log_scroll)
+                    }
+                    KeyCode::Char('J') => {
+                        scroll_pos = scroll_pos.saturating_sub(1).min(max_log_scroll)
+                    }
+                    KeyCode::Char('g') => scroll_pos = 0,
+                    KeyCode::Char('G') => scroll_pos = max_log_scroll,
                     KeyCode::Char('r') => match view_mode {
                         ViewMode::Services => {
                             let service_name = &manager.config.services[service_index].name.clone();
