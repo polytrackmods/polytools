@@ -201,7 +201,7 @@ pub async fn parse_history(track_id: &str) -> Vec<(String, String, String, Strin
                 record.name,
                 if record.frames > 60000 {
                     format!(
-                        "{}:{}.{:0>3}",
+                        "{}:{:0>2}.{:0>3}",
                         record.frames / 60000,
                         record.frames % 60000 / 1000,
                         record.frames % 1000
