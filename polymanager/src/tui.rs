@@ -57,7 +57,7 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                 Constraint::Length(10),
                 Constraint::Min(3),
             ])
-            .margin(1)
+            .margin(0)
             .split(f.area());
 
             // Title
@@ -144,7 +144,7 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
             // Logs
             let log_layout = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
                 .split(layout[4]);
             max_log_scroll = service_log_lines
                 .len()
