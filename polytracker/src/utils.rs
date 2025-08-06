@@ -21,9 +21,10 @@ use sqlx::{query, query_as, Pool, Sqlite};
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::fs;
+use tokio::sync::Mutex;
 use tokio::time::sleep;
 use unicode_width::UnicodeWidthStr;
 
@@ -103,20 +104,39 @@ struct DbUser {
     discord: Option<String>,
 }
 
+#[derive(sqlx::FromRow)]
+#[allow(dead_code)]
+struct DbAdmin {
+    id: i64,
+    discord: String,
+    privilege: i64,
+}
+
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::cast_sign_loss)]
 #[allow(clippy::missing_errors_doc)]
 impl BotData {
-    #[allow(clippy::significant_drop_tightening)]
     pub async fn load(&self) -> Result<()> {
         let pool = self.pool.as_ref();
-        let results: Vec<DbUser> = query_as!(DbUser, "SELECT * FROM users")
+        let user_results: Vec<DbUser> = query_as!(DbUser, "SELECT * FROM users")
             .fetch_all(pool)
             .await?;
-        let mut user_ids = self.user_ids.lock().expect("failed to acquite Mutex");
-        user_ids.clear();
-        for user in results {
-            user_ids.insert(user.name, user.game_id);
+        {
+            let mut user_ids = self.user_ids.lock().await;
+            user_ids.clear();
+            for user in user_results {
+                user_ids.insert(user.name, user.game_id);
+            }
+        }
+        let admin_results: Vec<DbAdmin> = query_as!(DbAdmin, "SELECT * FROM admins")
+            .fetch_all(pool)
+            .await?;
+        {
+            let mut admins = self.admins.lock().await;
+            admins.clear();
+            for user in admin_results {
+                admins.insert(user.discord, u32::try_from(user.privilege)?);
+            }
         }
         Ok(())
     }
@@ -609,12 +629,7 @@ pub async fn write_embed(
 // checks whether invoking user is an admin with the required privilege level
 #[allow(clippy::missing_panics_doc)]
 pub async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
-    let admin_list = ctx
-        .data()
-        .admins
-        .lock()
-        .expect("Failed to acquire Mutex")
-        .clone();
+    let admin_list = ctx.data().admins.lock().await.clone();
     if let Ok(application_info) = ctx.http().get_current_application_info().await {
         if let Some(owner) = application_info.owner {
             if ctx.author().id == owner.id {
@@ -640,14 +655,7 @@ pub async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
 // autocompletion function for registered users
 #[allow(clippy::missing_panics_doc)]
 pub async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
-    let user_ids: Vec<String> = ctx
-        .data()
-        .user_ids
-        .lock()
-        .expect("Failed to acquire Mutex")
-        .keys()
-        .cloned()
-        .collect();
+    let user_ids: Vec<String> = ctx.data().user_ids.lock().await.keys().cloned().collect();
     let user_ids = user_ids.into_iter();
     if user_ids.clone().filter(|k| k.starts_with(partial)).count() > 0 {
         user_ids.filter(|k| k.starts_with(partial)).collect()

@@ -9,4 +9,4 @@ crossterm = "0.29.0"
 facet = "0.27.16"
 facet-toml = "0.25.18"
 ratatui = "0.29.0"
-tokio = { version = "1.46.1", features = ["rt-multi-thread", "macros", "fs", "signal", "time", "process", "full"] }
+tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "fs", "signal", "time", "process", "full"] }

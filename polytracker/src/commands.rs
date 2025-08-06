@@ -200,7 +200,7 @@ pub async fn assign(
         .data()
         .user_ids
         .lock()
-        .expect("Failed to acquire Mutex")
+        .await
         .contains_key(&user)
     {
         let response = format!(
@@ -213,7 +213,7 @@ pub async fn assign(
     ctx.data()
         .user_ids
         .lock()
-        .expect("Failed to acquire Mutex")
+        .await
         .insert(user.clone(), user_id.clone());
     ctx.data().add(user, user_id).await?;
     write(&ctx, response).await?;
@@ -240,13 +240,13 @@ pub async fn delete(
     let response = if bot_data
         .user_ids
         .lock()
-        .expect("Failed to acquire Mutex")
+        .await
         .contains_key(&user)
     {
         let id = bot_data
             .user_ids
             .lock()
-            .expect("Failed to acquire Mutex")
+            .await
             .remove(&user)
             .expect("Checked for user earlier");
         ctx.data().delete(user.clone()).await?;
@@ -279,7 +279,7 @@ pub async fn update_admins(
             ctx.data()
                 .admins
                 .lock()
-                .expect("Failed to acquire Mutex")
+                .await
                 .insert(discord.clone(), privilege);
             ctx.data()
                 .add_admin(discord.clone(), i64::from(privilege))
@@ -295,14 +295,14 @@ pub async fn update_admins(
                 .data()
                 .admins
                 .lock()
-                .expect("Failed to acquire Mutex")
+                .await
                 .contains_key(&discord)
             {
                 let privilege = ctx
                     .data()
                     .admins
                     .lock()
-                    .expect("Failed to acquire Mutex")
+                    .await
                     .remove(&discord)
                     .expect("Failed to remove entry");
                 ctx.data().remove_admin(discord.clone()).await?;
@@ -321,13 +321,13 @@ pub async fn update_admins(
                 .data()
                 .admins
                 .lock()
-                .expect("Failed to acquire Mutex")
+                .await
                 .contains_key(&discord)
             {
                 ctx.data()
                     .admins
                     .lock()
-                    .expect("Failed to acquire Mutex")
+                    .await
                     .insert(discord.clone(), privilege);
                 ctx.data()
                     .edit_admin(discord.clone(), i64::from(privilege))
@@ -370,7 +370,7 @@ pub async fn request(
         .data()
         .user_ids
         .lock()
-        .expect("Failed to acquire Mutex")
+        .await
         .get(&user)
     {
         id.clone_from(id_test);
@@ -494,7 +494,7 @@ pub async fn list(
         .data()
         .user_ids
         .lock()
-        .expect("Failed to acquire Mutex")
+        .await
         .get(&user)
     {
         id.clone_from(id_test);
@@ -656,7 +656,7 @@ pub async fn compare(
             .data()
             .user_ids
             .lock()
-            .expect("Failed to acquire Mutex")
+            .await
             .get(&user)
         {
             id.clone_from(id_test);
@@ -1234,7 +1234,7 @@ pub async fn users(ctx: Context<'_>) -> Result<()> {
     for (user, id) in bot_data
         .user_ids
         .lock()
-        .expect("Failed to acquire Mutex")
+        .await
         .iter()
     {
         writeln!(users, "{user}: {id}")?;
@@ -1250,7 +1250,7 @@ pub async fn admins(ctx: Context<'_>) -> Result<()> {
     for (admin, privilege) in bot_data
         .admins
         .lock()
-        .expect("Failed to acquire Mutex")
+        .await
         .iter()
     {
         writeln!(admins, "{admin}: {privilege}")?;
