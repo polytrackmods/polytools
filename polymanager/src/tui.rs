@@ -251,10 +251,10 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                         }
                     },
                     KeyCode::Char('K') => {
-                        scroll_pos = scroll_pos.saturating_add(1).min(max_log_scroll)
+                        scroll_pos = scroll_pos.saturating_add(1).min(max_log_scroll);
                     }
                     KeyCode::Char('J') => {
-                        scroll_pos = scroll_pos.saturating_sub(1).min(max_log_scroll)
+                        scroll_pos = scroll_pos.saturating_sub(1).min(max_log_scroll);
                     }
                     KeyCode::Char('g') => scroll_pos = 0,
                     KeyCode::Char('G') => scroll_pos = max_log_scroll,
