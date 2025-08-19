@@ -2,31 +2,27 @@ use std::collections::HashMap;
 
 use chrono::DateTime;
 
+use facet::Facet;
 use polycore::{
     check_blacklist, get_alt, send_to_networker, PolyLeaderBoard, PolyLeaderBoardEntry,
     CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
-use rocket::serde::{Deserialize, Serialize};
 use rocket::tokio::fs;
 
-#[derive(Deserialize, Serialize)]
-#[serde(crate = "rocket::serde")]
+#[derive(Facet)]
 struct LeaderBoardEntry {
     name: String,
     frames: u32,
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(crate = "rocket::serde")]
+#[derive(Facet)]
 struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
 
-#[derive(Deserialize, Clone)]
-#[serde(crate = "rocket::serde")]
-#[serde(rename_all = "camelCase")]
+#[derive(Facet, Clone)]
 struct FileRecord {
     name: String,
     frames: u32,
@@ -39,7 +35,7 @@ pub async fn parse_leaderboard(file_path: &str) -> PolyLeaderBoard {
     let contents = fs::read_to_string(file_path)
         .await
         .expect("Failed to read file");
-    serde_json::from_str(&contents).expect("Invalid leaderboard file")
+    facet_json::from_str(&contents).expect("Invalid leaderboard file")
 }
 
 #[allow(clippy::missing_panics_doc)]
@@ -49,10 +45,10 @@ pub async fn parse_leaderboard_with_records(file_path: &str) -> (PolyLeaderBoard
         .expect("Failed to read file");
     let mut lines = contents.lines();
     let leaderboard: PolyLeaderBoard =
-        serde_json::from_str(lines.next().expect("Couldn't find leaderboard"))
+        facet_json::from_str(lines.next().expect("Couldn't find leaderboard"))
             .expect("Invalid leaderboard");
     let record_leaderboard: PolyLeaderBoard =
-        serde_json::from_str(lines.next().expect("Couldn't find leaderboard"))
+        facet_json::from_str(lines.next().expect("Couldn't find leaderboard"))
             .expect("Invalid leaderboard");
     (leaderboard, record_leaderboard)
 }
@@ -93,7 +89,7 @@ pub async fn get_custom_leaderboard(track_id: &str) -> (String, PolyLeaderBoard)
     let result = send_to_networker(&client, &url)
         .await
         .expect("Failed to complete request");
-    let response: LeaderBoard = serde_json::from_str(&result).expect("Invalid leaderboard");
+    let response: LeaderBoard = facet_json::from_str(&result).expect("Invalid leaderboard");
     let mut leaderboard = PolyLeaderBoard::default();
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
@@ -153,7 +149,7 @@ pub async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
     let result = send_to_networker(&client, &url)
         .await
         .expect("Failed to complete request");
-    let response: LeaderBoard = serde_json::from_str(&result).expect("Invalid leaderboard");
+    let response: LeaderBoard = facet_json::from_str(&result).expect("Invalid leaderboard");
     let mut leaderboard = PolyLeaderBoard::default();
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
@@ -194,7 +190,7 @@ pub async fn parse_history(track_id: &str) -> Vec<(String, String, String, Strin
         .expect("Couldn't read from record file");
     let history = records
         .lines()
-        .map(|s| serde_json::from_str(s).expect("Failed to deserialize history"));
+        .map(|s| facet_json::from_str(s).expect("Failed to deserialize history"));
     history
         .map(|record: FileRecord| {
             (

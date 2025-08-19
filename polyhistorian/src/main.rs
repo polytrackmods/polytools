@@ -1,8 +1,8 @@
 use std::{cmp::Ordering, collections::HashMap, time::Duration};
 
 use chrono::{DateTime, Utc};
+use facet::Facet;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use tokio::{
     fs::{self, OpenOptions},
     io::AsyncWriteExt,
@@ -18,14 +18,14 @@ use polycore::{
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Facet)]
 struct LeaderBoard {
     total: u32,
     entries: Vec<Record>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Facet, Clone)]
+#[facet(rename_all = "camelCase")]
 struct FileRecord {
     id: u64,
     user_id: String,
@@ -74,8 +74,8 @@ impl FileRecord {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Facet, Clone)]
+#[facet(rename_all = "camelCase")]
 struct Record {
     id: u64,
     user_id: String,
@@ -132,7 +132,7 @@ impl Record {
         )
         .await
         .map_or(String::new(), |response| {
-            serde_json::from_str::<Vec<Recording>>(&response).map_or(String::new(), |recordings| {
+            facet_json::from_str::<Vec<Recording>>(&response).map_or(String::new(), |recordings| {
                 recordings.first().map_or(String::new(), |recording| {
                     recording.recording.trim_matches('"').to_string()
                 })
@@ -141,7 +141,7 @@ impl Record {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Facet)]
 struct Recording {
     recording: String,
 }
@@ -176,7 +176,7 @@ async fn main() -> Result<(), Error> {
         if fs::try_exists(path.clone()).await.unwrap_or(false) {
             let text = fs::read_to_string(path).await.expect("Couldn't read file");
             let record: FileRecord = text.lines().last().map_or(FileRecord::new(), |line_last| {
-                serde_json::from_str(line_last).expect("Error deserializing line")
+                facet_json::from_str(line_last).expect("Error deserializing line")
             });
             prior_records.insert(name, record);
         } else {
@@ -199,7 +199,7 @@ async fn main() -> Result<(), Error> {
                     continue;
                 }
             }
-            if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response_text)
+            if let Ok(new_lb) = facet_json::from_str::<LeaderBoard>(&response_text)
                 && let Some(new_record) = new_lb.entries.first()
                 && *new_record
                     < prior_records
@@ -216,15 +216,9 @@ async fn main() -> Result<(), Error> {
                     .await
                     .expect("Failed to open file");
                 let new_record = new_record.clone().to_file().await;
-                file.write_all(
-                    format!(
-                        "{}\n",
-                        serde_json::to_string(&new_record).expect("Failed serializing")
-                    )
-                    .as_bytes(),
-                )
-                .await
-                .expect("Failed writing to file");
+                file.write_all(format!("{}\n", facet_json::to_string(&new_record)).as_bytes())
+                    .await
+                    .expect("Failed writing to file");
                 new_record.print(
                     name,
                     prior_records.get(name).expect("Inserted earlier").frames,

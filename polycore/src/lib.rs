@@ -3,6 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use anyhow::{Error, Result, anyhow};
 use chrono::{DateTime, Datelike as _, Utc};
 use dotenvy::dotenv;
+use facet::Facet;
 use futures::future::join_all;
 use regex::Regex;
 use reqwest::Client;
@@ -44,24 +45,24 @@ enum PolyError {
     BusyUpdating,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Facet)]
 struct LeaderBoardEntry {
     name: String,
     frames: u32,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Facet)]
 struct LeaderBoard {
     entries: Vec<LeaderBoardEntry>,
 }
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Default, Facet)]
 pub struct PolyLeaderBoard {
     pub total: usize,
     pub entries: Vec<PolyLeaderBoardEntry>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Facet)]
 pub struct PolyLeaderBoardEntry {
     pub rank: usize,
     pub name: String,
@@ -218,7 +219,7 @@ pub async fn global_rankings_update() -> Result<()> {
             })
             .collect(),
     };
-    let output = serde_json::to_string(&leaderboard)?;
+    let output = facet_json::to_string(&leaderboard);
     fs::write(RANKINGS_FILE, output).await?;
     Ok(())
 }
@@ -296,7 +297,7 @@ pub async fn hof_update() -> Result<()> {
             points.to_string(),
         ));
     }
-    let mut output = serde_json::to_string(&final_leaderboard)?;
+    let mut output = facet_json::to_string(&final_leaderboard);
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
@@ -323,7 +324,7 @@ pub async fn hof_update() -> Result<()> {
         ));
     }
     output.push('\n');
-    output.push_str(&serde_json::to_string(&final_player_records).expect("Failed to serialize"));
+    output.push_str(&facet_json::to_string(&final_player_records));
     fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
@@ -350,7 +351,7 @@ pub async fn hof_update() -> Result<()> {
             })
             .collect(),
     };
-    let time_output = serde_json::to_string(&time_leaderboard)?;
+    let time_output = facet_json::to_string(&time_leaderboard);
     fs::write(HOF_TIME_RANKINGS_FILE, time_output).await?;
     Ok(())
 }
@@ -424,7 +425,7 @@ pub async fn community_update() -> Result<()> {
         total: final_leaderboard_entries.len(),
         entries: final_leaderboard_entries,
     };
-    let mut output = serde_json::to_string(&final_leaderboard)?;
+    let mut output = facet_json::to_string(&final_leaderboard);
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
@@ -451,7 +452,7 @@ pub async fn community_update() -> Result<()> {
         ));
     }
     output.push('\n');
-    output.push_str(&serde_json::to_string(&final_player_records).expect("Failed to serialize"));
+    output.push_str(&facet_json::to_string(&final_player_records));
     fs::write(COMMUNITY_RANKINGS_FILE, output).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
@@ -478,7 +479,7 @@ pub async fn community_update() -> Result<()> {
             })
             .collect(),
     };
-    let time_output = serde_json::to_string(&time_leaderboard)?;
+    let time_output = facet_json::to_string(&time_leaderboard);
     fs::write(COMMUNITY_TIME_RANKINGS_FILE, time_output).await?;
     Ok(())
 }
@@ -567,7 +568,7 @@ async fn tracks_leaderboards(
         let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
         for res in result {
             leaderboard.append(
-                &mut serde_json::from_str::<LeaderBoard>(&res)
+                &mut facet_json::from_str::<LeaderBoard>(&res)
                     .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
                     .entries,
             );
@@ -668,7 +669,7 @@ pub async fn et_rankings_update() -> Result<()> {
             points.to_string(),
         ));
     }
-    let mut output = serde_json::to_string(&final_leaderboard)?;
+    let mut output = facet_json::to_string(&final_leaderboard);
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
@@ -695,7 +696,7 @@ pub async fn et_rankings_update() -> Result<()> {
         ));
     }
     output.push('\n');
-    output.push_str(&serde_json::to_string(&final_player_records).expect("Failed to serialize"));
+    output.push_str(&facet_json::to_string(&final_player_records));
     fs::write(ET_RANKINGS_FILE, output.clone()).await?;
     Ok(())
 }
