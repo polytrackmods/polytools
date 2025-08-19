@@ -199,7 +199,7 @@ pub async fn global_rankings_update() -> Result<()> {
         .map(|(name, times)| (name, times.iter().sum()))
         .collect();
     sorted_leaderboard.sort_by_key(|(_, frames)| *frames);
-    let leaderboard: PolyLeaderBoard = PolyLeaderBoard {
+    let leaderboard = PolyLeaderBoard {
         total: sorted_leaderboard.len(),
         entries: sorted_leaderboard
             .into_iter()
@@ -413,13 +413,17 @@ pub async fn community_update() -> Result<()> {
             .cmp(points_a)
             .then_with(|| tiebreakers_b.cmp(tiebreakers_a))
     });
-    let final_leaderboard: Vec<_> = sorted_leaderboard
+    let final_leaderboard_entries: Vec<_> = sorted_leaderboard
         .into_iter()
         .enumerate()
         .map(|(rank, (name, points, _))| {
             PolyLeaderBoardEntry::new(rank + 1, name, points.to_string())
         })
         .collect();
+    let final_leaderboard = PolyLeaderBoard {
+        total: final_leaderboard_entries.len(),
+        entries: final_leaderboard_entries,
+    };
     let mut output = serde_json::to_string(&final_leaderboard)?;
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
