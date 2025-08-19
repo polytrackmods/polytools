@@ -661,17 +661,11 @@ pub async fn et_rankings_update() -> Result<()> {
             .then_with(|| tiebreakers_b.cmp(tiebreakers_a))
     });
     let mut final_leaderboard = PolyLeaderBoard::default();
-    let mut points_prev = point_values[0] * track_num + 1;
-    let mut rank_prev = 0;
-    for (name, points, _) in sorted_leaderboard.clone() {
-        if points < points_prev {
-            points_prev = points;
-            rank_prev += 1;
-        }
+    for (rank, (name, points, _)) in sorted_leaderboard.clone().into_iter().enumerate() {
         final_leaderboard.push_entry(PolyLeaderBoardEntry::new(
-            rank_prev,
+            rank + 1,
             name,
-            points_prev.to_string(),
+            points.to_string(),
         ));
     }
     let mut output = serde_json::to_string(&final_leaderboard)?;
