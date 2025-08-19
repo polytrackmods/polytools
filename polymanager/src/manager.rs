@@ -15,19 +15,19 @@ impl ServiceManager {
             config: config.clone(),
             processes: HashMap::new(),
         };
-        if let Some(default_preset_name) = config.default_preset {
-            if let Some(default_preset) = config
+        if let Some(default_preset_name) = config.default_preset
+            && let Some(default_preset) = config
                 .presets
                 .clone()
                 .unwrap_or_default()
                 .iter()
                 .find(|preset| preset.name == default_preset_name)
-            {
-                for service in default_preset.services.clone() {
-                    let _ = manager.start_service(&service);
-                }
+        {
+            for service in default_preset.services.clone() {
+                let _ = manager.start_service(&service);
             }
         }
+
         manager
     }
 

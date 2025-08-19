@@ -30,22 +30,22 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
     let mut scroll_pos = 0;
 
     loop {
-        if view_mode == ViewMode::Services {
-            if let Some(service) = manager.config.services.get(service_index) {
-                let log_path = PathBuf::from(format!("logs/{}.log", service.name));
-                if log_path.exists() {
-                    if let Ok(log) = fs::read_to_string(log_path).await {
-                        service_log_lines = log
-                            .lines()
-                            .rev()
-                            .take(100)
-                            .map(std::string::ToString::to_string)
-                            .collect::<VecDeque<_>>();
-                        service_log_lines.make_contiguous().reverse();
-                    }
-                } else {
-                    service_log_lines.clear();
+        if view_mode == ViewMode::Services
+            && let Some(service) = manager.config.services.get(service_index)
+        {
+            let log_path = PathBuf::from(format!("logs/{}.log", service.name));
+            if log_path.exists() {
+                if let Ok(log) = fs::read_to_string(log_path).await {
+                    service_log_lines = log
+                        .lines()
+                        .rev()
+                        .take(100)
+                        .map(std::string::ToString::to_string)
+                        .collect::<VecDeque<_>>();
+                    service_log_lines.make_contiguous().reverse();
                 }
+            } else {
+                service_log_lines.clear();
             }
         }
 
@@ -194,138 +194,133 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
             f.render_stateful_widget(scrollbar, layout[4], &mut scrollbar_state);
         })?;
 
-        if event::poll(Duration::from_millis(250))? {
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => break,
-                    KeyCode::Char('p') => {
-                        view_mode = match view_mode {
-                            ViewMode::Services => ViewMode::Presets,
-                            ViewMode::Presets => ViewMode::Services,
-                        };
+        if event::poll(Duration::from_millis(250))?
+            && let Event::Key(key) = event::read()?
+        {
+            match key.code {
+                KeyCode::Char('q') => break,
+                KeyCode::Char('p') => {
+                    view_mode = match view_mode {
+                        ViewMode::Services => ViewMode::Presets,
+                        ViewMode::Presets => ViewMode::Services,
+                    };
+                }
+                KeyCode::Up => match view_mode {
+                    ViewMode::Services => {
+                        if service_index > 0 {
+                            service_index -= 1;
+                        } else {
+                            service_index = manager.config.services.len().saturating_sub(1);
+                        }
                     }
-                    KeyCode::Up => match view_mode {
-                        ViewMode::Services => {
-                            if service_index > 0 {
-                                service_index -= 1;
-                            } else {
-                                service_index = manager.config.services.len().saturating_sub(1);
-                            }
+                    ViewMode::Presets => {
+                        if preset_index > 0 {
+                            preset_index -= 1;
+                        } else {
+                            preset_index = manager
+                                .config
+                                .presets
+                                .clone()
+                                .unwrap_or_default()
+                                .len()
+                                .saturating_sub(1);
                         }
-                        ViewMode::Presets => {
-                            if preset_index > 0 {
-                                preset_index -= 1;
-                            } else {
-                                preset_index = manager
-                                    .config
-                                    .presets
-                                    .clone()
-                                    .unwrap_or_default()
-                                    .len()
-                                    .saturating_sub(1);
-                            }
-                        }
-                    },
-                    KeyCode::Down => match view_mode {
-                        ViewMode::Services => {
-                            if service_index < manager.config.services.len().saturating_sub(1) {
-                                service_index += 1;
-                            } else {
-                                service_index = 0;
-                            }
-                        }
-                        ViewMode::Presets => {
-                            if preset_index
-                                < manager
-                                    .config
-                                    .presets
-                                    .clone()
-                                    .unwrap_or_default()
-                                    .len()
-                                    .saturating_sub(1)
-                            {
-                                preset_index += 1;
-                            } else {
-                                preset_index = 0;
-                            }
-                        }
-                    },
-                    KeyCode::Char('K') => {
-                        scroll_pos = scroll_pos.saturating_add(1).min(max_log_scroll);
                     }
-                    KeyCode::Char('J') => {
-                        scroll_pos = scroll_pos.saturating_sub(1).min(max_log_scroll);
+                },
+                KeyCode::Down => match view_mode {
+                    ViewMode::Services => {
+                        if service_index < manager.config.services.len().saturating_sub(1) {
+                            service_index += 1;
+                        } else {
+                            service_index = 0;
+                        }
                     }
-                    KeyCode::Char('g') => scroll_pos = 0,
-                    KeyCode::Char('G') => scroll_pos = max_log_scroll,
-                    KeyCode::Char('r') => match view_mode {
-                        ViewMode::Services => {
-                            let service_name = &manager.config.services[service_index].name.clone();
+                    ViewMode::Presets => {
+                        if preset_index
+                            < manager
+                                .config
+                                .presets
+                                .clone()
+                                .unwrap_or_default()
+                                .len()
+                                .saturating_sub(1)
+                        {
+                            preset_index += 1;
+                        } else {
+                            preset_index = 0;
+                        }
+                    }
+                },
+                KeyCode::Char('K') => {
+                    scroll_pos = scroll_pos.saturating_add(1).min(max_log_scroll);
+                }
+                KeyCode::Char('J') => {
+                    scroll_pos = scroll_pos.saturating_sub(1).min(max_log_scroll);
+                }
+                KeyCode::Char('g') => scroll_pos = 0,
+                KeyCode::Char('G') => scroll_pos = max_log_scroll,
+                KeyCode::Char('r') => match view_mode {
+                    ViewMode::Services => {
+                        let service_name = &manager.config.services[service_index].name.clone();
+                        if let Err(e) = manager.restart_service(service_name).await {
+                            manager_log_lines
+                                .push_back(format!("Error restarting {service_name}: {e}"));
+                        } else {
+                            manager_log_lines
+                                .push_back(format!("Restarted service: {service_name}"));
+                        }
+                    }
+                    ViewMode::Presets => {
+                        let preset =
+                            &manager.config.presets.clone().unwrap_or_default()[preset_index];
+                        for service_name in &preset.services {
                             if let Err(e) = manager.restart_service(service_name).await {
                                 manager_log_lines
-                                    .push_back(format!("Error restarting {service_name}: {e}"));
+                                    .push_back(format!("Error restarting {service_name}: {e}",));
                             } else {
                                 manager_log_lines
                                     .push_back(format!("Restarted service: {service_name}"));
                             }
                         }
-                        ViewMode::Presets => {
-                            let preset =
-                                &manager.config.presets.clone().unwrap_or_default()[preset_index];
-                            for service_name in &preset.services {
-                                if let Err(e) = manager.restart_service(service_name).await {
-                                    manager_log_lines.push_back(format!(
-                                        "Error restarting {service_name}: {e}",
-                                    ));
-                                } else {
-                                    manager_log_lines
-                                        .push_back(format!("Restarted service: {service_name}"));
-                                }
-                            }
-                            manager_log_lines
-                                .push_back(format!("Restarted preset: {}", preset.name));
-                        }
-                    },
-                    KeyCode::Enter => match view_mode {
-                        ViewMode::Services => {
-                            let service_name = &manager.config.services[service_index].name.clone();
-                            if manager.is_service_running(service_name) {
-                                if let Err(e) = manager.stop_service(service_name).await {
-                                    manager_log_lines
-                                        .push_back(format!("Error stopping {service_name}: {e}"));
-                                } else {
-                                    manager_log_lines
-                                        .push_back(format!("Stopped service: {service_name}"));
-                                }
-                            } else if let Err(e) = manager.start_service(service_name) {
+                        manager_log_lines.push_back(format!("Restarted preset: {}", preset.name));
+                    }
+                },
+                KeyCode::Enter => match view_mode {
+                    ViewMode::Services => {
+                        let service_name = &manager.config.services[service_index].name.clone();
+                        if manager.is_service_running(service_name) {
+                            if let Err(e) = manager.stop_service(service_name).await {
                                 manager_log_lines
-                                    .push_back(format!("Error starting {service_name}: {e}"));
+                                    .push_back(format!("Error stopping {service_name}: {e}"));
                             } else {
                                 manager_log_lines
-                                    .push_back(format!("Started service: {service_name}"));
+                                    .push_back(format!("Stopped service: {service_name}"));
                             }
+                        } else if let Err(e) = manager.start_service(service_name) {
+                            manager_log_lines
+                                .push_back(format!("Error starting {service_name}: {e}"));
+                        } else {
+                            manager_log_lines.push_back(format!("Started service: {service_name}"));
                         }
-                        ViewMode::Presets => {
-                            let preset =
-                                &manager.config.presets.clone().unwrap_or_default()[preset_index];
-                            for service_name in &preset.services {
-                                if !manager.is_service_running(service_name) {
-                                    if let Err(e) = manager.start_service(service_name) {
-                                        manager_log_lines.push_back(format!(
-                                            "Error starting {service_name}: {e}"
-                                        ));
-                                    } else {
-                                        manager_log_lines
-                                            .push_back(format!("Started service: {service_name}"));
-                                    }
+                    }
+                    ViewMode::Presets => {
+                        let preset =
+                            &manager.config.presets.clone().unwrap_or_default()[preset_index];
+                        for service_name in &preset.services {
+                            if !manager.is_service_running(service_name) {
+                                if let Err(e) = manager.start_service(service_name) {
+                                    manager_log_lines
+                                        .push_back(format!("Error starting {service_name}: {e}"));
+                                } else {
+                                    manager_log_lines
+                                        .push_back(format!("Started service: {service_name}"));
                                 }
                             }
-                            manager_log_lines
-                                .push_back(format!("Activated preset: {}", preset.name));
                         }
-                    },
-                    _ => {}
-                }
+                        manager_log_lines.push_back(format!("Activated preset: {}", preset.name));
+                    }
+                },
+                _ => {}
             }
         }
     }
