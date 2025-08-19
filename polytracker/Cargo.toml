@@ -7,13 +7,13 @@ edition = "2021"
 anyhow = "1.0.98"
 chrono = "0.4.41"
 dotenvy = "0.15.7"
+facet = "0.28.0"
+facet-json = "0.28.2"
 poise = "0.6.1"
 polycore = { version = "0.1.0", path = "../polycore" }
 polytrack-codes = "0.1.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.22", features = ["json"] }
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.142"
 sha256 = "1.6.0"
 sqlx = { version = "0.8.6", features = ["macros", "runtime-tokio", "sqlite"] }
 tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros"] }

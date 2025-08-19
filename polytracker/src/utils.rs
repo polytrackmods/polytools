@@ -2,17 +2,16 @@ use crate::commands::LeaderboardChoice;
 use crate::{Context, ET_PERIOD_DURATION, MAX_MSG_AGE};
 use anyhow::Result;
 use chrono::Utc;
+use facet::Facet;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polycore::{
-    check_blacklist, get_alt, recent_et_period, send_to_networker,
-    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT,
-    TRACK_FILE, VERSION,
+    check_blacklist, get_alt, recent_et_period, send_to_networker, COMMUNITY_TRACK_FILE,
+    ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, VERSION,
 };
 use polytrack_codes::v5;
 use regex::Regex;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use serenity::{
     ChannelId, Color, ComponentInteractionCollector, CreateActionRow, CreateAttachment,
     CreateButton, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
@@ -34,23 +33,23 @@ const MAX_COL_WIDTH: usize = 25;
 const TRACK_CODE_STARTS: [&str; 2] = ["PolyTrack14p", "v3"];
 
 // structs for deserializing leaderboards
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Facet)]
+#[facet(rename_all = "camelCase")]
 pub struct LeaderBoardEntry {
     pub name: String,
     pub frames: f64,
     pub verified_state: u8,
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Facet)]
+#[facet(rename_all = "camelCase")]
 pub struct LeaderBoard {
     pub entries: Vec<LeaderBoardEntry>,
     pub total: u32,
     pub user_entry: Option<UserEntry>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Facet)]
 pub struct UserEntry {
     pub position: u32,
     pub frames: u32,
@@ -724,7 +723,8 @@ pub async fn get_records(tracks: LeaderboardChoice, only_verified: bool) -> Resu
             sleep(Duration::from_millis(1000)).await;
             att += 1;
         }
-        let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
+        let leaderboard = facet_json::from_str::<LeaderBoard>(&res)
+            .map_err(facet_json::DeserError::into_owned)?;
         let default_winner = LeaderBoardEntry {
             name: "unknown".to_string(),
             frames: 69420.0,

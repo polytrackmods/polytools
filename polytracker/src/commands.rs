@@ -196,13 +196,7 @@ pub async fn assign(
     if response != "null" {
         user_id = digest(user_id);
     }
-    if ctx
-        .data()
-        .user_ids
-        .lock()
-        .await
-        .contains_key(&user)
-    {
+    if ctx.data().user_ids.lock().await.contains_key(&user) {
         let response = format!(
             "`User '{user}' is already assigned an ID, to reassign please contact this bot's owner`"
         );
@@ -237,12 +231,7 @@ pub async fn delete(
         return Ok(());
     }
     let bot_data = ctx.data();
-    let response = if bot_data
-        .user_ids
-        .lock()
-        .await
-        .contains_key(&user)
-    {
+    let response = if bot_data.user_ids.lock().await.contains_key(&user) {
         let id = bot_data
             .user_ids
             .lock()
@@ -291,13 +280,7 @@ pub async fn update_admins(
                 .await?
                 .expect("Empty modal output");
             let discord = modal_output.discord;
-            if ctx
-                .data()
-                .admins
-                .lock()
-                .await
-                .contains_key(&discord)
-            {
+            if ctx.data().admins.lock().await.contains_key(&discord) {
                 let privilege = ctx
                     .data()
                     .admins
@@ -317,13 +300,7 @@ pub async fn update_admins(
                 .expect("Empty modal output");
             let discord = modal_output.discord;
             let privilege = modal_output.privilege.parse()?;
-            if ctx
-                .data()
-                .admins
-                .lock()
-                .await
-                .contains_key(&discord)
-            {
+            if ctx.data().admins.lock().await.contains_key(&discord) {
                 ctx.data()
                     .admins
                     .lock()
@@ -366,13 +343,7 @@ pub async fn request(
         ctx.defer().await?;
     }
     let mut id = String::new();
-    if let Some(id_test) = ctx
-        .data()
-        .user_ids
-        .lock()
-        .await
-        .get(&user)
-    {
+    if let Some(id_test) = ctx.data().user_ids.lock().await.get(&user) {
         id.clone_from(id_test);
     }
     if id.is_empty() {
@@ -402,7 +373,7 @@ pub async fn request(
         };
         let contents: Vec<String>;
         if let Ok(text) = send_to_networker(&client, &url).await {
-            if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&text) {
+            if let Ok(leaderboard) = facet_json::from_str::<LeaderBoard>(&text) {
                 if let Some(user_entry) = leaderboard.user_entry {
                     let position = user_entry.position;
                     let frames = user_entry.frames;
@@ -490,13 +461,7 @@ pub async fn list(
         }
     };
     let mut id = String::new();
-    if let Some(id_test) = ctx
-        .data()
-        .user_ids
-        .lock()
-        .await
-        .get(&user)
-    {
+    if let Some(id_test) = ctx.data().user_ids.lock().await.get(&user) {
         id.clone_from(id_test);
     }
     if id.is_empty() {
@@ -542,7 +507,7 @@ pub async fn list(
         let mut headers = vec!["Track", "Rank", "Time"];
         let mut inlines = vec![true, true, true];
         for response in responses {
-            if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&response) {
+            if let Ok(leaderboard) = facet_json::from_str::<LeaderBoard>(&response) {
                 if let Some(user_entry) = leaderboard.user_entry {
                     let position = user_entry.position;
                     let frames = user_entry.frames;
@@ -652,13 +617,7 @@ pub async fn compare(
     for user in [user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
         let mut id = String::new();
-        if let Some(id_test) = ctx
-            .data()
-            .user_ids
-            .lock()
-            .await
-            .get(&user)
-        {
+        if let Some(id_test) = ctx.data().user_ids.lock().await.get(&user) {
             id.clone_from(id_test);
         }
         if id.is_empty() {
@@ -694,7 +653,7 @@ pub async fn compare(
             results.sort_by_key(|(i, _)| *i);
             let responses: Vec<String> = results.into_iter().map(|(_, res)| res).collect();
             for response in responses {
-                if let Ok(leaderboard) = serde_json::from_str::<LeaderBoard>(&response) {
+                if let Ok(leaderboard) = facet_json::from_str::<LeaderBoard>(&response) {
                     if let Some(user_entry) = leaderboard.user_entry {
                         let position = user_entry.position;
                         let frames = user_entry.frames;
@@ -843,7 +802,7 @@ pub async fn update_rankings(
     })
     .await?;
     let line = content.lines().next().expect("Should have next line");
-    let lb: PolyLeaderBoard = serde_json::from_str(line).expect("Invalid leaderboard");
+    let lb: PolyLeaderBoard = facet_json::from_str(line).expect("Invalid leaderboard");
     for i in 0..lb.total {
         writeln!(contents[0], "{}", lb.entries[i].rank)?;
         writeln!(contents[1], "{}", lb.entries[i].stat)?;
@@ -874,13 +833,14 @@ pub async fn roles(
     let mut embeds: Vec<WriteEmbed> = Vec::new();
     let champion_contents = {
         let mut champions = vec![String::new(); 2];
-        let ct_champion = serde_json::from_str::<PolyLeaderBoard>(
+        let ct_champion = facet_json::from_str::<PolyLeaderBoard>(
             fs::read_to_string(COMMUNITY_RANKINGS_FILE)
                 .await?
                 .lines()
                 .next()
                 .expect("Should have next line"),
-        )?
+        )
+        .map_err(facet_json::DeserError::into_owned)?
         .entries
         .first()
         .expect("Should have first entry")
@@ -888,13 +848,14 @@ pub async fn roles(
         .clone();
         writeln!(champions[0], "{ct_champion}")?;
         champions[1].push_str("CT Champion\n");
-        let hof_champion = serde_json::from_str::<PolyLeaderBoard>(
+        let hof_champion = facet_json::from_str::<PolyLeaderBoard>(
             fs::read_to_string(HOF_RANKINGS_FILE)
                 .await?
                 .lines()
                 .next()
                 .expect("Should have next line"),
-        )?
+        )
+        .map_err(facet_json::DeserError::into_owned)?
         .entries
         .first()
         .expect("Should have first entry")
@@ -947,20 +908,22 @@ pub async fn roles(
     let global_grandmaster_contents = {
         let mut global_grandmasters = Vec::new();
         let mut main_leaderboard =
-            serde_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)?
+            facet_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)
+                .map_err(facet_json::DeserError::into_owned)?
                 .entries
                 .iter()
                 .take_while(|entry| entry.rank < 21)
                 .map(|e| e.name.clone())
                 .collect();
         global_grandmasters.append(&mut main_leaderboard);
-        let mut community_leaderboard = serde_json::from_str::<PolyLeaderBoard>(
+        let mut community_leaderboard = facet_json::from_str::<PolyLeaderBoard>(
             fs::read_to_string(COMMUNITY_RANKINGS_FILE)
                 .await?
                 .lines()
                 .next()
                 .expect("Should have first line"),
-        )?
+        )
+        .map_err(facet_json::DeserError::into_owned)?
         .entries
         .iter()
         .take_while(|entry| entry.rank < 21)
@@ -979,33 +942,36 @@ pub async fn roles(
     let grandmaster_contents = {
         let mut grandmasters = Vec::new();
         let mut main_leaderboard =
-            serde_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)?
+            facet_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)
+                .map_err(facet_json::DeserError::into_owned)?
                 .entries
                 .iter()
                 .take_while(|entry| entry.rank < 6)
                 .map(|e| e.name.clone())
                 .collect();
         grandmasters.append(&mut main_leaderboard);
-        let mut community_leaderboard = serde_json::from_str::<PolyLeaderBoard>(
+        let mut community_leaderboard = facet_json::from_str::<PolyLeaderBoard>(
             fs::read_to_string(COMMUNITY_RANKINGS_FILE)
                 .await?
                 .lines()
                 .next()
                 .expect("Should have first line"),
-        )?
+        )
+        .map_err(facet_json::DeserError::into_owned)?
         .entries
         .iter()
         .take_while(|entry| entry.rank < 21)
         .map(|e| e.name.clone())
         .collect();
         grandmasters.append(&mut community_leaderboard);
-        let mut hof_leaderboard = serde_json::from_str::<PolyLeaderBoard>(
+        let mut hof_leaderboard = facet_json::from_str::<PolyLeaderBoard>(
             fs::read_to_string(HOF_RANKINGS_FILE)
                 .await?
                 .lines()
                 .next()
                 .expect("Should have first line"),
-        )?
+        )
+        .map_err(facet_json::DeserError::into_owned)?
         .entries
         .iter()
         .take_while(|entry| entry.rank < 21)
@@ -1108,7 +1074,7 @@ pub async fn rankings(
     ];
     let content = fs::read_to_string(rankings_file).await?;
     let line = content.lines().next().expect("Should have first line");
-    let lb: PolyLeaderBoard = serde_json::from_str(line).expect("Invalid leaderboard");
+    let lb: PolyLeaderBoard = facet_json::from_str(line).expect("Invalid leaderboard");
     for i in 0..lb.total {
         writeln!(contents[0], "{}", lb.entries[i].rank)?;
         writeln!(contents[1], "{}", lb.entries[i].stat)?;
@@ -1231,12 +1197,7 @@ pub async fn edit_lists(
 pub async fn users(ctx: Context<'_>) -> Result<()> {
     let bot_data = ctx.data();
     let mut users = String::new();
-    for (user, id) in bot_data
-        .user_ids
-        .lock()
-        .await
-        .iter()
-    {
+    for (user, id) in bot_data.user_ids.lock().await.iter() {
         writeln!(users, "{user}: {id}")?;
     }
     write(&ctx, format!("```{users}```")).await?;
@@ -1247,12 +1208,7 @@ pub async fn users(ctx: Context<'_>) -> Result<()> {
 pub async fn admins(ctx: Context<'_>) -> Result<()> {
     let bot_data = ctx.data();
     let mut admins = String::new();
-    for (admin, privilege) in bot_data
-        .admins
-        .lock()
-        .await
-        .iter()
-    {
+    for (admin, privilege) in bot_data.admins.lock().await.iter() {
         writeln!(admins, "{admin}: {privilege}")?;
     }
     write(&ctx, format!("```{admins}```")).await?;
@@ -1302,7 +1258,9 @@ pub async fn players(
             sleep(Duration::from_millis(500)).await;
             att += 1;
         }
-        let number = serde_json::from_str::<LeaderBoard>(&res)?.total;
+        let number = facet_json::from_str::<LeaderBoard>(&res)
+            .map_err(facet_json::DeserError::into_owned)?
+            .total;
         writeln!(
             contents.get_mut(0).expect("Should have first entry"),
             "{name}"
@@ -1413,7 +1371,8 @@ pub async fn top(
             sleep(Duration::from_millis(1000)).await;
             att += 1;
         }
-        let leaderboard = serde_json::from_str::<LeaderBoard>(&res)?;
+        let leaderboard = facet_json::from_str::<LeaderBoard>(&res)
+            .map_err(facet_json::DeserError::into_owned)?;
         let default_winner = LeaderBoardEntry {
             name: "unknown".to_string(),
             frames: 0.0,
