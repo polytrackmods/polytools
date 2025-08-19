@@ -5,10 +5,11 @@ use chrono::Utc;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polycore::{
-    check_blacklist, export_to_id, get_alt, recent_et_period, send_to_networker,
+    check_blacklist, get_alt, recent_et_period, send_to_networker,
     COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT,
     TRACK_FILE, VERSION,
 };
+use polytrack_codes::v5;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -667,22 +668,22 @@ pub async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> 
         .count()
         > 0
     {
-        return user_ids
+        user_ids
             .filter(|k| k.to_lowercase().starts_with(&partial.to_lowercase()))
-            .collect();
+            .collect()
     } else if user_ids
         .clone()
         .filter(|k| k.to_lowercase().contains(&partial.to_lowercase()))
         .count()
         > 0
     {
-        return user_ids
+        user_ids
             .filter(|k| k.to_lowercase().contains(&partial.to_lowercase()))
-            .collect();
+            .collect()
     } else {
-        return user_ids
+        user_ids
             .filter(|key| key.to_lowercase().starts_with(&partial.to_lowercase()))
-            .collect();
+            .collect()
     }
 }
 
@@ -773,7 +774,7 @@ pub async fn et_tracks_update(http: Arc<Http>) -> Result<()> {
     .await?;
     let ids = codes
         .into_iter()
-        .map(|[code, name]| [export_to_id(&code).unwrap_or_default(), name].join(" "))
+        .map(|[code, name]| [v5::export_to_id(&code).unwrap_or_default(), name].join(" "))
         .collect::<Vec<_>>();
     fs::write(ET_TRACK_FILE, ids.join("\n")).await?;
     Ok(())

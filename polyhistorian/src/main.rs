@@ -199,40 +199,37 @@ async fn main() -> Result<(), Error> {
                     continue;
                 }
             }
-            if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response_text) {
-                if let Some(new_record) = new_lb.entries.first() {
-                    if *new_record
-                        < prior_records
-                            .get(name)
-                            .expect("Inserted earlier")
-                            .clone()
-                            .to_record()
-                    {
-                        let path =
-                            format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
-                        let mut file = OpenOptions::new()
-                            .write(true)
-                            .append(true)
-                            .open(path)
-                            .await
-                            .expect("Failed to open file");
-                        let new_record = new_record.clone().to_file().await;
-                        file.write_all(
-                            format!(
-                                "{}\n",
-                                serde_json::to_string(&new_record).expect("Failed serializing")
-                            )
-                            .as_bytes(),
-                        )
-                        .await
-                        .expect("Failed writing to file");
-                        new_record.print(
-                            name,
-                            prior_records.get(name).expect("Inserted earlier").frames,
-                        );
-                        prior_records.entry(name).and_modify(|r| *r = new_record);
-                    }
-                }
+            if let Ok(new_lb) = serde_json::from_str::<LeaderBoard>(&response_text)
+                && let Some(new_record) = new_lb.entries.first()
+                && *new_record
+                    < prior_records
+                        .get(name)
+                        .expect("Inserted earlier")
+                        .clone()
+                        .to_record()
+            {
+                let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
+                let mut file = OpenOptions::new()
+                    .write(true)
+                    .append(true)
+                    .open(path)
+                    .await
+                    .expect("Failed to open file");
+                let new_record = new_record.clone().to_file().await;
+                file.write_all(
+                    format!(
+                        "{}\n",
+                        serde_json::to_string(&new_record).expect("Failed serializing")
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .expect("Failed writing to file");
+                new_record.print(
+                    name,
+                    prior_records.get(name).expect("Inserted earlier").frames,
+                );
+                prior_records.entry(name).and_modify(|r| *r = new_record);
             }
         }
         sleep(Duration::from_secs(60 * 5)).await;
