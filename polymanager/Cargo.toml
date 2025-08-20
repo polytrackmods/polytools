@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.98"
+anyhow = "1.0.99"
 crossterm = "0.29.0"
 facet = "0.27.16"
 facet-toml = "0.25.18"

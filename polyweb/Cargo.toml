@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 rocket = "0.5.1"
 rocket_dyn_templates = { version = "0.2.0", features = ["tera"] }
-reqwest = { version = "0.12.22", features = ["json"] }
+reqwest = { version = "0.12.23", features = ["json"] }
 polycore = { version = "0.1.0", path = "../polycore" }
 chrono = "0.4.41"
 filenamify = "0.1.2"
