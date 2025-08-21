@@ -1,6 +1,6 @@
 use polycore::{
-    COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, HOF_RANKINGS_FILE,
-    HOF_TIME_RANKINGS_FILE, RANKINGS_FILE,
+    ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
+    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, RANKINGS_FILE,
 };
 use rocket::{get, request::FromParam, tokio::fs};
 
@@ -13,11 +13,15 @@ pub enum ApiList {
     Community,
     CommunityTime,
     History(String),
+    AltList,
+    BlackList,
 }
 impl<'a> FromParam<'a> for ApiList {
     type Error = &'a str;
     fn from_param(param: &'a str) -> Result<Self, Self::Error> {
-        use ApiList::{Community, CommunityTime, Global, History, Hof, HofTime};
+        use ApiList::{
+            AltList, BlackList, Community, CommunityTime, Global, History, Hof, HofTime,
+        };
         if param.starts_with(HISTORY_START) {
             return Ok(History(
                 param
@@ -32,6 +36,8 @@ impl<'a> FromParam<'a> for ApiList {
             "hof_time" => Ok(HofTime),
             "community" => Ok(Community),
             "community_time" => Ok(CommunityTime),
+            "altlist" => Ok(AltList),
+            "blacklist" => Ok(BlackList),
             _ => Err("Failed to find enum"),
         }
     }
@@ -41,13 +47,17 @@ impl<'a> FromParam<'a> for ApiList {
 #[get("/api/<list>")]
 pub async fn get_api(list: ApiList) -> String {
     let file = {
-        use ApiList::{Community, CommunityTime, Global, History, Hof, HofTime};
+        use ApiList::{
+            AltList, BlackList, Community, CommunityTime, Global, History, Hof, HofTime,
+        };
         match list {
             Global => RANKINGS_FILE,
             Hof => HOF_RANKINGS_FILE,
             HofTime => HOF_TIME_RANKINGS_FILE,
             Community => COMMUNITY_RANKINGS_FILE,
             CommunityTime => COMMUNITY_TIME_RANKINGS_FILE,
+            AltList => ALT_ACCOUNT_FILE,
+            BlackList => BLACKLIST_FILE,
             History(history_name) => &format!("histories/HISTORY_{history_name}.txt"),
         }
     };
