@@ -19,6 +19,8 @@ use rocket::tokio::{fs, task, time::sleep};
 use rocket::{get, main, routes};
 use rocket_dyn_templates::{context, Template};
 
+use crate::api::get_lbfunc;
+
 #[get("/")]
 fn index() -> Template {
     Template::render("index", Context::default())
@@ -155,6 +157,7 @@ async fn main() -> Result<(), Box<rocket::Error>> {
                 history_home,
                 history,
                 get_api,
+                get_lbfunc
             ],
         )
         .mount("/static", FileServer::from("static"))
