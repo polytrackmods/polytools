@@ -1,8 +1,10 @@
 use polycore::{
-    ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
-    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, RANKINGS_FILE,
+    PolyLeaderBoard, ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE,
+    COMMUNITY_TIME_RANKINGS_FILE, HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, RANKINGS_FILE,
 };
 use rocket::{get, request::FromParam, tokio::fs};
+
+use crate::parsers;
 
 const HISTORY_START: &str = "history-";
 
@@ -62,4 +64,34 @@ pub async fn get_api(list: ApiList) -> String {
         }
     };
     fs::read_to_string(file).await.expect("Failed to read file")
+}
+
+#[get("/lbfunc?<query..>")]
+pub async fn get_lbfunc(query: LbFuncQuery) -> String {
+    let file = {
+        match query.leaderboard.as_str() {
+            "global" => RANKINGS_FILE,
+            "community" => COMMUNITY_RANKINGS_FILE,
+            "community-time" => COMMUNITY_TIME_RANKINGS_FILE,
+            _ => panic!("invalid leaderboard"),
+        }
+    };
+    let leaderboard = parsers::parse_leaderboard(file).await;
+    let leaderboard_out = PolyLeaderBoard {
+        total: leaderboard.total,
+        entries: leaderboard
+            .entries
+            .into_iter()
+            .skip(query.skip)
+            .take(query.amount)
+            .collect::<Vec<_>>(),
+    };
+    facet_json::to_string(&leaderboard_out)
+}
+
+#[derive(rocket::FromForm)]
+pub struct LbFuncQuery {
+    leaderboard: String,
+    skip: usize,
+    amount: usize,
 }
