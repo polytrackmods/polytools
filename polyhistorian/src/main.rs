@@ -13,7 +13,7 @@ use filenamify::filenamify;
 
 use polycore::{
     COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION, get_datetime,
-    send_to_networker,
+    read_track_file, send_to_networker,
 };
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -149,29 +149,15 @@ struct Recording {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let client = Client::new();
-    let track_ids = fs::read_to_string(TRACK_FILE)
-        .await
-        .expect("Couldn't read from track file");
-    let mut tracks: Vec<(&str, &str)> = track_ids
-        .lines()
-        .map(|l| l.split_once(' ').expect("Invalid track ids file"))
-        .collect();
-    let track_ids = fs::read_to_string(COMMUNITY_TRACK_FILE)
-        .await
-        .expect("Couldn't read from track file");
-    tracks.append(
-        &mut track_ids
-            .lines()
-            .map(|l| l.split_once(' ').expect("Invalid track ids file"))
-            .collect(),
-    );
+    let mut tracks = read_track_file(TRACK_FILE).await;
+    tracks.append(&mut read_track_file(COMMUNITY_TRACK_FILE).await);
     let mut prior_records: HashMap<&str, FileRecord> = HashMap::new();
     if !fs::try_exists(HISTORY_FILE_LOCATION).await.unwrap_or(false) {
         fs::create_dir(HISTORY_FILE_LOCATION)
             .await
             .expect("Couldn't create directory");
     }
-    for (_, name) in tracks.clone() {
+    for (_, name) in &tracks {
         let path = format!("{HISTORY_FILE_LOCATION}HISTORY_{}.txt", filenamify(name));
         if fs::try_exists(path.clone()).await.unwrap_or(false) {
             let text = fs::read_to_string(path).await.expect("Couldn't read file");
@@ -186,7 +172,7 @@ async fn main() -> Result<(), Error> {
     }
     loop {
         println!("Checking records! ({})", get_datetime());
-        for (id, name) in tracks.clone() {
+        for (id, name) in &tracks {
             let url = format!(
                 "https://vps.kodub.com/leaderboard?version={VERSION}&skip=0&onlyVerified=true&amount=5&trackId={id}"
             );
@@ -203,7 +189,7 @@ async fn main() -> Result<(), Error> {
                 && let Some(new_record) = new_lb.entries.first()
                 && *new_record
                     < prior_records
-                        .get(name)
+                        .get(name.as_str())
                         .expect("Inserted earlier")
                         .clone()
                         .to_record()
@@ -221,7 +207,10 @@ async fn main() -> Result<(), Error> {
                     .expect("Failed writing to file");
                 new_record.print(
                     name,
-                    prior_records.get(name).expect("Inserted earlier").frames,
+                    prior_records
+                        .get(name.as_str())
+                        .expect("Inserted earlier")
+                        .frames,
                 );
                 prior_records.entry(name).and_modify(|r| *r = new_record);
             }

@@ -15,11 +15,11 @@ use poise::{
 };
 use polycore::{
     check_blacklist, community_update, et_rankings_update, get_alt, global_rankings_update,
-    hof_update, read_altlist, read_blacklist, send_to_networker, write_altlist, write_blacklist,
-    PolyLeaderBoard, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
-    ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE,
-    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE, REQUEST_RETRY_COUNT,
-    TRACK_FILE, UPDATE_CYCLE_LEN, VERSION,
+    hof_update, read_altlist, read_blacklist, read_track_file, send_to_networker, write_altlist,
+    write_blacklist, PolyLeaderBoard, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
+    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
+    HOF_CODE_FILE, HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE,
+    REQUEST_RETRY_COUNT, TRACK_FILE, UPDATE_CYCLE_LEN, VERSION,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -356,14 +356,7 @@ pub async fn request(
                 ctx.say("Not an official track!").await?;
                 return Ok(());
             }
-            let track_ids: Vec<(String, String)> = fs::read_to_string(TRACK_FILE)
-                .await?
-                .lines()
-                .map(|s| {
-                    let parts = s.split_once(' ').expect("Invalid track ids file");
-                    (parts.0.to_string(), parts.1.to_string())
-                })
-                .collect();
+            let track_ids = read_track_file(TRACK_FILE).await;
             let track_id = track_ids
                 .get(track.parse::<usize>()? - 1)
                 .expect("Couldn't find track");
@@ -471,14 +464,7 @@ pub async fn list(
         let mut line_num: u32 = 0;
         let mut total_time = 0.0;
         let mut display_total = true;
-        let track_ids: Vec<(String, String)> = fs::read_to_string(track_file)
-            .await?
-            .lines()
-            .map(|s| {
-                let parts = s.split_once(' ').expect("Invalid track ids file");
-                (parts.0.to_string(), parts.1.to_string())
-            })
-            .collect();
+        let track_ids = read_track_file(track_file).await;
         let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
             let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",
@@ -597,22 +583,13 @@ pub async fn compare(
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
-    let track_ids: Vec<(String, String)> = fs::read_to_string({
-        use LeaderboardChoice::{Community, Et, Global, Hof};
-        match tracks {
-            Global => TRACK_FILE,
-            Community => COMMUNITY_TRACK_FILE,
-            Hof => HOF_TRACK_FILE,
-            Et => ET_TRACK_FILE,
-        }
+    let track_ids = read_track_file(match tracks {
+        LeaderboardChoice::Global => TRACK_FILE,
+        LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
+        LeaderboardChoice::Hof => HOF_TRACK_FILE,
+        LeaderboardChoice::Et => ET_TRACK_FILE,
     })
-    .await?
-    .lines()
-    .map(|s| {
-        let parts = s.split_once(' ').expect("Invalid track ids file");
-        (parts.0.to_string(), parts.1.to_string())
-    })
-    .collect();
+    .await;
     let track_names: Vec<String> = track_ids.iter().map(|(_, name)| name.clone()).collect();
     for user in [user1.clone(), user2.clone()] {
         let mut user_results: Vec<(u32, f64)> = Vec::new();
@@ -1223,7 +1200,6 @@ pub async fn players(
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<()> {
-    use LeaderboardChoice::{Community, Et, Global, Hof};
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
@@ -1231,22 +1207,13 @@ pub async fn players(
         ctx.defer().await?;
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
-    let track_ids: Vec<(String, String)> = fs::read_to_string({
-        match tracks {
-            Global => TRACK_FILE,
-            Community => COMMUNITY_TRACK_FILE,
-            Hof => HOF_ALL_TRACK_FILE,
-            Et => ET_TRACK_FILE,
-        }
+    let track_ids = read_track_file(match tracks {
+        LeaderboardChoice::Global => TRACK_FILE,
+        LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
+        LeaderboardChoice::Hof => HOF_ALL_TRACK_FILE,
+        LeaderboardChoice::Et => ET_TRACK_FILE,
     })
-    .await
-    .expect("Failed to read file")
-    .lines()
-    .map(|s| {
-        let parts = s.split_once(' ').expect("Invalid track ids file");
-        (parts.0.to_string(), parts.1.to_string())
-    })
-    .collect();
+    .await;
     let mut contents = vec![String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
@@ -1334,7 +1301,6 @@ pub async fn top(
     #[description = "Hidden"] hidden: Option<bool>,
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<()> {
-    use LeaderboardChoice::{Community, Et, Global, Hof};
     let mobile_friendly = mobile_friendly.unwrap_or(false);
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
@@ -1342,22 +1308,13 @@ pub async fn top(
         ctx.defer().await?;
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
-    let track_ids: Vec<(String, String)> = fs::read_to_string({
-        match tracks {
-            Global => TRACK_FILE,
-            Community => COMMUNITY_TRACK_FILE,
-            Hof => HOF_ALL_TRACK_FILE,
-            Et => ET_TRACK_FILE,
-        }
+    let track_ids = read_track_file(match tracks {
+        LeaderboardChoice::Global => TRACK_FILE,
+        LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
+        LeaderboardChoice::Hof => HOF_ALL_TRACK_FILE,
+        LeaderboardChoice::Et => ET_TRACK_FILE,
     })
-    .await
-    .expect("Failed to read file")
-    .lines()
-    .map(|s| {
-        let parts = s.split_once(' ').expect("Invalid track ids file");
-        (parts.0.to_string(), parts.1.to_string())
-    })
-    .collect();
+    .await;
     let mut contents = vec![String::new(), String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {

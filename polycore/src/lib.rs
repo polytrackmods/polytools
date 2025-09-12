@@ -25,7 +25,6 @@ pub const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
 pub const COMMUNITY_RANKINGS_FILE: &str = "data/community_rankings.txt";
 pub const COMMUNITY_TIME_RANKINGS_FILE: &str = "data/community_time_rankings.txt";
 const COMMUNITY_LB_SIZE: u32 = 20;
-pub const CUSTOM_TRACK_FILE: &str = "data/custom_tracks.txt";
 pub const VERSION: &str = "0.5.1";
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
 pub const REQUEST_RETRY_COUNT: u32 = 5;
@@ -699,4 +698,15 @@ pub async fn et_rankings_update() -> Result<()> {
     output.push_str(&facet_json::to_string(&final_player_records));
     fs::write(ET_RANKINGS_FILE, output.clone()).await?;
     Ok(())
+}
+
+#[allow(clippy::missing_panics_doc)]
+pub async fn read_track_file(file: &str) -> Vec<(String, String)> {
+    fs::read_to_string(file)
+        .await
+        .expect("Failed to read file")
+        .lines()
+        .map(|l| l.split_once(' ').expect("failed to split tracks in file"))
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect()
 }

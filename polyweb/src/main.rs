@@ -4,18 +4,18 @@ pub mod parsers;
 use api::get_api;
 use filenamify::filenamify;
 use parsers::{
-    get_custom_leaderboard, get_standard_leaderboard, parse_history, parse_leaderboard,
+    get_standard_leaderboard, parse_history, parse_leaderboard,
     parse_leaderboard_with_records,
 };
 use polycore::{
-    community_update, et_rankings_update, global_rankings_update, hof_update,
-    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, CUSTOM_TRACK_FILE, HOF_RANKINGS_FILE,
+    community_update, et_rankings_update, global_rankings_update, hof_update, read_track_file,
+    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_RANKINGS_FILE,
     RANKINGS_FILE, TRACK_FILE, UPDATE_CYCLE_LEN, UPDATE_LB_COUNT,
 };
 use rocket::form::Context;
 use rocket::fs::FileServer;
 use rocket::tokio::join;
-use rocket::tokio::{fs, task, time::sleep};
+use rocket::tokio::{task, time::sleep};
 use rocket::{get, main, routes};
 use rocket_dyn_templates::{context, Template};
 
@@ -44,46 +44,14 @@ async fn hof() -> Template {
     Template::render("hof", context! { leaderboard })
 }
 
-#[get("/lb-custom")]
-async fn custom_lb_home() -> Template {
-    let tracks: Vec<String> = fs::read_to_string(CUSTOM_TRACK_FILE)
-        .await
-        .expect("Failed to read file")
-        .lines()
-        .map(std::string::ToString::to_string)
-        .map(|s| {
-            s.split_once(' ')
-                .expect("Invalid custom tracks file")
-                .1
-                .to_string()
-        })
-        .collect();
-    Template::render("lb_custom_home", context! { tracks })
-}
-
 #[get("/lb-standard")]
 async fn standard_lb_home() -> Template {
-    let track_names: Vec<String> = fs::read_to_string(TRACK_FILE)
+    let track_names: Vec<String> = read_track_file(TRACK_FILE)
         .await
-        .expect("Failed to read file")
-        .lines()
-        .map(|s| {
-            s.split_once(' ')
-                .expect("Invalid track ids file")
-                .1
-                .to_string()
-        })
+        .into_iter()
+        .map(|(_, name)| name)
         .collect();
     Template::render("lb_standard_home", context! { track_names })
-}
-
-#[get("/lb-custom/<track_id>")]
-async fn custom_lb(track_id: &str) -> Template {
-    let (name, leaderboard) = get_custom_leaderboard(track_id).await;
-    Template::render(
-        "track_leaderboard",
-        context! { track_name: name, leaderboard },
-    )
 }
 
 #[get("/lb-standard/<track_id>")]
@@ -107,23 +75,16 @@ fn tutorial() -> Template {
 
 #[get("/history")]
 async fn history_home() -> Template {
-    let mut track_names: Vec<String> = fs::read_to_string(TRACK_FILE)
+    let mut track_names: Vec<String> = read_track_file(TRACK_FILE)
         .await
-        .expect("Failed to read file")
-        .lines()
-        .map(|s| {
-            s.split_once(' ')
-                .expect("Invalid track ids file")
-                .1
-                .to_string()
-        })
+        .into_iter()
+        .map(|(_, name)| name)
         .collect();
     track_names.append(
-        &mut fs::read_to_string(COMMUNITY_TRACK_FILE)
+        &mut read_track_file(COMMUNITY_TRACK_FILE)
             .await
-            .expect("Failed to read file")
-            .lines()
-            .map(|s| filenamify(s.split_once(' ').expect("Invalid track ids file").1))
+            .into_iter()
+            .map(|(_, name)| filenamify(name))
             .collect(),
     );
     Template::render("history_home", context! { track_names })
@@ -151,8 +112,6 @@ async fn main() -> Result<(), Box<rocket::Error>> {
                 tutorial,
                 standard_lb_home,
                 standard_lb,
-                custom_lb_home,
-                custom_lb,
                 policy,
                 history_home,
                 history,
