@@ -15,9 +15,6 @@
 	<a href="lb-standard"><button class="button">
 			Standard Tracks
 		</button></a>
-	<a href="lb-custom"><button class="button">
-			Custom Tracks
-		</button></a>
 	<a href="history"><button class="button">
 			History
 		</button></a>
