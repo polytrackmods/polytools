@@ -6,8 +6,9 @@ use facet::Facet;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polycore::{
-    check_blacklist, get_alt, recent_et_period, send_to_networker, COMMUNITY_TRACK_FILE,
-    ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT, TRACK_FILE, VERSION,
+    check_blacklist, get_alt, read_track_file, recent_et_period, send_to_networker,
+    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT,
+    TRACK_FILE, VERSION,
 };
 use polytrack_codes::v5;
 use regex::Regex;
@@ -112,11 +113,9 @@ struct DbAdmin {
     privilege: i64,
 }
 
-#[allow(clippy::missing_panics_doc)]
 #[allow(clippy::cast_sign_loss)]
-#[allow(clippy::missing_errors_doc)]
 impl BotData {
-    pub async fn load(&self) -> Result<()> {
+    pub(crate) async fn load(&self) -> Result<()> {
         let pool = self.pool.as_ref();
         let user_results: Vec<DbUser> = query_as!(DbUser, "SELECT * FROM users")
             .fetch_all(pool)
@@ -140,7 +139,7 @@ impl BotData {
         }
         Ok(())
     }
-    pub async fn add(&self, name: String, game_id: String) -> Result<()> {
+    pub(crate) async fn add(&self, name: String, game_id: String) -> Result<()> {
         let pool = self.pool.as_ref();
         query!(
             "INSERT INTO users (name, game_id, discord) VALUES ($1, $2, $3)",
@@ -152,14 +151,14 @@ impl BotData {
         .await?;
         Ok(())
     }
-    pub async fn delete(&self, delete_name: String) -> Result<()> {
+    pub(crate) async fn delete(&self, delete_name: String) -> Result<()> {
         let pool = self.pool.as_ref();
         query!("DELETE FROM users WHERE name = $1", delete_name)
             .execute(pool)
             .await?;
         Ok(())
     }
-    pub async fn add_admin(&self, discord: String, privilege: i64) -> Result<()> {
+    pub(crate) async fn add_admin(&self, discord: String, privilege: i64) -> Result<()> {
         let pool = self.pool.as_ref();
         query!(
             "INSERT INTO admins (discord, privilege) VALUES ($1, $2)",
@@ -170,14 +169,14 @@ impl BotData {
         .await?;
         Ok(())
     }
-    pub async fn remove_admin(&self, discord: String) -> Result<()> {
+    pub(crate) async fn remove_admin(&self, discord: String) -> Result<()> {
         let pool = self.pool.as_ref();
         query!("DELETE FROM admins WHERE discord = $1", discord)
             .execute(pool)
             .await?;
         Ok(())
     }
-    pub async fn edit_admin(&self, discord: String, privilege: i64) -> Result<()> {
+    pub(crate) async fn edit_admin(&self, discord: String, privilege: i64) -> Result<()> {
         let pool = self.pool.as_ref();
         query!(
             "UPDATE admins SET privilege = $1 WHERE discord = $2",
@@ -191,9 +190,7 @@ impl BotData {
 }
 
 // non-embed output function
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
-pub async fn write(ctx: &Context<'_>, mut text: String) -> Result<()> {
+pub(crate) async fn write(ctx: &Context<'_>, mut text: String) -> Result<()> {
     if text.len() > 2000 {
         if text.starts_with("```") {
             for _ in 0..3 {
@@ -323,10 +320,8 @@ struct EmbedColumn {
 }
 
 // output function using embeds
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
 #[allow(clippy::too_many_lines)]
-pub async fn write_embed(
+pub(crate) async fn write_embed(
     ctx: Context<'_>,
     write_embeds: Vec<WriteEmbed>,
     mobile_friendly: bool,
@@ -627,8 +622,7 @@ pub async fn write_embed(
 }
 
 // checks whether invoking user is an admin with the required privilege level
-#[allow(clippy::missing_panics_doc)]
-pub async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
+pub(crate) async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
     let admin_list = ctx.data().admins.lock().await.clone();
     if let Ok(application_info) = ctx.http().get_current_application_info().await {
         if let Some(owner) = application_info.owner {
@@ -653,8 +647,7 @@ pub async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
 }
 
 // autocompletion function for registered users
-#[allow(clippy::missing_panics_doc)]
-pub async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
+pub(crate) async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
     let user_ids: Vec<String> = ctx.data().user_ids.lock().await.keys().cloned().collect();
     let user_ids = user_ids.into_iter();
     if user_ids.clone().filter(|k| k.starts_with(partial)).count() > 0 {
@@ -691,26 +684,14 @@ pub struct PolyRecords {
     pub wr_amounts: HashMap<String, u32>,
 }
 
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
-pub async fn get_records(tracks: LeaderboardChoice, only_verified: bool) -> Result<PolyRecords> {
-    use LeaderboardChoice::{Community, Et, Global, Hof};
-    let track_ids: Vec<(String, String)> = fs::read_to_string({
-        match tracks {
-            Global => TRACK_FILE,
-            Community => COMMUNITY_TRACK_FILE,
-            Hof => HOF_ALL_TRACK_FILE,
-            Et => ET_TRACK_FILE,
-        }
+pub(crate) async fn get_records(tracks: LeaderboardChoice, only_verified: bool) -> Result<PolyRecords> {
+    let track_ids = read_track_file(match tracks {
+        LeaderboardChoice::Global => TRACK_FILE,
+        LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
+        LeaderboardChoice::Hof => HOF_ALL_TRACK_FILE,
+        LeaderboardChoice::Et => ET_TRACK_FILE,
     })
-    .await
-    .expect("Failed to read file")
-    .lines()
-    .map(|s| {
-        let parts = s.split_once(' ').expect("Invalid track ids file");
-        (parts.0.to_string(), parts.1.to_string())
-    })
-    .collect();
+    .await;
     let mut records = vec![Vec::new(); 3];
     let client = Client::new();
     let mut wr_amounts: HashMap<String, u32> = HashMap::new();
@@ -760,8 +741,7 @@ pub async fn get_records(tracks: LeaderboardChoice, only_verified: bool) -> Resu
     Ok(poly_records)
 }
 
-#[allow(clippy::missing_errors_doc)]
-pub async fn et_tracks_update(http: Arc<Http>) -> Result<()> {
+pub(crate) async fn et_tracks_update(http: Arc<Http>) -> Result<()> {
     let codes = get_ets(http).await?;
     fs::write(
         ET_CODE_FILE,

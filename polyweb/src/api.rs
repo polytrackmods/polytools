@@ -45,9 +45,8 @@ impl<'a> FromParam<'a> for ApiList {
     }
 }
 
-#[allow(clippy::missing_panics_doc)]
 #[get("/api/<list>")]
-pub async fn get_api(list: ApiList) -> String {
+pub(crate) async fn get_api(list: ApiList) -> String {
     let file = {
         use ApiList::{
             AltList, BlackList, Community, CommunityTime, Global, History, Hof, HofTime,
@@ -67,7 +66,7 @@ pub async fn get_api(list: ApiList) -> String {
 }
 
 #[get("/lbfunc?<query..>")]
-pub async fn get_lbfunc(query: LbFuncQuery) -> String {
+pub(crate) async fn get_lbfunc(query: LbFuncQuery) -> String {
     let file = {
         match query.leaderboard.as_str() {
             "global" => RANKINGS_FILE,

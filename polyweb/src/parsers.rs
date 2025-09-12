@@ -5,7 +5,7 @@ use chrono::DateTime;
 use facet::Facet;
 use polycore::{
     check_blacklist, get_alt, send_to_networker, PolyLeaderBoard, PolyLeaderBoardEntry,
-    CUSTOM_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
+    HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
@@ -30,16 +30,14 @@ struct FileRecord {
     recording: String,
 }
 
-#[allow(clippy::missing_panics_doc)]
-pub async fn parse_leaderboard(file_path: &str) -> PolyLeaderBoard {
+pub(crate) async fn parse_leaderboard(file_path: &str) -> PolyLeaderBoard {
     let contents = fs::read_to_string(file_path)
         .await
         .expect("Failed to read file");
     facet_json::from_str(&contents).expect("Invalid leaderboard file")
 }
 
-#[allow(clippy::missing_panics_doc)]
-pub async fn parse_leaderboard_with_records(file_path: &str) -> (PolyLeaderBoard, PolyLeaderBoard) {
+pub(crate) async fn parse_leaderboard_with_records(file_path: &str) -> (PolyLeaderBoard, PolyLeaderBoard) {
     let contents = fs::read_to_string(file_path)
         .await
         .expect("Failed to read file");
@@ -53,83 +51,7 @@ pub async fn parse_leaderboard_with_records(file_path: &str) -> (PolyLeaderBoard
     (leaderboard, record_leaderboard)
 }
 
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::too_many_lines)]
-pub async fn get_custom_leaderboard(track_id: &str) -> (String, PolyLeaderBoard) {
-    let client = Client::new();
-    let track_ids: HashMap<String, String> = fs::read_to_string(CUSTOM_TRACK_FILE)
-        .await
-        .expect("Failed to read file")
-        .lines()
-        .map(std::string::ToString::to_string)
-        .map(|s| {
-            let parts = s.split_once(' ').expect("Invalid track ids file");
-            (parts.1.to_string(), parts.0.to_string())
-        })
-        .collect();
-    let mut real_track_id = String::new();
-    for track in track_ids.clone().into_keys() {
-        if track.to_lowercase() == track_id.to_lowercase() {
-            real_track_id = track;
-            break;
-        }
-    }
-    let url = if real_track_id.is_empty() {
-        format!(
-            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track_id}&skip=0&amount=500",
-        )
-    } else {
-        format!(
-            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500",
-            track_ids
-                .get(&real_track_id)
-                .expect("Couldn't find track id")
-        )
-    };
-    let result = send_to_networker(&client, &url)
-        .await
-        .expect("Failed to complete request");
-    let response: LeaderBoard = facet_json::from_str(&result).expect("Invalid leaderboard");
-    let mut leaderboard = PolyLeaderBoard::default();
-    let mut rank = 0;
-    let mut has_time: Vec<String> = Vec::new();
-    for entry in response.entries {
-        let name = get_alt(&entry.name)
-            .await
-            .expect("should be able to get alt");
-        if !has_time.contains(&name)
-            && check_blacklist(&name)
-                .await
-                .expect("should be able to get blacklist")
-        {
-            rank += 1;
-            leaderboard.push_entry(PolyLeaderBoardEntry::new(
-                rank,
-                name.clone(),
-                if entry.frames < 60000 {
-                    (f64::from(entry.frames) / 1000.0).to_string()
-                } else {
-                    format!(
-                        "{}:{:0>2}.{:0>3}",
-                        entry.frames / 60000,
-                        entry.frames % 60000 / 1000,
-                        entry.frames % 1000
-                    )
-                },
-            ));
-            has_time.push(name);
-        }
-    }
-    let name = if track_ids.contains_key(&real_track_id) {
-        format!("{real_track_id} ")
-    } else {
-        String::new()
-    };
-    (name, leaderboard)
-}
-
-#[allow(clippy::missing_panics_doc)]
-pub async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
+pub(crate) async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
     let client = Client::new();
     let tracks = fs::read_to_string(TRACK_FILE)
         .await
@@ -183,8 +105,7 @@ pub async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
     leaderboard
 }
 
-#[allow(clippy::missing_panics_doc)]
-pub async fn parse_history(track_id: &str) -> Vec<(String, String, String, String)> {
+pub(crate) async fn parse_history(track_id: &str) -> Vec<(String, String, String, String)> {
     let records = fs::read_to_string(format!("{HISTORY_FILE_LOCATION}HISTORY_{track_id}.txt"))
         .await
         .expect("Couldn't read from record file");
