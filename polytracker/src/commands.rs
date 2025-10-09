@@ -951,7 +951,7 @@ pub async fn roles(
         .map_err(facet_json::DeserError::into_owned)?
         .entries
         .iter()
-        .take_while(|entry| entry.rank < 21)
+        .take_while(|entry| entry.rank < 6)
         .map(|e| e.name.clone())
         .collect();
         grandmasters.append(&mut hof_leaderboard);
