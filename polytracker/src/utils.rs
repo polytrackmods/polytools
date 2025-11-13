@@ -718,7 +718,7 @@ pub(crate) async fn get_records(tracks: LeaderboardChoice, only_verified: bool) 
                 break;
             }
         }
-        let winner_name = winner.name.clone();
+        let winner_name = get_alt(&winner.name).await?;
         let winner_time = winner.frames / 1000.0;
         *wr_amounts.entry(winner_name.clone()).or_default() += 1;
         records
