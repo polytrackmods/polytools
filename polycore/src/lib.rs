@@ -18,7 +18,7 @@ pub const TRACK_FILE: &str = "lists/official_tracks.txt";
 pub const HOF_CODE_FILE: &str = "lists/hof_codes.txt";
 pub const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
 pub const HOF_ALL_TRACK_FILE: &str = "lists/hof_tracks_all.txt";
-const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
+pub const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
 pub const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
 pub const HOF_TIME_RANKINGS_FILE: &str = "data/hof_time_rankings.txt";
 pub const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
@@ -45,9 +45,11 @@ enum PolyError {
 }
 
 #[derive(Facet)]
-struct LeaderBoardEntry {
-    name: String,
-    frames: u32,
+#[facet(rename_all = "camelCase")]
+pub struct LeaderBoardEntry {
+    pub name: String,
+    pub frames: u32,
+    pub user_id: String,
 }
 
 #[derive(Facet)]
@@ -513,7 +515,7 @@ pub async fn send_to_networker(client: &Client, url: &str) -> Result<String> {
         .await?)
 }
 
-async fn tracks_leaderboards(
+pub async fn tracks_leaderboards(
     track_ids: Vec<String>,
     lb_size: u32,
 ) -> Result<Vec<Vec<LeaderBoardEntry>>> {

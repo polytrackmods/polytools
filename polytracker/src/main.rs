@@ -22,8 +22,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task;
-use tokio::time::{sleep_until, Instant};
-use utils::{et_tracks_update, BotData};
+use tokio::time::{Instant, sleep, sleep_until};
+use utils::{BotData, et_tracks_update};
+
+use crate::commands::{add_totw, get_totw_lb, update_totw};
+use crate::utils::totw;
 
 const MAX_MSG_AGE: Duration = Duration::from_secs(60 * 10);
 pub const ET_PERIOD_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 7);
@@ -45,7 +48,7 @@ async fn main() -> Result<()> {
     let bot_data = BotData {
         user_ids: Mutex::new(HashMap::new()),
         admins: Mutex::new(HashMap::new()),
-        pool: Arc::new(pool),
+        pool: Arc::new(pool.clone()),
     };
     bot_data.load().await?;
 
@@ -70,6 +73,9 @@ async fn main() -> Result<()> {
                 rankings(),
                 roles(),
                 policy(),
+                add_totw(),
+                update_totw(),
+                get_totw_lb(),
             ],
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some("~".into()),
@@ -112,11 +118,11 @@ async fn main() -> Result<()> {
         .await
         .expect("Failed to create client");
     let http = client.http.clone();
-    let updater = task::spawn(async move {
+    let et_updater = task::spawn(async move {
         loop {
             et_tracks_update(http.clone())
                 .await
-                .unwrap_or_else(|_| println!("failed to update ET tracks"));
+                .unwrap_or_else(|_| eprintln!("failed to update ET tracks"));
             let next_run = recent_et_period(Utc::now()) + ET_PERIOD_DURATION;
             let duration_until = next_run.timestamp_millis() - Utc::now().timestamp_millis();
             let sleep_duration =
@@ -125,12 +131,21 @@ async fn main() -> Result<()> {
             sleep_until(wakeup_time).await;
         }
     });
+    let totw_updater = task::spawn(async move {
+        loop {
+            totw::update(&pool)
+                .await
+                .unwrap_or_else(|_| println!("failed to update TOTW"));
+            sleep(Duration::from_secs(3600)).await;
+        }
+    });
     let client_task = task::spawn(async move {
         client.start().await.expect("Failed to start client");
     });
     tokio::select! {
-        _ = updater => println!("Updater task finished unexpectedly."),
+        _ = et_updater => println!("ET updater task finished unexpectedly."),
         _ = client_task => println!("Client stopped."),
+        _ = totw_updater => println!("TOTW updater task finished unexpectedly.")
     }
     Ok(())
 }

@@ -17,7 +17,7 @@ use std::{
 use tokio::{net::TcpListener, sync::oneshot::Sender, task, time::sleep};
 
 // current Kodub rate limit value, slightly adapted to be safe
-const MAX_PER_MINUTE: f64 = 55.0;
+const MAX_PER_MINUTE: f64 = 59.0;
 const WINDOW_SECONDS: f64 = 300.0;
 
 #[derive(Deserialize)]
@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
 #[allow(clippy::significant_drop_tightening)]
 async fn get_queue(State(queue): State<SharedQueue>) -> impl IntoResponse {
     let queue = queue.lock().expect("other threads should not panic");
-    let queue_out: Vec<_> = queue.iter().map(|entry| (entry.url.clone())).collect();
+    let queue_out: Vec<_> = queue.iter().map(|entry| entry.url.clone()).collect();
     Json(queue_out)
 }
 

@@ -6,9 +6,9 @@ use facet::Facet;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polycore::{
-    check_blacklist, get_alt, read_track_file, recent_et_period, send_to_networker,
     COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT,
-    TRACK_FILE, VERSION,
+    TRACK_FILE, VERSION, check_blacklist, get_alt, read_track_file, recent_et_period,
+    send_to_networker,
 };
 use polytrack_codes::v5;
 use regex::Regex;
@@ -18,7 +18,7 @@ use serenity::{
     CreateButton, CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
     GuildId,
 };
-use sqlx::{query, query_as, Pool, Sqlite};
+use sqlx::{Pool, Sqlite, query, query_as};
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::Path;
@@ -486,18 +486,20 @@ pub(crate) async fn write_embed(
                             joined_columns
                                 .get_mut(result_col + 1)
                                 .expect("should have that column")
-                                .content = vec![content_column
-                                .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
-                                .unwrap_or_else(|| {
-                                    if content_column.len() > EMBED_PAGE_LEN {
-                                        content_column
-                                            .get(EMBED_PAGE_LEN * page..)
-                                            .expect("should have that many rows")
-                                    } else {
-                                        content_column
-                                    }
-                                })
-                                .join("\n")];
+                                .content = vec![
+                                content_column
+                                    .get(EMBED_PAGE_LEN * page..EMBED_PAGE_LEN * (page + 1))
+                                    .unwrap_or_else(|| {
+                                        if content_column.len() > EMBED_PAGE_LEN {
+                                            content_column
+                                                .get(EMBED_PAGE_LEN * page..)
+                                                .expect("should have that many rows")
+                                        } else {
+                                            content_column
+                                        }
+                                    })
+                                    .join("\n"),
+                            ];
                             joined_columns
                                 .get_mut(result_col + 1)
                                 .expect("should have that column")
@@ -684,7 +686,10 @@ pub struct PolyRecords {
     pub wr_amounts: HashMap<String, u32>,
 }
 
-pub(crate) async fn get_records(tracks: LeaderboardChoice, only_verified: bool) -> Result<PolyRecords> {
+pub(crate) async fn get_records(
+    tracks: LeaderboardChoice,
+    only_verified: bool,
+) -> Result<PolyRecords> {
     let track_ids = read_track_file(match tracks {
         LeaderboardChoice::Global => TRACK_FILE,
         LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
@@ -696,7 +701,9 @@ pub(crate) async fn get_records(tracks: LeaderboardChoice, only_verified: bool) 
     let client = Client::new();
     let mut wr_amounts: HashMap<String, u32> = HashMap::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified={only_verified}");
+        let url = format!(
+            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified={only_verified}"
+        );
         let mut att = 0;
         let mut res = String::new();
         while res.is_empty() && att <= REQUEST_RETRY_COUNT {
@@ -904,4 +911,205 @@ async fn find_pastebin_content(message: String) -> Option<String> {
         }
     }
     None
+}
+
+pub(crate) mod totw {
+    use std::collections::HashSet;
+
+    use anyhow::{Result, anyhow};
+    use facet::Facet;
+    use polycore::{HOF_POINTS_FILE, tracks_leaderboards};
+    use reqwest::{Client, StatusCode};
+
+    const POLYUSERS_URL: &str = "https://polyusers.ireo.xyz/discord/";
+    pub enum PolyUserMode {
+        #[allow(dead_code)]
+        GetPlayer(String),
+        GetDiscord(String),
+    }
+    pub enum PolyUserOut {
+        #[allow(dead_code)]
+        GetPlayer(Player),
+        GetDiscord(Discord),
+    }
+    #[derive(Facet)]
+    pub struct Player {
+        id: String,
+        name: Option<String>,
+        public: bool,
+        primary_dc: Option<i64>,
+    }
+    #[derive(Facet)]
+    pub struct Discord {
+        pub id: i64,
+    }
+
+    pub async fn polyusers(client: &Client, mode: PolyUserMode) -> Result<PolyUserOut> {
+        let url = match &mode {
+            PolyUserMode::GetPlayer(player) => format!("{}get_player/{}", POLYUSERS_URL, player),
+            PolyUserMode::GetDiscord(discord) => {
+                format!("{}get_discord/{}", POLYUSERS_URL, discord)
+            }
+        };
+        let result = client.get(url).send().await?;
+        if result.status() == StatusCode::NOT_FOUND {
+            return Err(anyhow!("Not found"));
+        }
+        let res = result.text().await?;
+        let out = match mode {
+            PolyUserMode::GetPlayer(_) => PolyUserOut::GetPlayer(
+                facet_json::from_str(&res).map_err(facet_json::DeserError::into_owned)?,
+            ),
+            PolyUserMode::GetDiscord(_) => PolyUserOut::GetDiscord(
+                facet_json::from_str(&res).map_err(facet_json::DeserError::into_owned)?,
+            ),
+        };
+        Ok(out)
+    }
+
+    use chrono::{DateTime, Utc};
+    use sqlx::SqlitePool;
+    #[allow(dead_code)]
+    pub struct DbTotw {
+        pub id: i64,
+        pub name: String,
+        pub track_id: String,
+        pub export_code: Option<String>,
+        pub end: Option<i64>,
+    }
+    #[allow(dead_code)]
+    pub struct DbTotwPlayer {
+        pub user_id: String,
+        pub name: String,
+    }
+    #[allow(dead_code)]
+    pub struct DbTotwEntry {
+        pub totw_id: i64,
+        pub player_id: String,
+        pub rank: i64,
+        pub points: i64,
+    }
+    pub async fn get_current_totw(pool: &SqlitePool) -> Result<Option<DbTotw>> {
+        let totw_result = sqlx::query_as!(
+            DbTotw,
+            "SELECT * FROM totws WHERE totws.end > UNIXEPOCH('now')
+            ORDER BY totws.end ASC LIMIT 1"
+        )
+        .fetch_optional(pool)
+        .await?;
+        Ok(totw_result)
+    }
+    pub async fn get_totws(pool: &SqlitePool) -> Result<Vec<DbTotw>> {
+        let totw_result = sqlx::query_as!(DbTotw, "SELECT * FROM totws")
+            .fetch_all(pool)
+            .await?;
+        Ok(totw_result)
+    }
+    pub async fn add_totw(
+        pool: &SqlitePool,
+        name: String,
+        track_id: String,
+        export_code: Option<String>,
+        end: Option<DateTime<Utc>>,
+    ) -> Result<()> {
+        let end = end.map(|end| end.timestamp());
+        sqlx::query!(
+            "INSERT INTO totws (name, track_id, export_code, end) VALUES ($1, $2, $3, $4)",
+            name,
+            track_id,
+            export_code,
+            end
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+    pub struct TotwEntry {
+        pub user_id: String,
+        pub name: String,
+    }
+    pub async fn update(pool: &SqlitePool) -> Result<()> {
+        if let Some(current_totw) = get_current_totw(pool).await? {
+            let leaderboard = tracks_leaderboards(vec![current_totw.track_id], 1)
+                .await?
+                .first()
+                .expect("Should have output a leaderboard")
+                .into_iter()
+                .map(|entry| TotwEntry {
+                    user_id: entry.user_id.clone(),
+                    name: entry.name.clone(),
+                })
+                .collect();
+            update_db(pool, leaderboard).await?;
+        }
+        Ok(())
+    }
+    async fn update_db(pool: &SqlitePool, entries: Vec<TotwEntry>) -> Result<()> {
+        let current_totw = get_current_totw(pool).await?;
+        if let Some(current_totw) = current_totw {
+            sqlx::query!(
+                "DELETE FROM totw_entries WHERE totw_id = $1",
+                current_totw.id,
+            )
+            .execute(pool)
+            .await?;
+            let point_values: Vec<_> = tokio::fs::read_to_string(HOF_POINTS_FILE)
+                .await?
+                .lines()
+                .map(|l| l.parse().expect("should be a number"))
+                .collect();
+            let mut discords = HashSet::new();
+            let client = Client::new();
+            let mut rank = 0;
+            for entry in entries {
+                if let Ok(PolyUserOut::GetDiscord(discord)) =
+                    polyusers(&client, PolyUserMode::GetDiscord(entry.user_id.clone())).await
+                {
+                    if !discords.insert(discord.id) {
+                        continue;
+                    }
+                }
+                let points: i64 = (point_values.get(rank as usize).map(|n| *n)).unwrap_or_default();
+                rank += 1;
+                sqlx::query!(
+                    "INSERT OR IGNORE INTO totw_players (user_id, name) VALUES ($1, $2)",
+                    entry.user_id,
+                    entry.name
+                )
+                .execute(pool)
+                .await?;
+                sqlx::query!(
+                    "INSERT OR IGNORE INTO totw_entries
+                    (totw_id, player_id, rank, points)
+                    VALUES ($1, $2, $3, $4)",
+                    current_totw.id,
+                    entry.user_id,
+                    rank,
+                    points
+                )
+                .execute(pool)
+                .await?;
+            }
+        }
+        Ok(())
+    }
+    pub struct TotwResultEntry {
+        pub name: String,
+        pub rank: i64,
+        pub points: i64,
+        pub user_id: String,
+    }
+    pub async fn list(pool: &SqlitePool, id: i64) -> Result<Vec<TotwResultEntry>> {
+        let list = sqlx::query_as!(
+            TotwResultEntry,
+            "SELECT tp.*, te.rank, te.points FROM totw_entries AS te
+            INNER JOIN totw_players AS tp ON te.player_id = tp.user_id
+            WHERE te.totw_id = $1 AND te.points > 0
+            ORDER BY te.points DESC",
+            id
+        )
+        .fetch_all(pool)
+        .await?;
+        Ok(list)
+    }
 }
