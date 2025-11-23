@@ -1,9 +1,10 @@
+use crate::utils::totw::{self, get_current_totw};
 use crate::utils::{
-    autocomplete_users, get_records, is_admin, write, write_embed, AddAdminModal, BotData,
-    EditAdminModal, EditModal, LeaderBoard, LeaderBoardEntry, RemoveAdminModal, WriteEmbed,
+    AddAdminModal, BotData, EditAdminModal, EditModal, LeaderBoard, LeaderBoardEntry,
+    RemoveAdminModal, WriteEmbed, autocomplete_users, get_records, is_admin, write, write_embed,
 };
 use crate::{Context, Error};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use dotenvy::dotenv;
 use poise::serenity_prelude::{
     self as serenity, ComponentInteractionCollector, ComponentInteractionDataKind, CreateActionRow,
@@ -11,15 +12,15 @@ use poise::serenity_prelude::{
     CreateSelectMenuOption,
 };
 use poise::{
-    builtins, ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, Modal,
+    ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, Modal, builtins,
 };
 use polycore::{
-    check_blacklist, community_update, et_rankings_update, get_alt, global_rankings_update,
-    hof_update, read_altlist, read_blacklist, read_track_file, send_to_networker, write_altlist,
-    write_blacklist, PolyLeaderBoard, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
-    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
-    HOF_CODE_FILE, HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, RANKINGS_FILE,
-    REQUEST_RETRY_COUNT, TRACK_FILE, UPDATE_CYCLE_LEN, VERSION,
+    COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE,
+    ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
+    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, PolyLeaderBoard, RANKINGS_FILE, REQUEST_RETRY_COUNT,
+    TRACK_FILE, UPDATE_CYCLE_LEN, VERSION, check_blacklist, community_update, et_rankings_update,
+    get_alt, global_rankings_update, hof_update, read_altlist, read_blacklist, read_track_file,
+    send_to_networker, write_altlist, write_blacklist,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -360,9 +361,14 @@ pub async fn request(
             let track_id = track_ids
                 .get(track.parse::<usize>()? - 1)
                 .expect("Couldn't find track");
-            format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",track_id.0)
+            format!(
+                "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",
+                track_id.0
+            )
         } else {
-            format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}")
+            format!(
+                "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}"
+            )
         };
         let contents: Vec<String>;
         if let Ok(text) = send_to_networker(&client, &url).await {
@@ -388,10 +394,12 @@ pub async fn request(
                         contents = vec![position.to_string(), time, (found.len() + 1).to_string()];
                         write_embed(
                             ctx,
-                            vec![WriteEmbed::new(3)
-                                .title("Leaderboard")
-                                .headers(&["Rank", "Time", "Unique"])
-                                .contents(contents)],
+                            vec![
+                                WriteEmbed::new(3)
+                                    .title("Leaderboard")
+                                    .headers(&["Rank", "Time", "Unique"])
+                                    .contents(contents),
+                            ],
                             mobile_friendly,
                         )
                         .await?;
@@ -401,10 +409,12 @@ pub async fn request(
                         contents = vec![position.to_string(), time];
                         write_embed(
                             ctx,
-                            vec![WriteEmbed::new(2)
-                                .title("Leaderboard")
-                                .headers(&["Rank", "Time"])
-                                .contents(contents)],
+                            vec![
+                                WriteEmbed::new(2)
+                                    .title("Leaderboard")
+                                    .headers(&["Rank", "Time"])
+                                    .contents(contents),
+                            ],
                             mobile_friendly,
                         )
                         .await?;
@@ -550,11 +560,13 @@ pub async fn list(
         }
         write_embed(
             ctx,
-            vec![WriteEmbed::new(headers.len())
-                .title(&user)
-                .headers(&headers)
-                .contents(contents)
-                .inlines(inlines)],
+            vec![
+                WriteEmbed::new(headers.len())
+                    .title(&user)
+                    .headers(&headers)
+                    .contents(contents)
+                    .inlines(inlines),
+            ],
             mobile_friendly,
         )
         .await?;
@@ -788,11 +800,13 @@ pub async fn update_rankings(
     let inlines: Vec<bool> = vec![true, true, true];
     write_embed(
         ctx,
-        vec![WriteEmbed::new(headers.len())
-            .title(&format!("{} Leaderboard", leaderboard.name()))
-            .headers(&headers)
-            .contents(contents)
-            .inlines(inlines)],
+        vec![
+            WriteEmbed::new(headers.len())
+                .title(&format!("{} Leaderboard", leaderboard.name()))
+                .headers(&headers)
+                .contents(contents)
+                .inlines(inlines),
+        ],
         mobile_friendly,
     )
     .await?;
@@ -1060,11 +1074,13 @@ pub async fn rankings(
     let inlines: Vec<bool> = vec![true, true, true, false];
     write_embed(
         ctx,
-        vec![WriteEmbed::new(headers.len())
-            .title(&format!("{} Leaderboard", leaderboard.name()))
-            .headers(&headers)
-            .contents(contents)
-            .inlines(inlines)],
+        vec![
+            WriteEmbed::new(headers.len())
+                .title(&format!("{} Leaderboard", leaderboard.name()))
+                .headers(&headers)
+                .contents(contents)
+                .inlines(inlines),
+        ],
         mobile_friendly,
     )
     .await?;
@@ -1217,7 +1233,9 @@ pub async fn players(
     let mut contents = vec![String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=1&onlyVerified=false");
+        let url = format!(
+            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=1&onlyVerified=false"
+        );
         let mut att = 0;
         let mut res = String::new();
         while res.is_empty() && att <= REQUEST_RETRY_COUNT {
@@ -1239,10 +1257,12 @@ pub async fn players(
     }
     write_embed(
         ctx,
-        vec![WriteEmbed::new(2)
-            .title("Player numbers")
-            .headers(&["Track", "Players"])
-            .contents(contents)],
+        vec![
+            WriteEmbed::new(2)
+                .title("Player numbers")
+                .headers(&["Track", "Players"])
+                .contents(contents),
+        ],
         mobile_friendly,
     )
     .await?;
@@ -1318,7 +1338,8 @@ pub async fn top(
     let mut contents = vec![String::new(), String::new(), String::new()];
     let client = Client::new();
     for (id, name) in track_ids {
-        let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip={}&amount=1&onlyVerified=true",
+        let url = format!(
+            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip={}&amount=1&onlyVerified=true",
             position - 1,
         );
         let mut att = 0;
@@ -1353,10 +1374,12 @@ pub async fn top(
     }
     write_embed(
         ctx,
-        vec![WriteEmbed::new(3)
-            .title(&format!("Rank {position}"))
-            .headers(&["Track", "Player", "Time"])
-            .contents(contents)],
+        vec![
+            WriteEmbed::new(3)
+                .title(&format!("Rank {position}"))
+                .headers(&["Track", "Player", "Time"])
+                .contents(contents),
+        ],
         mobile_friendly,
     )
     .await?;
@@ -1385,5 +1408,152 @@ pub async fn help(ctx: Context<'_>, #[description = "Command"] cmd: Option<Strin
         ..Default::default()
     };
     builtins::help(ctx, cmd.as_deref(), config).await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, owners_only)]
+pub async fn add_totw(
+    ctx: Context<'_>,
+    #[description = "pastes.dev code"] export_code_link: String,
+    end_time: Option<String>,
+) -> Result<()> {
+    ctx.defer_ephemeral().await?;
+    use crate::utils::totw;
+    use chrono::DateTime;
+    let client = Client::new();
+    let export_code = client
+        .get(format!("https://api.pastes.dev/{export_code_link}"))
+        .send()
+        .await?
+        .text()
+        .await?;
+    let track = polytrack_codes::v5::decode_track_code(&export_code);
+    let track_id = polytrack_codes::v5::export_to_id(&export_code);
+    if let Some(track) = track
+        && let Some(track_id) = track_id
+    {
+        let end = end_time.map(|end| DateTime::parse_from_rfc3339(&end));
+        if let Some(Err(e)) = end {
+            Err(e.into())
+        } else {
+            totw::add_totw(
+                &ctx.data().pool,
+                track.name,
+                track_id,
+                Some(export_code),
+                end.map(|end| end.expect("Checked earlier").to_utc()),
+            )
+            .await?;
+            ctx.say("Successfully added TOTW").await?;
+            Ok(())
+        }
+    } else {
+        Err(anyhow!("Could not decode track code!"))
+    }
+}
+
+#[poise::command(slash_command, owners_only)]
+pub async fn update_totw(ctx: Context<'_>) -> Result<()> {
+    ctx.defer_ephemeral().await?;
+    if let Some(_) = get_current_totw(&ctx.data().pool).await? {
+        totw::update(&ctx.data().pool).await?;
+        ctx.say("Updated TOTW").await?;
+    } else {
+        ctx.say("Could not find current TOTW").await?;
+    }
+    Ok(())
+}
+
+#[poise::command(slash_command)]
+pub async fn get_totw_lb(ctx: Context<'_>, current: bool) -> Result<()> {
+    ctx.defer().await?;
+    if current {
+        if let Some(current_totw) = get_current_totw(&ctx.data().pool).await? {
+            let list = totw::list(&ctx.data().pool, current_totw.id).await?;
+            let ranks = list
+                .iter()
+                .map(|l| l.rank.to_string())
+                .collect::<Vec<_>>()
+                .join("\n");
+            let names = list
+                .iter()
+                .map(|l| l.name.clone())
+                .collect::<Vec<_>>()
+                .join("\n");
+            let points = list
+                .iter()
+                .map(|l| l.points.to_string())
+                .collect::<Vec<_>>()
+                .join("\n");
+            write_embed(
+                ctx,
+                vec![
+                    WriteEmbed::new(3)
+                        .title("Current TOTW")
+                        .headers(&["Rank", "Name", "Points"])
+                        .contents(vec![ranks, names, points]),
+                ],
+                false,
+            )
+            .await?;
+        }
+    } else {
+        let mut discords: HashMap<i64, String> = HashMap::new();
+        let mut players: HashMap<String, (i64, String)> = HashMap::new();
+        let client = Client::new();
+        for totw in totw::get_totws(&ctx.data().pool).await? {
+            let list = totw::list(&ctx.data().pool, totw.id).await?;
+            for entry in list {
+                if let Ok(totw::PolyUserOut::GetDiscord(discord)) = totw::polyusers(
+                    &client,
+                    totw::PolyUserMode::GetDiscord(entry.user_id.clone()),
+                )
+                .await
+                {
+                    if let Some(discord_player) = discords.get(&discord.id) {
+                        players
+                            .entry(discord_player.clone())
+                            .or_insert((0, entry.name))
+                            .0 += entry.points;
+                    } else {
+                        discords.insert(discord.id, entry.user_id.clone());
+                        players.entry(entry.user_id).or_insert((0, entry.name)).0 += entry.points;
+                    }
+                } else {
+                    players.entry(entry.user_id).or_insert((0, entry.name)).0 += entry.points;
+                }
+            }
+        }
+        let mut list: Vec<_> = players.into_iter().collect();
+        list.sort_by_key(|(_, (points, _))| *points);
+        list.reverse();
+        let ranks = list
+            .iter()
+            .enumerate()
+            .map(|(rank, _)| (rank + 1).to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let names = list
+            .iter()
+            .map(|(_, (_, name))| name.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let points = list
+            .iter()
+            .map(|(_, (points, _))| points.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        write_embed(
+            ctx,
+            vec![
+                WriteEmbed::new(3)
+                    .title("All TOTWs")
+                    .headers(&["Rank", "Name", "Points"])
+                    .contents(vec![ranks, names, points]),
+            ],
+            false,
+        )
+        .await?;
+    }
     Ok(())
 }

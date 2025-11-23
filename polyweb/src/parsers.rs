@@ -4,8 +4,8 @@ use chrono::DateTime;
 
 use facet::Facet;
 use polycore::{
-    check_blacklist, get_alt, send_to_networker, PolyLeaderBoard, PolyLeaderBoardEntry,
-    HISTORY_FILE_LOCATION, TRACK_FILE, VERSION,
+    HISTORY_FILE_LOCATION, PolyLeaderBoard, PolyLeaderBoardEntry, TRACK_FILE, VERSION,
+    check_blacklist, get_alt, send_to_networker,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
@@ -37,7 +37,9 @@ pub(crate) async fn parse_leaderboard(file_path: &str) -> PolyLeaderBoard {
     facet_json::from_str(&contents).expect("Invalid leaderboard file")
 }
 
-pub(crate) async fn parse_leaderboard_with_records(file_path: &str) -> (PolyLeaderBoard, PolyLeaderBoard) {
+pub(crate) async fn parse_leaderboard_with_records(
+    file_path: &str,
+) -> (PolyLeaderBoard, PolyLeaderBoard) {
     let contents = fs::read_to_string(file_path)
         .await
         .expect("Failed to read file");

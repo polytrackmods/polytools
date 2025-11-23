@@ -4,20 +4,19 @@ pub mod parsers;
 use api::get_api;
 use filenamify::filenamify;
 use parsers::{
-    get_standard_leaderboard, parse_history, parse_leaderboard,
-    parse_leaderboard_with_records,
+    get_standard_leaderboard, parse_history, parse_leaderboard, parse_leaderboard_with_records,
 };
 use polycore::{
-    community_update, et_rankings_update, global_rankings_update, hof_update, read_track_file,
-    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_RANKINGS_FILE,
-    RANKINGS_FILE, TRACK_FILE, UPDATE_CYCLE_LEN, UPDATE_LB_COUNT,
+    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
+    UPDATE_CYCLE_LEN, UPDATE_LB_COUNT, community_update, et_rankings_update,
+    global_rankings_update, hof_update, read_track_file,
 };
 use rocket::form::Context;
 use rocket::fs::FileServer;
 use rocket::tokio::join;
 use rocket::tokio::{task, time::sleep};
 use rocket::{get, main, routes};
-use rocket_dyn_templates::{context, Template};
+use rocket_dyn_templates::{Template, context};
 
 use crate::api::get_lbfunc;
 

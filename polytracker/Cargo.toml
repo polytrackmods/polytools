@@ -1,7 +1,7 @@
 [package]
 name = "polytracker"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 anyhow = "1.0.99"
@@ -11,7 +11,7 @@ facet = "0.28.3"
 facet-json = "0.28.2"
 poise = "0.6.1"
 polycore = { version = "0.1.0", path = "../polycore" }
-polytrack-codes = "0.1.2"
+polytrack-codes = "0.2.1"
 regex = "1.11.2"
 reqwest = { version = "0.12.23", features = ["json"] }
 sha256 = "1.6.0"

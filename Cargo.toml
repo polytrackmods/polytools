@@ -7,4 +7,4 @@ members = [
     "polynetworker",
     "polymanager",
 ]
-resolver = "2"
+resolver = "3"
