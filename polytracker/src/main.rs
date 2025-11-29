@@ -19,7 +19,7 @@ use sqlx::sqlite::SqlitePoolOptions;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 use tokio::task;
 use tokio::time::{Instant, sleep, sleep_until};
@@ -131,11 +131,33 @@ async fn main() -> Result<()> {
             sleep_until(wakeup_time).await;
         }
     });
+    let pool2 = pool.clone();
     let totw_updater = task::spawn(async move {
         loop {
-            totw::update(&pool)
+            totw::update(&pool2)
                 .await
                 .unwrap_or_else(|_| println!("failed to update TOTW"));
+            sleep(Duration::from_secs(3600)).await;
+        }
+    });
+    let final_totw_updater = task::spawn(async move {
+        loop {
+            if let Some(current_totw) = totw::get_current_totw(&pool)
+                .await
+                .expect("Failed to make request")
+            {
+                if let Some(end) = current_totw.end {
+                    let final_update_time =
+                        UNIX_EPOCH + Duration::from_secs(end as u64) - Duration::from_secs(60);
+                    if let Ok(dur) = final_update_time.duration_since(SystemTime::now()) {
+                        sleep(dur).await;
+                        totw::update(&pool)
+                            .await
+                            .unwrap_or_else(|_| println!("failed to update TOTW"));
+                        continue;
+                    }
+                }
+            }
             sleep(Duration::from_secs(3600)).await;
         }
     });
@@ -145,7 +167,8 @@ async fn main() -> Result<()> {
     tokio::select! {
         _ = et_updater => println!("ET updater task finished unexpectedly."),
         _ = client_task => println!("Client stopped."),
-        _ = totw_updater => println!("TOTW updater task finished unexpectedly.")
+        _ = totw_updater => println!("TOTW updater task finished unexpectedly."),
+        _ = final_totw_updater => println!("Final TOTW updater task finished unexpectedly."),
     }
     Ok(())
 }
