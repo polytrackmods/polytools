@@ -11,3 +11,5 @@ filenamify = "0.1.2"
 polycore = { version = "0.1.0", path = "../polycore" }
 reqwest = { version = "0.12.23", features = ["json"] }
 tokio = { version = "1.47.1", features = ["fs", "macros", "rt-multi-thread"] }
+tracing = "0.1.43"
+tracing-subscriber = "0.3.22"

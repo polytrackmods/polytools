@@ -12,7 +12,7 @@ use dotenvy::dotenv;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::{EditTracker, Framework, FrameworkOptions, Prefix, PrefixFrameworkOptions};
-use polycore::{get_datetime, recent_et_period};
+use polycore::recent_et_period;
 use serenity::{ClientBuilder, GatewayIntents};
 use sqlx::migrate;
 use sqlx::sqlite::SqlitePoolOptions;
@@ -35,6 +35,8 @@ type Context<'a> = poise::Context<'a, BotData, Error>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    tracing::subscriber::set_global_default(subscriber)?;
     dotenv().ok();
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://poly.db".to_string());
     let pool = SqlitePoolOptions::new()
@@ -85,21 +87,19 @@ async fn main() -> Result<()> {
             },
             pre_command: |ctx| {
                 Box::pin(async move {
-                    println!(
-                        "Executing command {} issued by {} at {}",
+                    tracing::info!(
+                        "Executing command {} issued by {}",
                         ctx.command().qualified_name,
                         ctx.author().display_name(),
-                        get_datetime()
                     );
                 })
             },
             post_command: |ctx| {
                 Box::pin(async move {
-                    println!(
-                        "Executed command {} issued by {} at {}!",
+                    tracing::info!(
+                        "Executed command {} issued by {}!",
                         ctx.command().qualified_name,
                         ctx.author().display_name(),
-                        get_datetime()
                     );
                 })
             },
@@ -122,7 +122,7 @@ async fn main() -> Result<()> {
         loop {
             et_tracks_update(http.clone())
                 .await
-                .unwrap_or_else(|_| eprintln!("failed to update ET tracks"));
+                .unwrap_or_else(|_| tracing::error!("Failed to update ET tracks"));
             let next_run = recent_et_period(Utc::now()) + ET_PERIOD_DURATION;
             let duration_until = next_run.timestamp_millis() - Utc::now().timestamp_millis();
             let sleep_duration =
@@ -136,16 +136,13 @@ async fn main() -> Result<()> {
         loop {
             totw::update(&pool2)
                 .await
-                .unwrap_or_else(|_| println!("failed to update TOTW"));
+                .unwrap_or_else(|_| tracing::error!("Failed to update TOTW"));
             sleep(Duration::from_secs(3600)).await;
         }
     });
     let final_totw_updater = task::spawn(async move {
         loop {
-            if let Some(current_totw) = totw::get_current_totw(&pool)
-                .await
-                .expect("Failed to make request")
-            {
+            if let Ok(Some(current_totw)) = totw::get_current_totw(&pool).await {
                 if let Some(end) = current_totw.end {
                     let final_update_time =
                         UNIX_EPOCH + Duration::from_secs(end as u64) - Duration::from_secs(60);
@@ -153,10 +150,12 @@ async fn main() -> Result<()> {
                         sleep(dur).await;
                         totw::update(&pool)
                             .await
-                            .unwrap_or_else(|_| println!("failed to update TOTW"));
+                            .unwrap_or_else(|_| tracing::error!("failed to update TOTW"));
                         continue;
                     }
                 }
+            } else {
+                tracing::warn!("Unable to get current TOTW");
             }
             sleep(Duration::from_secs(3600)).await;
         }
@@ -165,10 +164,10 @@ async fn main() -> Result<()> {
         client.start().await.expect("Failed to start client");
     });
     tokio::select! {
-        _ = et_updater => println!("ET updater task finished unexpectedly."),
-        _ = client_task => println!("Client stopped."),
-        _ = totw_updater => println!("TOTW updater task finished unexpectedly."),
-        _ = final_totw_updater => println!("Final TOTW updater task finished unexpectedly."),
+        _ = et_updater => tracing::error!("ET updater task finished unexpectedly."),
+        _ = client_task => tracing::error!("Client stopped."),
+        _ = totw_updater => tracing::error!("TOTW updater task finished unexpectedly."),
+        _ = final_totw_updater => tracing::error!("Final TOTW updater task finished unexpectedly."),
     }
     Ok(())
 }

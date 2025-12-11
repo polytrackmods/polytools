@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::HashMap, time::Duration};
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use facet::Facet;
 use reqwest::Client;
 use tokio::{
@@ -12,8 +12,8 @@ use tokio::{
 use filenamify::filenamify;
 
 use polycore::{
-    COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION, get_datetime,
-    read_track_file, send_to_networker,
+    COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION, read_track_file,
+    send_to_networker,
 };
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -57,16 +57,9 @@ impl FileRecord {
         }
     }
     fn print(&self, track: &str, prior_frames: u32) {
-        let timestamp = self.timestamp;
-        let date = DateTime::from_timestamp(timestamp, 0)
-            .expect("Should always be a valid timestamp")
-            .format("%Y/%m/%d %H:%M:%S")
-            .to_string();
-        println!(
-            "{}New {} Record\n{} | {:>2.3} ({:0>1.3}) | {}",
-            " ".repeat(22),
+        tracing::info!(
+            "New {} Record\n {:>2.3} ({:0>1.3}) | {}",
             track,
-            date,
             f64::from(self.frames) / 1000.0,
             (f64::from(prior_frames) - f64::from(self.frames)) / -1000.0,
             self.name,
@@ -148,6 +141,8 @@ struct Recording {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    tracing::subscriber::set_global_default(subscriber)?;
     let client = Client::new();
     let mut tracks = read_track_file(TRACK_FILE).await;
     tracks.append(&mut read_track_file(COMMUNITY_TRACK_FILE).await);
@@ -171,7 +166,7 @@ async fn main() -> Result<(), Error> {
         }
     }
     loop {
-        println!("Checking records! ({})", get_datetime());
+        tracing::info!("Checking records!");
         for (id, name) in &tracks {
             let url = format!(
                 "https://vps.kodub.com/leaderboard?version={VERSION}&skip=0&onlyVerified=true&amount=5&trackId={id}"

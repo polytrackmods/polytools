@@ -1496,6 +1496,8 @@ pub async fn get_totw_lb(ctx: Context<'_>, current: bool) -> Result<()> {
                 false,
             )
             .await?;
+        } else {
+            ctx.say("Could not find current TOTW").await?;
         }
     } else {
         let mut discords: HashMap<i64, String> = HashMap::new();
