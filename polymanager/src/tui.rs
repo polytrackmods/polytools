@@ -60,13 +60,11 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
             .margin(0)
             .split(f.area());
 
-            // Title
             let title = Paragraph::new("Polymanager Dashboard")
                 .style(Style::default().add_modifier(Modifier::BOLD))
                 .centered();
             f.render_widget(title, layout[0]);
 
-            // Services
             let service_items: Vec<ListItem> = manager
                 .config
                 .services
@@ -110,7 +108,6 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                 );
             f.render_widget(service_list, layout[2]);
 
-            // Presets
             let preset_items: Vec<ListItem> = manager
                 .config
                 .presets
@@ -141,53 +138,51 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                 );
             f.render_widget(preset_list, layout[3]);
 
-            // Logs
             let log_layout = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
                 .split(layout[4]);
             max_log_scroll = service_log_lines
                 .len()
                 .max(manager_log_lines.len())
-                .saturating_sub(log_layout[0].height as usize - 2);
+                .saturating_sub(log_layout[1].height as usize - 2);
             let service_skip = scroll_pos.min(
                 service_log_lines
                     .len()
-                    .saturating_sub(log_layout[0].height as usize - 2),
+                    .saturating_sub(log_layout[1].height as usize - 2),
             );
             let manager_skip = scroll_pos.min(
                 manager_log_lines
                     .len()
-                    .saturating_sub(log_layout[1].height as usize - 2),
+                    .saturating_sub(log_layout[0].height as usize - 2),
             );
-            // Service logs
             let service_log_text = service_log_lines
                 .iter()
                 .cloned()
                 .rev()
                 .skip(service_skip)
-                .take(log_layout[0].height as usize - 2)
+                .take(log_layout[1].height as usize - 2)
                 .rev()
                 .collect::<Vec<_>>()
                 .join("\n");
             let service_log_widget = Paragraph::new(service_log_text)
                 .block(Block::default().borders(Borders::ALL).title("Service logs"))
                 .style(Style::default().fg(Color::Gray));
-            f.render_widget(service_log_widget, log_layout[0]);
+            f.render_widget(service_log_widget, log_layout[1]);
             // Manager logs
             let manager_log_text = manager_log_lines
                 .iter()
                 .cloned()
                 .rev()
                 .skip(manager_skip)
-                .take(log_layout[1].height as usize - 2)
+                .take(log_layout[0].height as usize - 2)
                 .rev()
                 .collect::<Vec<_>>()
                 .join("\n");
             let manager_log_widget = Paragraph::new(manager_log_text)
                 .block(Block::default().borders(Borders::ALL).title("Manager logs"))
                 .style(Style::default().fg(Color::Gray));
-            f.render_widget(manager_log_widget, log_layout[1]);
+            f.render_widget(manager_log_widget, log_layout[0]);
             let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
             let mut scrollbar_state = ScrollbarState::new(max_log_scroll)
                 .position(max_log_scroll.saturating_sub(scroll_pos));

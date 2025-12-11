@@ -100,6 +100,8 @@ async fn history(track_id: &str) -> Template {
 
 #[main]
 async fn main() -> Result<(), Box<rocket::Error>> {
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set subscriber");
     let rocket = rocket::build()
         .mount(
             "/",
@@ -130,8 +132,8 @@ async fn main() -> Result<(), Box<rocket::Error>> {
                 )
             )
             .0
-            .unwrap_or_else(|_| println!("Failed update"));
-            println!("Cycle done");
+            .unwrap_or_else(|_| tracing::error!("Failed HOF update"));
+            tracing::info!("HOF update done");
             join!(
                 community_update(),
                 sleep(
@@ -140,8 +142,8 @@ async fn main() -> Result<(), Box<rocket::Error>> {
                 )
             )
             .0
-            .unwrap_or_else(|_| println!("Failed update"));
-            println!("Cycle done");
+            .unwrap_or_else(|_| tracing::error!("Failed CT update"));
+            tracing::info!("CT update done");
             join!(
                 et_rankings_update(),
                 sleep(
@@ -150,8 +152,8 @@ async fn main() -> Result<(), Box<rocket::Error>> {
                 )
             )
             .0
-            .unwrap_or_else(|_| println!("Failed update"));
-            println!("Cycle done");
+            .unwrap_or_else(|_| tracing::error!("Failed ET update"));
+            tracing::info!("ET update done");
             join!(
                 global_rankings_update(),
                 sleep(
@@ -160,8 +162,8 @@ async fn main() -> Result<(), Box<rocket::Error>> {
                 )
             )
             .0
-            .unwrap_or_else(|_| println!("Failed update"));
-            println!("Cycle done");
+            .unwrap_or_else(|_| tracing::error!("Failed Global update"));
+            tracing::info!("Global update done");
         }
     });
     rocket.launch().await?;
