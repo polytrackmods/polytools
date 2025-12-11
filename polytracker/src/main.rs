@@ -134,10 +134,11 @@ async fn main() -> Result<()> {
     let pool2 = pool.clone();
     let totw_updater = task::spawn(async move {
         loop {
+            sleep(Duration::from_secs(1800)).await;
             totw::update(&pool2)
                 .await
                 .unwrap_or_else(|_| tracing::error!("Failed to update TOTW"));
-            sleep(Duration::from_secs(3600)).await;
+            sleep(Duration::from_secs(1800)).await;
         }
     });
     let final_totw_updater = task::spawn(async move {
