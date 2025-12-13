@@ -11,7 +11,7 @@ use serde::Deserialize;
 use std::{
     collections::VecDeque,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicU32},
     time::{Duration, Instant},
 };
 use tokio::{net::TcpListener, sync::oneshot::Sender, task, time::sleep};
@@ -31,11 +31,24 @@ struct QueueEntry {
     responder: Sender<(StatusCode, String)>,
 }
 
+#[derive(Clone)]
+struct AppState {
+    queue: SharedQueue,
+    count: Arc<AtomicU32>,
+}
+
 type SharedQueue = Arc<Mutex<VecDeque<QueueEntry>>>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let subscriber = tracing_subscriber::fmt().compact().finish();
+    tracing::subscriber::set_global_default(subscriber)?;
     let queue: SharedQueue = Arc::new(Mutex::new(VecDeque::new()));
+    let count = Arc::new(AtomicU32::new(0));
+    let state = AppState {
+        queue: Arc::clone(&queue),
+        count,
+    };
     let limiter: RateLimiter = RateLimiter::new(MAX_PER_MINUTE, WINDOW_SECONDS);
     let client = Client::new();
 
@@ -49,35 +62,52 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/submit", post(handle_submit))
         .route("/queue", get(get_queue))
-        .with_state(queue);
+        .route("/count", get(get_count))
+        .route("/reset_count", get(reset_count))
+        .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = TcpListener::bind(addr).await?;
-    println!("Listening on http://{addr}");
+    tracing::info!("Listening on http://{addr}");
 
     axum::serve(listener, app).await?;
     Ok(())
 }
 
 #[allow(clippy::significant_drop_tightening)]
-async fn get_queue(State(queue): State<SharedQueue>) -> impl IntoResponse {
-    let queue = queue.lock().expect("other threads should not panic");
+async fn get_queue(State(state): State<AppState>) -> impl IntoResponse {
+    let queue = state.queue.lock().expect("other threads should not panic");
     let queue_out: Vec<_> = queue.iter().map(|entry| entry.url.clone()).collect();
     Json(queue_out)
 }
 
+async fn get_count(State(state): State<AppState>) -> String {
+    let count = state.count.load(std::sync::atomic::Ordering::Relaxed);
+    count.to_string()
+}
+
+async fn reset_count(State(state): State<AppState>) -> String {
+    let count = state.count.load(std::sync::atomic::Ordering::Relaxed);
+    tracing::info!("Resetting! Current request count: {count}");
+    state.count.store(0, std::sync::atomic::Ordering::Relaxed);
+    count.to_string()
+}
+
 async fn handle_submit(
-    State(queue): State<SharedQueue>,
+    State(state): State<AppState>,
     Json(payload): Json<UrlRequest>,
 ) -> impl IntoResponse {
     let (tx, rx) = tokio::sync::oneshot::channel();
     {
-        let mut q = queue.lock().expect("other threads should not panic");
+        let mut q = state.queue.lock().expect("other threads should not panic");
         q.push_back(QueueEntry {
             url: payload.url,
             responder: tx,
         });
     }
+    state
+        .count
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     rx.await.unwrap_or_else(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,

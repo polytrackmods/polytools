@@ -35,7 +35,7 @@ type Context<'a> = poise::Context<'a, BotData, Error>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    let subscriber = tracing_subscriber::fmt().compact().finish();
     tracing::subscriber::set_global_default(subscriber)?;
     dotenv().ok();
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://poly.db".to_string());

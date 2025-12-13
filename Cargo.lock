@@ -2759,6 +2759,8 @@ dependencies = [
  "reqwest 0.12.24",
  "serde",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
