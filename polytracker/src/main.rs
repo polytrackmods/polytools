@@ -146,7 +146,7 @@ async fn main() -> Result<()> {
             if let Ok(Some(current_totw)) = totw::get_current_totw(&pool).await {
                 if let Some(end) = current_totw.end {
                     let final_update_time =
-                        UNIX_EPOCH + Duration::from_secs(end as u64) - Duration::from_secs(60);
+                        UNIX_EPOCH + Duration::from_secs(end as u64) - Duration::from_secs(30);
                     if let Ok(dur) = final_update_time.duration_since(SystemTime::now()) {
                         sleep(dur).await;
                         totw::update(&pool)
