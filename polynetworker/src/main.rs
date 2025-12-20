@@ -149,7 +149,7 @@ async fn dispatcher(queue: SharedQueue, mut limiter: RateLimiter, client: Client
                 entry
                     .responder
                     .send(response)
-                    .unwrap_or_else(|_| eprintln!("Receiver dropped"));
+                    .unwrap_or_else(|_| tracing::error!("Receiver dropped"));
             });
         } else {
             sleep(Duration::from_millis(100)).await;
