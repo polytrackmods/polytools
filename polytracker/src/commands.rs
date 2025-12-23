@@ -1043,18 +1043,7 @@ pub async fn rankings(
     .as_millis();
     let headers: Vec<&str> = vec![
         "Rank",
-        {
-            match leaderboard {
-                Global => "Time",
-                _ => {
-                    if time_based {
-                        "Time"
-                    } else {
-                        "Points"
-                    }
-                }
-            }
-        },
+        if time_based { "Time" } else { "Points" },
         "Player",
         "Update in",
     ];
