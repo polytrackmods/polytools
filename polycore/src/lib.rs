@@ -2,7 +2,6 @@ use std::{collections::HashMap, time::Duration};
 
 use anyhow::{Error, Result, anyhow};
 use chrono::{DateTime, Datelike as _, Utc};
-use dotenvy::dotenv;
 use facet::Facet;
 use futures::future::join_all;
 use regex::Regex;
@@ -13,6 +12,7 @@ use tokio::{fs, task, time::sleep};
 pub const BLACKLIST_FILE: &str = "data/blacklist.txt";
 pub const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
 pub const RANKINGS_FILE: &str = "data/poly_rankings.txt";
+pub const POINT_RANKINGS_FILE: &str = "data/point_poly_rankings.txt";
 const LB_SIZE: u32 = 20;
 pub const TRACK_FILE: &str = "lists/official_tracks.txt";
 pub const HOF_CODE_FILE: &str = "lists/hof_codes.txt";
@@ -164,7 +164,7 @@ pub async fn write_altlist(content: String) -> Result<()> {
     Ok(())
 }
 
-#[allow(clippy::missing_errors_doc)]
+/* #[allow(clippy::missing_errors_doc)]
 #[allow(clippy::missing_panics_doc)]
 pub async fn global_rankings_update() -> Result<()> {
     dotenv().ok();
@@ -224,7 +224,7 @@ pub async fn global_rankings_update() -> Result<()> {
     fs::write(RANKINGS_FILE, output).await?;
     tracing::info!("Updated Global LB!");
     Ok(())
-}
+} */
 
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
@@ -281,7 +281,7 @@ pub async fn hof_update() -> Result<()> {
                     tiebreakers[*ranking] += 1;
                 }
             }
-            (name.to_string(), points, tiebreakers)
+            (name.clone(), points, tiebreakers)
         })
         .collect();
     sorted_leaderboard.sort_by(|a, b| {
@@ -407,7 +407,7 @@ pub async fn community_update() -> Result<()> {
                 points += 100.0 / (*ranking as f64 + 1.0).sqrt();
                 *tiebreakers.get_mut(*ranking).unwrap_or(&mut 0) += 1;
             }
-            (name.to_string(), points as u32, tiebreakers)
+            (name.clone(), points as u32, tiebreakers)
         })
         .collect();
     sorted_leaderboard.sort_by(|a, b| {
@@ -450,7 +450,7 @@ pub async fn community_update() -> Result<()> {
         }
         final_player_records.push_entry(PolyLeaderBoardEntry::new(
             rank_prev,
-            name.to_string(),
+            name.clone(),
             records_prev.to_string(),
         ));
     }
@@ -485,6 +485,135 @@ pub async fn community_update() -> Result<()> {
     let time_output = facet_json::to_string(&time_leaderboard);
     fs::write(COMMUNITY_TIME_RANKINGS_FILE, time_output).await?;
     tracing::info!("Updated CT LB!");
+    Ok(())
+}
+
+#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::missing_errors_doc)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
+pub async fn global_rankings_update() -> Result<()> {
+    let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
+        .await?
+        .lines()
+        .map(|track_id| {
+            track_id
+                .split_once(' ')
+                .expect("invalid lb file format")
+                .0
+                .to_string()
+        })
+        .collect();
+    let track_num = u32::try_from(track_ids.len()).expect("Shouldn't have that many tracks");
+    let leaderboards = tracks_leaderboards(track_ids, LB_SIZE).await?;
+    let mut point_rankings: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut time_rankings: HashMap<String, Vec<u32>> = HashMap::new();
+    for leaderboard in leaderboards {
+        let mut has_ranking: Vec<String> = Vec::new();
+        let mut pos = 0;
+        for entry in leaderboard {
+            let name = get_alt(&entry.name).await?;
+            if !has_ranking.contains(&name) && check_blacklist(&name).await? {
+                point_rankings.entry(name.clone()).or_default().push(pos);
+                time_rankings
+                    .entry(name.clone())
+                    .or_default()
+                    .push(entry.frames);
+                has_ranking.push(name);
+                pos += 1;
+            }
+        }
+    }
+    let mut sorted_point_leaderboard: Vec<(String, u32, Vec<u32>)> = point_rankings
+        .iter()
+        .map(|(name, rankings)| {
+            let mut tiebreakers = vec![0; LB_SIZE as usize * 500];
+            let mut points = 0.0;
+            for ranking in rankings {
+                points += 100.0 / (*ranking as f64 + 1.0).sqrt();
+                *tiebreakers.get_mut(*ranking).unwrap_or(&mut 0) += 1;
+            }
+            (name.clone(), points as u32, tiebreakers)
+        })
+        .collect();
+    sorted_point_leaderboard.sort_by(|a, b| {
+        let (_, points_a, tiebreakers_a) = a;
+        let (_, points_b, tiebreakers_b) = b;
+        points_b
+            .cmp(points_a)
+            .then_with(|| tiebreakers_b.cmp(tiebreakers_a))
+    });
+    let final_point_leaderboard_entries: Vec<_> = sorted_point_leaderboard
+        .into_iter()
+        .enumerate()
+        .map(|(rank, (name, points, _))| {
+            PolyLeaderBoardEntry::new(rank + 1, name, points.to_string())
+        })
+        .collect();
+    let final_point_leaderboard = PolyLeaderBoard {
+        total: final_point_leaderboard_entries.len(),
+        entries: final_point_leaderboard_entries,
+    };
+    let mut output = facet_json::to_string(&final_point_leaderboard);
+    let mut player_records: HashMap<String, u32> = HashMap::new();
+    for (name, rankings) in point_rankings {
+        for rank in rankings {
+            if rank == 0 {
+                *player_records.entry(name.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut player_records: Vec<(String, u32)> = player_records.into_iter().collect();
+    player_records.sort_by_key(|(_, amt)| *amt);
+    player_records.reverse();
+    let mut final_player_records = PolyLeaderBoard::default();
+    let mut records_prev = track_num + 1;
+    let mut rank_prev = 0;
+    for (name, records) in &player_records {
+        if *records < records_prev {
+            records_prev = *records;
+            rank_prev += 1;
+        }
+        final_player_records.push_entry(PolyLeaderBoardEntry::new(
+            rank_prev,
+            name.clone(),
+            records_prev.to_string(),
+        ));
+    }
+    output.push('\n');
+    output.push_str(&facet_json::to_string(&final_player_records));
+    fs::write(POINT_RANKINGS_FILE, output).await?;
+    let mut sorted_times: Vec<(String, u32)> = time_rankings
+        .into_iter()
+        .filter(|(_, times)| times.len() == track_num as usize)
+        .map(|(name, times)| (name, times.iter().sum()))
+        .collect();
+    sorted_times.sort_by_key(|(_, frames)| *frames);
+    let time_leaderboard = PolyLeaderBoard {
+        total: sorted_times.len(),
+        entries: sorted_times
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, frames))| {
+                PolyLeaderBoardEntry::new(
+                    i + 1,
+                    name,
+                    format!(
+                        "{}:{:0>2}.{:0>3}",
+                        frames / 60000,
+                        frames % 60000 / 1000,
+                        frames % 1000
+                    ),
+                )
+            })
+            .collect(),
+    };
+    let time_output = facet_json::to_string(&time_leaderboard);
+    fs::write(RANKINGS_FILE, time_output).await?;
+    tracing::info!("Updated Global LB!");
     Ok(())
 }
 

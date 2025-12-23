@@ -17,10 +17,10 @@ use poise::{
 use polycore::{
     COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE,
     ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
-    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, PolyLeaderBoard, RANKINGS_FILE, REQUEST_RETRY_COUNT,
-    TRACK_FILE, UPDATE_CYCLE_LEN, VERSION, check_blacklist, community_update, et_rankings_update,
-    get_alt, global_rankings_update, hof_update, read_altlist, read_blacklist, read_track_file,
-    send_to_networker, write_altlist, write_blacklist,
+    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, POINT_RANKINGS_FILE, PolyLeaderBoard, RANKINGS_FILE,
+    REQUEST_RETRY_COUNT, TRACK_FILE, UPDATE_CYCLE_LEN, VERSION, check_blacklist, community_update,
+    et_rankings_update, get_alt, global_rankings_update, hof_update, read_altlist, read_blacklist,
+    read_track_file, send_to_networker, write_altlist, write_blacklist,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -32,7 +32,7 @@ use tokio::time::sleep;
 use tokio::{fs, task};
 
 // argument enum for leaderboard related commands
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum LeaderboardChoice {
     Global,
     Community,
@@ -999,9 +999,15 @@ pub async fn rankings(
         ctx.defer().await?;
     }
     let leaderboard = leaderboard.unwrap_or(LeaderboardChoice::Global);
-    let time_based = time_based.unwrap_or(false);
+    let time_based = time_based.unwrap_or(leaderboard == Global);
     let rankings_file = match leaderboard {
-        Global => RANKINGS_FILE,
+        Global => {
+            if time_based {
+                RANKINGS_FILE
+            } else {
+                POINT_RANKINGS_FILE
+            }
+        }
         Community => {
             if time_based {
                 COMMUNITY_TIME_RANKINGS_FILE
