@@ -1,11 +1,12 @@
 #!/bin/sh
-touch data/alt_accounts.txt
-touch data/blacklist.txt
-touch data/community_rankings.txt
-touch data/community_time_rankings.txt
-touch data/hof_rankings.txt
-touch data/hof_time_rankings.txt
-touch data/poly_rankings.txt
+touch data/alt_accounts.json
+touch data/blacklist.json
+touch data/community_rankings.json
+touch data/community_time_rankings.json
+touch data/hof_rankings.json
+touch data/hof_time_rankings.json
+touch data/official_rankings.json
+touch data/official_time_rankings.json
 
 test -e .env || cp .env.example .env
 

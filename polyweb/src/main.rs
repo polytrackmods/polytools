@@ -7,7 +7,7 @@ use parsers::{
     get_standard_leaderboard, parse_history, parse_leaderboard, parse_leaderboard_with_records,
 };
 use polycore::{
-    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_RANKINGS_FILE, RANKINGS_FILE, TRACK_FILE,
+    COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_RANKINGS_FILE, OFFICIAL_RANKINGS_FILE, OFFICIAL_TRACK_FILE,
     UPDATE_CYCLE_LEN, UPDATE_LB_COUNT, community_update, et_rankings_update,
     global_rankings_update, hof_update, read_track_file,
 };
@@ -27,7 +27,7 @@ fn index() -> Template {
 
 #[get("/global")]
 async fn global() -> Template {
-    let leaderboard = parse_leaderboard(RANKINGS_FILE).await;
+    let leaderboard = parse_leaderboard(OFFICIAL_RANKINGS_FILE).await;
     Template::render("leaderboard", context! { leaderboard })
 }
 
@@ -45,7 +45,7 @@ async fn hof() -> Template {
 
 #[get("/lb-standard")]
 async fn standard_lb_home() -> Template {
-    let track_names: Vec<String> = read_track_file(TRACK_FILE)
+    let track_names: Vec<String> = read_track_file(OFFICIAL_TRACK_FILE)
         .await
         .into_iter()
         .map(|(_, name)| name)
@@ -74,7 +74,7 @@ fn tutorial() -> Template {
 
 #[get("/history")]
 async fn history_home() -> Template {
-    let mut track_names: Vec<String> = read_track_file(TRACK_FILE)
+    let mut track_names: Vec<String> = read_track_file(OFFICIAL_TRACK_FILE)
         .await
         .into_iter()
         .map(|(_, name)| name)

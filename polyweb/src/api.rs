@@ -1,6 +1,6 @@
 use polycore::{
     ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
-    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, PolyLeaderBoard, RANKINGS_FILE,
+    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, PolyLeaderBoard, OFFICIAL_RANKINGS_FILE,
 };
 use rocket::{get, request::FromParam, tokio::fs};
 
@@ -52,7 +52,7 @@ pub(crate) async fn get_api(list: ApiList) -> String {
             AltList, BlackList, Community, CommunityTime, Global, History, Hof, HofTime,
         };
         match list {
-            Global => RANKINGS_FILE,
+            Global => OFFICIAL_RANKINGS_FILE,
             Hof => HOF_RANKINGS_FILE,
             HofTime => HOF_TIME_RANKINGS_FILE,
             Community => COMMUNITY_RANKINGS_FILE,
@@ -69,7 +69,7 @@ pub(crate) async fn get_api(list: ApiList) -> String {
 pub(crate) async fn get_lbfunc(query: LbFuncQuery) -> String {
     let file = {
         match query.leaderboard.as_str() {
-            "global" => RANKINGS_FILE,
+            "global" => OFFICIAL_RANKINGS_FILE,
             "community" => COMMUNITY_RANKINGS_FILE,
             "community-time" => COMMUNITY_TIME_RANKINGS_FILE,
             _ => panic!("invalid leaderboard"),

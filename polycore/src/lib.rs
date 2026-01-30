@@ -9,28 +9,30 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, task, time::sleep};
 
-pub const BLACKLIST_FILE: &str = "data/blacklist.txt";
-pub const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.txt";
-pub const RANKINGS_FILE: &str = "data/poly_rankings.txt";
-pub const POINT_RANKINGS_FILE: &str = "data/point_poly_rankings.txt";
+pub const BLACKLIST_FILE: &str = "data/blacklist.json";
+pub const ALT_ACCOUNT_FILE: &str = "data/alt_accounts.json";
 const LB_SIZE: u32 = 20;
-pub const TRACK_FILE: &str = "lists/official_tracks.txt";
+pub const OFFICIAL_RANKINGS_FILE: &str = "data/official_rankings.json";
+pub const OFFICIAL_TIME_RANKINGS_FILE: &str = "data/official_time_rankings.json";
+pub const OFFICIAL_TRACK_FILE: &str = "lists/official_tracks.txt";
 pub const HOF_CODE_FILE: &str = "lists/hof_codes.txt";
 pub const HOF_TRACK_FILE: &str = "lists/hof_tracks.txt";
 pub const HOF_ALL_TRACK_FILE: &str = "lists/hof_tracks_all.txt";
-pub const HOF_POINTS_FILE: &str = "lists/hof_points.txt";
-pub const HOF_RANKINGS_FILE: &str = "data/hof_rankings.txt";
-pub const HOF_TIME_RANKINGS_FILE: &str = "data/hof_time_rankings.txt";
-pub const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
-pub const COMMUNITY_RANKINGS_FILE: &str = "data/community_rankings.txt";
-pub const COMMUNITY_TIME_RANKINGS_FILE: &str = "data/community_time_rankings.txt";
+pub const HOF_RANKINGS_FILE: &str = "data/hof_rankings.json";
+pub const HOF_TIME_RANKINGS_FILE: &str = "data/hof_time_rankings.json";
 const COMMUNITY_LB_SIZE: u32 = 20;
-pub const VERSION: &str = "0.5.2";
-pub const HISTORY_FILE_LOCATION: &str = "histories/";
-pub const REQUEST_RETRY_COUNT: u32 = 5;
+pub const COMMUNITY_TRACK_FILE: &str = "lists/community_tracks.txt";
+pub const COMMUNITY_RANKINGS_FILE: &str = "data/community_rankings.json";
+pub const COMMUNITY_TIME_RANKINGS_FILE: &str = "data/community_time_rankings.json";
 pub const ET_CODE_FILE: &str = "data/et_codes.txt";
 pub const ET_TRACK_FILE: &str = "data/et_tracks.txt";
-pub const ET_RANKINGS_FILE: &str = "data/et_rankings.txt";
+pub const ET_RANKINGS_FILE: &str = "data/et_rankings.json";
+pub const VERSION: &str = "0.5.2";
+pub const SIMPLE_POINTS: [u32; 20] = [
+    100, 66, 50, 37, 30, 25, 21, 17, 14, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+];
+pub const HISTORY_FILE_LOCATION: &str = "histories/";
+pub const REQUEST_RETRY_COUNT: u32 = 5;
 
 pub const UPDATE_LB_COUNT: u64 = 4;
 pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT * 10 * 60);
@@ -164,67 +166,6 @@ pub async fn write_altlist(content: String) -> Result<()> {
     Ok(())
 }
 
-/* #[allow(clippy::missing_errors_doc)]
-#[allow(clippy::missing_panics_doc)]
-pub async fn global_rankings_update() -> Result<()> {
-    dotenv().ok();
-    let official_tracks_file = TRACK_FILE;
-    let track_ids: Vec<String> = fs::read_to_string(official_tracks_file)
-        .await?
-        .lines()
-        .map(|s| {
-            s.split(' ')
-                .next()
-                .expect("Error in track file")
-                .to_string()
-        })
-        .collect();
-    let track_num = track_ids.len();
-    let leaderboards = tracks_leaderboards(track_ids, LB_SIZE).await?;
-    let mut player_times: HashMap<String, Vec<u32>> = HashMap::new();
-    for leaderboard in leaderboards {
-        let mut has_time: Vec<String> = Vec::new();
-        for entry in leaderboard {
-            let name = get_alt(&entry.name).await?;
-            if !has_time.contains(&name) && check_blacklist(&name).await? {
-                player_times
-                    .entry(name.clone())
-                    .or_default()
-                    .push(entry.frames);
-                has_time.push(name);
-            }
-        }
-    }
-    let mut sorted_leaderboard: Vec<(String, u32)> = player_times
-        .into_iter()
-        .filter(|(_, times)| times.len() == track_num)
-        .map(|(name, times)| (name, times.iter().sum()))
-        .collect();
-    sorted_leaderboard.sort_by_key(|(_, frames)| *frames);
-    let leaderboard = PolyLeaderBoard {
-        total: sorted_leaderboard.len(),
-        entries: sorted_leaderboard
-            .into_iter()
-            .enumerate()
-            .map(|(i, (name, frames))| {
-                PolyLeaderBoardEntry::new(
-                    i + 1,
-                    name,
-                    format!(
-                        "{}:{:0>2}.{:0>3}",
-                        frames / 60000,
-                        frames % 60000 / 1000,
-                        frames % 1000
-                    ),
-                )
-            })
-            .collect(),
-    };
-    let output = facet_json::to_string(&leaderboard);
-    fs::write(RANKINGS_FILE, output).await?;
-    tracing::info!("Updated Global LB!");
-    Ok(())
-} */
 
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
@@ -246,11 +187,6 @@ pub async fn hof_update() -> Result<()> {
     let leaderboards = tracks_leaderboards(track_ids, 1).await?;
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
     let mut time_rankings: HashMap<String, Vec<u32>> = HashMap::new();
-    let point_values: Vec<u32> = fs::read_to_string(HOF_POINTS_FILE)
-        .await?
-        .lines()
-        .map(|s| s.to_string().parse().expect("Invalid point value file"))
-        .collect();
     for leaderboard in leaderboards {
         let mut has_ranking: Vec<String> = Vec::new();
         let mut pos = 0;
@@ -262,7 +198,7 @@ pub async fn hof_update() -> Result<()> {
                     .entry(name.clone())
                     .or_default()
                     .push(entry.frames);
-                if pos + 1 > point_values.len() {
+                if pos + 1 > SIMPLE_POINTS.len() {
                     continue;
                 }
                 player_rankings.entry(name).or_default().push(pos);
@@ -273,11 +209,11 @@ pub async fn hof_update() -> Result<()> {
     let mut sorted_leaderboard: Vec<(String, u32, Vec<u32>)> = player_rankings
         .iter()
         .map(|(name, rankings)| {
-            let mut tiebreakers = vec![0; point_values.len()];
+            let mut tiebreakers = vec![0; SIMPLE_POINTS.len()];
             let mut points = 0;
             for ranking in rankings {
-                if *ranking < point_values.len() {
-                    points += point_values[*ranking];
+                if *ranking < SIMPLE_POINTS.len() {
+                    points += SIMPLE_POINTS[*ranking];
                     tiebreakers[*ranking] += 1;
                 }
             }
@@ -496,7 +432,7 @@ pub async fn community_update() -> Result<()> {
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
 pub async fn global_rankings_update() -> Result<()> {
-    let track_ids: Vec<String> = fs::read_to_string(TRACK_FILE)
+    let track_ids: Vec<String> = fs::read_to_string(OFFICIAL_TRACK_FILE)
         .await?
         .lines()
         .map(|track_id| {
@@ -585,7 +521,7 @@ pub async fn global_rankings_update() -> Result<()> {
     }
     output.push('\n');
     output.push_str(&facet_json::to_string(&final_player_records));
-    fs::write(POINT_RANKINGS_FILE, output).await?;
+    fs::write(OFFICIAL_RANKINGS_FILE, output).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
         .filter(|(_, times)| times.len() == track_num as usize)
@@ -612,7 +548,7 @@ pub async fn global_rankings_update() -> Result<()> {
             .collect(),
     };
     let time_output = facet_json::to_string(&time_leaderboard);
-    fs::write(RANKINGS_FILE, time_output).await?;
+    fs::write(OFFICIAL_TIME_RANKINGS_FILE, time_output).await?;
     tracing::info!("Updated Global LB!");
     Ok(())
 }
@@ -742,17 +678,11 @@ pub async fn et_rankings_update() -> Result<()> {
     let leaderboards = tracks_leaderboards(track_ids, 1).await?;
     let mut player_rankings: HashMap<String, Vec<usize>> = HashMap::new();
     let mut time_rankings: HashMap<String, Vec<u32>> = HashMap::new();
-    // TODO: change to actual point values
-    let point_values: Vec<u32> = fs::read_to_string(HOF_POINTS_FILE)
-        .await?
-        .lines()
-        .map(|s| s.to_string().parse().expect("Invalid point value file"))
-        .collect();
     for leaderboard in leaderboards {
         let mut has_ranking: Vec<String> = Vec::new();
         let mut pos = 0;
         for entry in leaderboard {
-            if pos + 1 > point_values.len() {
+            if pos + 1 > SIMPLE_POINTS.len() {
                 break;
             }
             let name = get_alt(&entry.name).await?;
@@ -770,11 +700,11 @@ pub async fn et_rankings_update() -> Result<()> {
     let mut sorted_leaderboard: Vec<(String, u32, Vec<u32>)> = player_rankings
         .iter()
         .map(|(name, rankings)| {
-            let mut tiebreakers = vec![0; point_values.len()];
+            let mut tiebreakers = vec![0; SIMPLE_POINTS.len()];
             let mut points = 0;
             for ranking in rankings {
-                if *ranking < point_values.len() {
-                    points += point_values[*ranking];
+                if *ranking < SIMPLE_POINTS.len() {
+                    points += SIMPLE_POINTS[*ranking];
                     tiebreakers[*ranking] += 1;
                 }
             }

@@ -17,8 +17,8 @@ use poise::{
 use polycore::{
     COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE,
     ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
-    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, POINT_RANKINGS_FILE, PolyLeaderBoard, RANKINGS_FILE,
-    REQUEST_RETRY_COUNT, TRACK_FILE, UPDATE_CYCLE_LEN, VERSION, check_blacklist, community_update,
+    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, OFFICIAL_TIME_RANKINGS_FILE, PolyLeaderBoard, OFFICIAL_RANKINGS_FILE,
+    REQUEST_RETRY_COUNT, OFFICIAL_TRACK_FILE, UPDATE_CYCLE_LEN, VERSION, check_blacklist, community_update,
     et_rankings_update, get_alt, global_rankings_update, hof_update, read_altlist, read_blacklist,
     read_track_file, send_to_networker, write_altlist, write_blacklist,
 };
@@ -357,7 +357,7 @@ pub async fn request(
                 ctx.say("Not an official track!").await?;
                 return Ok(());
             }
-            let track_ids = read_track_file(TRACK_FILE).await;
+            let track_ids = read_track_file(OFFICIAL_TRACK_FILE).await;
             let track_id = track_ids
                 .get(track.parse::<usize>()? - 1)
                 .expect("Couldn't find track");
@@ -457,7 +457,7 @@ pub async fn list(
     let track_file = {
         use LeaderboardChoice::{Community, Et, Global, Hof};
         match tracks {
-            Global => TRACK_FILE,
+            Global => OFFICIAL_TRACK_FILE,
             Community => COMMUNITY_TRACK_FILE,
             Hof => HOF_TRACK_FILE,
             Et => ET_TRACK_FILE,
@@ -596,7 +596,7 @@ pub async fn compare(
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let mut results: Vec<Vec<(u32, f64)>> = Vec::new();
     let track_ids = read_track_file(match tracks {
-        LeaderboardChoice::Global => TRACK_FILE,
+        LeaderboardChoice::Global => OFFICIAL_TRACK_FILE,
         LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
         LeaderboardChoice::Hof => HOF_TRACK_FILE,
         LeaderboardChoice::Et => ET_TRACK_FILE,
@@ -784,7 +784,7 @@ pub async fn update_rankings(
     ];
     let mut contents: Vec<String> = vec![String::new(), String::new(), String::new()];
     let content = fs::read_to_string(match leaderboard {
-        Global => RANKINGS_FILE,
+        Global => OFFICIAL_RANKINGS_FILE,
         Community => COMMUNITY_RANKINGS_FILE,
         Hof => HOF_RANKINGS_FILE,
         Et => ET_RANKINGS_FILE,
@@ -899,7 +899,7 @@ pub async fn roles(
     let global_grandmaster_contents = {
         let mut global_grandmasters = Vec::new();
         let mut main_leaderboard =
-            facet_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)
+            facet_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(OFFICIAL_RANKINGS_FILE).await?)
                 .map_err(facet_json::DeserError::into_owned)?
                 .entries
                 .iter()
@@ -933,7 +933,7 @@ pub async fn roles(
     let grandmaster_contents = {
         let mut grandmasters = Vec::new();
         let mut main_leaderboard =
-            facet_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(RANKINGS_FILE).await?)
+            facet_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(OFFICIAL_RANKINGS_FILE).await?)
                 .map_err(facet_json::DeserError::into_owned)?
                 .entries
                 .iter()
@@ -992,20 +992,20 @@ pub async fn rankings(
     #[description = "Mobile friendly mode"] mobile_friendly: Option<bool>,
 ) -> Result<()> {
     use LeaderboardChoice::{Community, Et, Global, Hof};
-    let mobile_friendly = mobile_friendly.unwrap_or(false);
+    let mobile_friendly = mobile_friendly.unwrap_or_default();
     if hidden.is_some_and(|x| x) {
         ctx.defer_ephemeral().await?;
     } else {
         ctx.defer().await?;
     }
     let leaderboard = leaderboard.unwrap_or(LeaderboardChoice::Global);
-    let time_based = time_based.unwrap_or(leaderboard == Global);
+    let time_based = time_based.unwrap_or_default();
     let rankings_file = match leaderboard {
         Global => {
             if time_based {
-                RANKINGS_FILE
+                OFFICIAL_TIME_RANKINGS_FILE
             } else {
-                POINT_RANKINGS_FILE
+                OFFICIAL_RANKINGS_FILE
             }
         }
         Community => {
@@ -1219,7 +1219,7 @@ pub async fn players(
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_ids = read_track_file(match tracks {
-        LeaderboardChoice::Global => TRACK_FILE,
+        LeaderboardChoice::Global => OFFICIAL_TRACK_FILE,
         LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
         LeaderboardChoice::Hof => HOF_ALL_TRACK_FILE,
         LeaderboardChoice::Et => ET_TRACK_FILE,
@@ -1324,7 +1324,7 @@ pub async fn top(
     }
     let tracks = tracks.unwrap_or(LeaderboardChoice::Global);
     let track_ids = read_track_file(match tracks {
-        LeaderboardChoice::Global => TRACK_FILE,
+        LeaderboardChoice::Global => OFFICIAL_TRACK_FILE,
         LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
         LeaderboardChoice::Hof => HOF_ALL_TRACK_FILE,
         LeaderboardChoice::Et => ET_TRACK_FILE,

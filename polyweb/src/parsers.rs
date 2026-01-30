@@ -4,7 +4,7 @@ use chrono::DateTime;
 
 use facet::Facet;
 use polycore::{
-    HISTORY_FILE_LOCATION, PolyLeaderBoard, PolyLeaderBoardEntry, TRACK_FILE, VERSION,
+    HISTORY_FILE_LOCATION, PolyLeaderBoard, PolyLeaderBoardEntry, OFFICIAL_TRACK_FILE, VERSION,
     check_blacklist, get_alt, send_to_networker,
 };
 use reqwest::Client;
@@ -55,7 +55,7 @@ pub(crate) async fn parse_leaderboard_with_records(
 
 pub(crate) async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard {
     let client = Client::new();
-    let tracks = fs::read_to_string(TRACK_FILE)
+    let tracks = fs::read_to_string(OFFICIAL_TRACK_FILE)
         .await
         .expect("Failed to read file");
     let track_ids: HashMap<&str, String> = tracks

@@ -12,7 +12,7 @@ use tokio::{
 use filenamify::filenamify;
 
 use polycore::{
-    COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, TRACK_FILE, VERSION, read_track_file,
+    COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, OFFICIAL_TRACK_FILE, VERSION, read_track_file,
     send_to_networker,
 };
 
@@ -144,7 +144,7 @@ async fn main() -> Result<(), Error> {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
     tracing::subscriber::set_global_default(subscriber)?;
     let client = Client::new();
-    let mut tracks = read_track_file(TRACK_FILE).await;
+    let mut tracks = read_track_file(OFFICIAL_TRACK_FILE).await;
     tracks.append(&mut read_track_file(COMMUNITY_TRACK_FILE).await);
     let mut prior_records: HashMap<&str, FileRecord> = HashMap::new();
     if !fs::try_exists(HISTORY_FILE_LOCATION).await.unwrap_or(false) {

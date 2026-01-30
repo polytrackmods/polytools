@@ -6,8 +6,8 @@ use facet::Facet;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polycore::{
-    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, REQUEST_RETRY_COUNT,
-    TRACK_FILE, VERSION, check_blacklist, get_alt, read_track_file, recent_et_period,
+    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, OFFICIAL_TRACK_FILE,
+    REQUEST_RETRY_COUNT, VERSION, check_blacklist, get_alt, read_track_file, recent_et_period,
     send_to_networker,
 };
 use polytrack_codes::v5;
@@ -691,7 +691,7 @@ pub(crate) async fn get_records(
     only_verified: bool,
 ) -> Result<PolyRecords> {
     let track_ids = read_track_file(match tracks {
-        LeaderboardChoice::Global => TRACK_FILE,
+        LeaderboardChoice::Global => OFFICIAL_TRACK_FILE,
         LeaderboardChoice::Community => COMMUNITY_TRACK_FILE,
         LeaderboardChoice::Hof => HOF_ALL_TRACK_FILE,
         LeaderboardChoice::Et => ET_TRACK_FILE,
@@ -919,7 +919,7 @@ pub(crate) mod totw {
 
     use anyhow::{Result, anyhow};
     use facet::Facet;
-    use polycore::{HOF_POINTS_FILE, tracks_leaderboards};
+    use polycore::{SIMPLE_POINTS, tracks_leaderboards};
     use reqwest::{Client, StatusCode};
 
     const POLYUSERS_URL: &str = "https://polyusers.ireo.xyz/discord/";
@@ -1055,11 +1055,6 @@ pub(crate) mod totw {
             )
             .execute(pool)
             .await?;
-            let point_values: Vec<_> = tokio::fs::read_to_string(HOF_POINTS_FILE)
-                .await?
-                .lines()
-                .map(|l| l.parse().expect("should be a number"))
-                .collect();
             let mut discords = HashSet::new();
             let client = Client::new();
             let mut rank = 0;
@@ -1071,7 +1066,7 @@ pub(crate) mod totw {
                         continue;
                     }
                 }
-                let points: i64 = (point_values.get(rank as usize).map(|n| *n)).unwrap_or_default();
+                let points = (SIMPLE_POINTS.get(rank as usize).map(|n| *n)).unwrap_or_default();
                 rank += 1;
                 sqlx::query!(
                     "INSERT OR IGNORE INTO totw_players (user_id, name) VALUES ($1, $2)",
