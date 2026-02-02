@@ -20,9 +20,13 @@ binary = "target/release/polynetworker"
 name = "polyhistorian"
 binary = "target/release/polyhistorian"
 
+[[services]]
+name = "polyupdater"
+binary = "target/release/polyupdater"
+
 [[presets]]
 name = "Full"
-services = ["polytracker", "polyweb", "polynetworker", "polyhistorian"]
+services = ["polytracker", "polyweb", "polynetworker", "polyhistorian", "polyupdater"]
 
 [[presets]]
 name = "Discord"
