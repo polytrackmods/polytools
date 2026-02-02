@@ -1,6 +1,6 @@
 use polycore::{
     ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
-    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, PolyLeaderBoard, OFFICIAL_RANKINGS_FILE,
+    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, OFFICIAL_RANKINGS_FILE, PolyLeaderBoard,
 };
 use rocket::{get, request::FromParam, tokio::fs};
 
@@ -85,7 +85,7 @@ pub(crate) async fn get_lbfunc(query: LbFuncQuery) -> String {
             .take(query.amount)
             .collect::<Vec<_>>(),
     };
-    facet_json::to_string(&leaderboard_out)
+    facet_json::to_string(&leaderboard_out).expect("failed to serialize leaderboard")
 }
 
 #[derive(rocket::FromForm)]

@@ -197,7 +197,7 @@ async fn main() -> Result<(), Error> {
                     .await
                     .expect("Failed to open file");
                 let new_record = new_record.clone().to_file().await;
-                file.write_all(format!("{}\n", facet_json::to_string(&new_record)).as_bytes())
+                file.write_all(format!("{}\n", facet_json::to_string(&new_record)?).as_bytes())
                     .await
                     .expect("Failed writing to file");
                 new_record.print(

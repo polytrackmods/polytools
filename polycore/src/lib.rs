@@ -166,7 +166,6 @@ pub async fn write_altlist(content: String) -> Result<()> {
     Ok(())
 }
 
-
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::missing_errors_doc)]
 #[allow(clippy::too_many_lines)]
@@ -235,7 +234,7 @@ pub async fn hof_update() -> Result<()> {
             points.to_string(),
         ));
     }
-    let mut output = facet_json::to_string(&final_leaderboard);
+    let mut output = facet_json::to_string(&final_leaderboard)?;
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
@@ -262,7 +261,7 @@ pub async fn hof_update() -> Result<()> {
         ));
     }
     output.push('\n');
-    output.push_str(&facet_json::to_string(&final_player_records));
+    output.push_str(&facet_json::to_string(&final_player_records)?);
     fs::write(HOF_RANKINGS_FILE, output.clone()).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
@@ -289,7 +288,7 @@ pub async fn hof_update() -> Result<()> {
             })
             .collect(),
     };
-    let time_output = facet_json::to_string(&time_leaderboard);
+    let time_output = facet_json::to_string(&time_leaderboard)?;
     fs::write(HOF_TIME_RANKINGS_FILE, time_output).await?;
     tracing::info!("Updated HOF LB!");
     Ok(())
@@ -364,7 +363,7 @@ pub async fn community_update() -> Result<()> {
         total: final_leaderboard_entries.len(),
         entries: final_leaderboard_entries,
     };
-    let mut output = facet_json::to_string(&final_leaderboard);
+    let mut output = facet_json::to_string(&final_leaderboard)?;
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
@@ -391,7 +390,7 @@ pub async fn community_update() -> Result<()> {
         ));
     }
     output.push('\n');
-    output.push_str(&facet_json::to_string(&final_player_records));
+    output.push_str(&facet_json::to_string(&final_player_records)?);
     fs::write(COMMUNITY_RANKINGS_FILE, output).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
@@ -418,7 +417,7 @@ pub async fn community_update() -> Result<()> {
             })
             .collect(),
     };
-    let time_output = facet_json::to_string(&time_leaderboard);
+    let time_output = facet_json::to_string(&time_leaderboard)?;
     fs::write(COMMUNITY_TIME_RANKINGS_FILE, time_output).await?;
     tracing::info!("Updated CT LB!");
     Ok(())
@@ -493,7 +492,7 @@ pub async fn global_rankings_update() -> Result<()> {
         total: final_point_leaderboard_entries.len(),
         entries: final_point_leaderboard_entries,
     };
-    let mut output = facet_json::to_string(&final_point_leaderboard);
+    let mut output = facet_json::to_string(&final_point_leaderboard)?;
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in point_rankings {
         for rank in rankings {
@@ -520,7 +519,7 @@ pub async fn global_rankings_update() -> Result<()> {
         ));
     }
     output.push('\n');
-    output.push_str(&facet_json::to_string(&final_player_records));
+    output.push_str(&facet_json::to_string(&final_player_records)?);
     fs::write(OFFICIAL_RANKINGS_FILE, output).await?;
     let mut sorted_times: Vec<(String, u32)> = time_rankings
         .into_iter()
@@ -547,7 +546,7 @@ pub async fn global_rankings_update() -> Result<()> {
             })
             .collect(),
     };
-    let time_output = facet_json::to_string(&time_leaderboard);
+    let time_output = facet_json::to_string(&time_leaderboard)?;
     fs::write(OFFICIAL_TIME_RANKINGS_FILE, time_output).await?;
     tracing::info!("Updated Global LB!");
     Ok(())
@@ -726,7 +725,7 @@ pub async fn et_rankings_update() -> Result<()> {
             points.to_string(),
         ));
     }
-    let mut output = facet_json::to_string(&final_leaderboard);
+    let mut output = facet_json::to_string(&final_leaderboard)?;
     let mut player_records: HashMap<String, u32> = HashMap::new();
     for (name, rankings) in player_rankings {
         for rank in rankings {
@@ -753,7 +752,7 @@ pub async fn et_rankings_update() -> Result<()> {
         ));
     }
     output.push('\n');
-    output.push_str(&facet_json::to_string(&final_player_records));
+    output.push_str(&facet_json::to_string(&final_player_records)?);
     fs::write(ET_RANKINGS_FILE, output.clone()).await?;
     tracing::info!("Updated ET Rankings!");
     Ok(())

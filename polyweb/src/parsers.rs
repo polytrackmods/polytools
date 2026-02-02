@@ -4,7 +4,7 @@ use chrono::DateTime;
 
 use facet::Facet;
 use polycore::{
-    HISTORY_FILE_LOCATION, PolyLeaderBoard, PolyLeaderBoardEntry, OFFICIAL_TRACK_FILE, VERSION,
+    HISTORY_FILE_LOCATION, OFFICIAL_TRACK_FILE, PolyLeaderBoard, PolyLeaderBoardEntry, VERSION,
     check_blacklist, get_alt, send_to_networker,
 };
 use reqwest::Client;

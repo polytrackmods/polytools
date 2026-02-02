@@ -711,8 +711,7 @@ pub(crate) async fn get_records(
             sleep(Duration::from_millis(1000)).await;
             att += 1;
         }
-        let leaderboard = facet_json::from_str::<LeaderBoard>(&res)
-            .map_err(facet_json::DeserError::into_owned)?;
+        let leaderboard = facet_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {
             name: "unknown".to_string(),
             frames: 69420.0,
@@ -958,12 +957,8 @@ pub(crate) mod totw {
         }
         let res = result.text().await?;
         let out = match mode {
-            PolyUserMode::GetPlayer(_) => PolyUserOut::GetPlayer(
-                facet_json::from_str(&res).map_err(facet_json::DeserError::into_owned)?,
-            ),
-            PolyUserMode::GetDiscord(_) => PolyUserOut::GetDiscord(
-                facet_json::from_str(&res).map_err(facet_json::DeserError::into_owned)?,
-            ),
+            PolyUserMode::GetPlayer(_) => PolyUserOut::GetPlayer(facet_json::from_str(&res)?),
+            PolyUserMode::GetDiscord(_) => PolyUserOut::GetDiscord(facet_json::from_str(&res)?),
         };
         Ok(out)
     }

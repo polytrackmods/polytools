@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-chrono = "0.4.42"
-facet = "0.28.3"
-facet-json = "0.28.2"
+chrono = "0.4.43"
+facet = "0.43.2"
+facet-json = "0.43.2"
 filenamify = "0.1.2"
 polycore = { version = "0.1.0", path = "../polycore" }
 reqwest = { version = "0.13.1", features = ["json"] }
-tokio = { version = "1.47.1", features = ["fs", "macros", "rt-multi-thread"] }
-tracing = "0.1.43"
+tokio = { version = "1.49.0", features = ["fs", "macros", "rt-multi-thread"] }
+tracing = "0.1.44"
 tracing-subscriber = "0.3.22"

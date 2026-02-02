@@ -8,9 +8,9 @@ rocket = "0.5.1"
 rocket_dyn_templates = { version = "0.2.0", features = ["tera"] }
 reqwest = { version = "0.13.1", features = ["json"] }
 polycore = { version = "0.1.0", path = "../polycore" }
-chrono = "0.4.42"
+chrono = "0.4.43"
 filenamify = "0.1.2"
-facet = "0.28.3"
-facet-json = "0.28.2"
-tracing = "0.1.43"
+facet = "0.43.2"
+facet-json = "0.43.2"
+tracing = "0.1.44"
 tracing-subscriber = "0.3.22"

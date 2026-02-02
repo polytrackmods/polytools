@@ -17,10 +17,11 @@ use poise::{
 use polycore::{
     COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE,
     ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
-    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, OFFICIAL_TIME_RANKINGS_FILE, PolyLeaderBoard, OFFICIAL_RANKINGS_FILE,
-    REQUEST_RETRY_COUNT, OFFICIAL_TRACK_FILE, UPDATE_CYCLE_LEN, VERSION, check_blacklist, community_update,
-    et_rankings_update, get_alt, global_rankings_update, hof_update, read_altlist, read_blacklist,
-    read_track_file, send_to_networker, write_altlist, write_blacklist,
+    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, OFFICIAL_RANKINGS_FILE, OFFICIAL_TIME_RANKINGS_FILE,
+    OFFICIAL_TRACK_FILE, PolyLeaderBoard, REQUEST_RETRY_COUNT, UPDATE_CYCLE_LEN, VERSION,
+    check_blacklist, community_update, et_rankings_update, get_alt, global_rankings_update,
+    hof_update, read_altlist, read_blacklist, read_track_file, send_to_networker, write_altlist,
+    write_blacklist,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -830,8 +831,7 @@ pub async fn roles(
                 .lines()
                 .next()
                 .expect("Should have next line"),
-        )
-        .map_err(facet_json::DeserError::into_owned)?
+        )?
         .entries
         .first()
         .expect("Should have first entry")
@@ -845,8 +845,7 @@ pub async fn roles(
                 .lines()
                 .next()
                 .expect("Should have next line"),
-        )
-        .map_err(facet_json::DeserError::into_owned)?
+        )?
         .entries
         .first()
         .expect("Should have first entry")
@@ -898,14 +897,14 @@ pub async fn roles(
     embeds.push(wr_holder_embed);
     let global_grandmaster_contents = {
         let mut global_grandmasters = Vec::new();
-        let mut main_leaderboard =
-            facet_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(OFFICIAL_RANKINGS_FILE).await?)
-                .map_err(facet_json::DeserError::into_owned)?
-                .entries
-                .iter()
-                .take_while(|entry| entry.rank < 21)
-                .map(|e| e.name.clone())
-                .collect();
+        let mut main_leaderboard = facet_json::from_str::<PolyLeaderBoard>(
+            &fs::read_to_string(OFFICIAL_RANKINGS_FILE).await?,
+        )?
+        .entries
+        .iter()
+        .take_while(|entry| entry.rank < 21)
+        .map(|e| e.name.clone())
+        .collect();
         global_grandmasters.append(&mut main_leaderboard);
         let mut community_leaderboard = facet_json::from_str::<PolyLeaderBoard>(
             fs::read_to_string(COMMUNITY_RANKINGS_FILE)
@@ -913,8 +912,7 @@ pub async fn roles(
                 .lines()
                 .next()
                 .expect("Should have first line"),
-        )
-        .map_err(facet_json::DeserError::into_owned)?
+        )?
         .entries
         .iter()
         .take_while(|entry| entry.rank < 21)
@@ -932,14 +930,14 @@ pub async fn roles(
     embeds.push(global_grandmaster_embed);
     let grandmaster_contents = {
         let mut grandmasters = Vec::new();
-        let mut main_leaderboard =
-            facet_json::from_str::<PolyLeaderBoard>(&fs::read_to_string(OFFICIAL_RANKINGS_FILE).await?)
-                .map_err(facet_json::DeserError::into_owned)?
-                .entries
-                .iter()
-                .take_while(|entry| entry.rank < 6)
-                .map(|e| e.name.clone())
-                .collect();
+        let mut main_leaderboard = facet_json::from_str::<PolyLeaderBoard>(
+            &fs::read_to_string(OFFICIAL_RANKINGS_FILE).await?,
+        )?
+        .entries
+        .iter()
+        .take_while(|entry| entry.rank < 6)
+        .map(|e| e.name.clone())
+        .collect();
         grandmasters.append(&mut main_leaderboard);
         let mut community_leaderboard = facet_json::from_str::<PolyLeaderBoard>(
             fs::read_to_string(COMMUNITY_RANKINGS_FILE)
@@ -947,8 +945,7 @@ pub async fn roles(
                 .lines()
                 .next()
                 .expect("Should have first line"),
-        )
-        .map_err(facet_json::DeserError::into_owned)?
+        )?
         .entries
         .iter()
         .take_while(|entry| entry.rank < 21)
@@ -961,8 +958,7 @@ pub async fn roles(
                 .lines()
                 .next()
                 .expect("Should have first line"),
-        )
-        .map_err(facet_json::DeserError::into_owned)?
+        )?
         .entries
         .iter()
         .take_while(|entry| entry.rank < 6)
@@ -1238,9 +1234,7 @@ pub async fn players(
             sleep(Duration::from_millis(500)).await;
             att += 1;
         }
-        let number = facet_json::from_str::<LeaderBoard>(&res)
-            .map_err(facet_json::DeserError::into_owned)?
-            .total;
+        let number = facet_json::from_str::<LeaderBoard>(&res)?.total;
         writeln!(
             contents.get_mut(0).expect("Should have first entry"),
             "{name}"
@@ -1344,8 +1338,7 @@ pub async fn top(
             sleep(Duration::from_millis(1000)).await;
             att += 1;
         }
-        let leaderboard = facet_json::from_str::<LeaderBoard>(&res)
-            .map_err(facet_json::DeserError::into_owned)?;
+        let leaderboard = facet_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {
             name: "unknown".to_string(),
             frames: 0.0,
