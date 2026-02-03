@@ -48,8 +48,7 @@ async fn main() {
     let http = client.http.clone();
     let resources_task = task::spawn(async move {
         loop {
-            // tokio::time::sleep(Duration::from_secs(10 * 60)).await;
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            tokio::time::sleep(Duration::from_secs(10 * 60)).await;
             update_resources(&http)
                 .await
                 .expect("Failed to update resources");
