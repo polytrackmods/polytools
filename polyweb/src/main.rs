@@ -8,13 +8,10 @@ use parsers::{
 };
 use polycore::{
     COMMUNITY_RANKINGS_FILE, COMMUNITY_TRACK_FILE, HOF_RANKINGS_FILE, OFFICIAL_RANKINGS_FILE,
-    OFFICIAL_TRACK_FILE, UPDATE_CYCLE_LEN, UPDATE_LB_COUNT, community_update, et_rankings_update,
-    global_rankings_update, hof_update, read_track_file,
+    OFFICIAL_TRACK_FILE, read_track_file,
 };
 use rocket::form::Context;
 use rocket::fs::FileServer;
-use rocket::tokio::join;
-use rocket::tokio::{task, time::sleep};
 use rocket::{get, main, routes};
 use rocket_dyn_templates::{Template, context};
 
@@ -122,50 +119,6 @@ async fn main() -> Result<(), Box<rocket::Error>> {
         )
         .mount("/static", FileServer::from("static"))
         .attach(Template::fairing());
-    task::spawn(async {
-        loop {
-            join!(
-                hof_update(),
-                sleep(
-                    UPDATE_CYCLE_LEN
-                        / u32::try_from(UPDATE_LB_COUNT).expect("shouldn't have that many lbs")
-                )
-            )
-            .0
-            .unwrap_or_else(|_| tracing::error!("Failed HOF update"));
-            tracing::info!("HOF update done");
-            join!(
-                community_update(),
-                sleep(
-                    UPDATE_CYCLE_LEN
-                        / u32::try_from(UPDATE_LB_COUNT).expect("shouldn't have that many lbs")
-                )
-            )
-            .0
-            .unwrap_or_else(|_| tracing::error!("Failed CT update"));
-            tracing::info!("CT update done");
-            join!(
-                et_rankings_update(),
-                sleep(
-                    UPDATE_CYCLE_LEN
-                        / u32::try_from(UPDATE_LB_COUNT).expect("shouldn't have that many lbs")
-                )
-            )
-            .0
-            .unwrap_or_else(|_| tracing::error!("Failed ET update"));
-            tracing::info!("ET update done");
-            join!(
-                global_rankings_update(),
-                sleep(
-                    UPDATE_CYCLE_LEN
-                        / u32::try_from(UPDATE_LB_COUNT).expect("shouldn't have that many lbs")
-                )
-            )
-            .0
-            .unwrap_or_else(|_| tracing::error!("Failed Global update"));
-            tracing::info!("Global update done");
-        }
-    });
     rocket.launch().await?;
     Ok(())
 }

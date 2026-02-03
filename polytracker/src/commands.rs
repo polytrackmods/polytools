@@ -19,7 +19,7 @@ use polycore::{
     ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
     HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, OFFICIAL_RANKINGS_FILE, OFFICIAL_TIME_RANKINGS_FILE,
     OFFICIAL_TRACK_FILE, PolyLeaderBoard, REQUEST_RETRY_COUNT, UPDATE_CYCLE_LEN, VERSION,
-    check_blacklist, community_update, et_rankings_update, get_alt, global_rankings_update,
+    check_blacklist, community_update, et_rankings_update, get_alt, official_update,
     hof_update, read_altlist, read_blacklist, read_track_file, send_to_networker, write_altlist,
     write_blacklist,
 };
@@ -768,7 +768,7 @@ pub async fn update_rankings(
         return Ok(());
     }
     match leaderboard {
-        Global => global_rankings_update().await,
+        Global => official_update().await,
         Community => community_update().await,
         Hof => hof_update().await,
         Et => et_rankings_update().await,
@@ -1029,7 +1029,7 @@ pub async fn rankings(
         }
     } else {
         match leaderboard {
-            Global => global_rankings_update().await?,
+            Global => official_update().await?,
             Community => community_update().await?,
             Hof => hof_update().await?,
             Et => et_rankings_update().await?,

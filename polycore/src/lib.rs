@@ -34,8 +34,8 @@ pub const SIMPLE_POINTS: [u32; 20] = [
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
 pub const REQUEST_RETRY_COUNT: u32 = 5;
 
-pub const UPDATE_LB_COUNT: u64 = 4;
-pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT * 10 * 60);
+pub const UPDATE_LB_COUNT: u32 = 4;
+pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT as u64 * 10 * 60);
 
 const UPDATE_LOCK_FILE: &str = "data/update.lock";
 const MAX_LOCK_TIME: Duration = Duration::from_secs(300);
@@ -430,7 +430,7 @@ pub async fn community_update() -> Result<()> {
 #[allow(clippy::cast_precision_loss)]
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
-pub async fn global_rankings_update() -> Result<()> {
+pub async fn official_update() -> Result<()> {
     let track_ids: Vec<String> = fs::read_to_string(OFFICIAL_TRACK_FILE)
         .await?
         .lines()
