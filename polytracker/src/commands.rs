@@ -19,8 +19,8 @@ use polycore::{
     ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
     HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, OFFICIAL_RANKINGS_FILE, OFFICIAL_TIME_RANKINGS_FILE,
     OFFICIAL_TRACK_FILE, PolyLeaderBoard, REQUEST_RETRY_COUNT, UPDATE_CYCLE_LEN, VERSION,
-    check_blacklist, community_update, et_rankings_update, get_alt, official_update,
-    hof_update, read_altlist, read_blacklist, read_track_file, send_to_networker, write_altlist,
+    check_blacklist, community_update, et_rankings_update, get_alt, hof_update, official_update,
+    read_altlist, read_blacklist, read_track_file, send_to_networker, write_altlist,
     write_blacklist,
 };
 use reqwest::Client;
@@ -1028,31 +1028,35 @@ pub async fn rankings(
             UPDATE_CYCLE_LEN - age
         }
     } else {
-        match leaderboard {
+        /* match leaderboard {
             Global => official_update().await?,
             Community => community_update().await?,
             Hof => hof_update().await?,
             Et => et_rankings_update().await?,
-        }
-        UPDATE_CYCLE_LEN
+        } */
+        Duration::from_secs(0)
     }
     .as_millis();
     let headers: Vec<&str> = vec![
         "Rank",
         if time_based { "Time" } else { "Points" },
         "Player",
-        "Update in",
+        "Updating in",
     ];
     let mut contents: Vec<String> = vec![
         String::new(),
         String::new(),
         String::new(),
-        format!(
-            "{}:{:0>2}.{:0>3}",
-            duration / 60000,
-            duration / 1000 % 60,
-            duration % 1000
-        ),
+        if duration > 0 {
+            format!(
+                "{}:{:0>2}.{:0>3}",
+                duration / 60000,
+                duration / 1000 % 60,
+                duration % 1000
+            )
+        } else {
+            "Currently updating...".to_string()
+        },
     ];
     let content = fs::read_to_string(rankings_file).await?;
     let line = content.lines().next().expect("Should have first line");
