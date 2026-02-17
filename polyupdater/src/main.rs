@@ -162,7 +162,9 @@ async fn prepare_resources_msg(channel: ResourceChannel) -> Result<String> {
     let rankings: Vec<_> = results
         .into_iter()
         .map(|res| {
-            if let Ok(Ok(res)) = res {
+            if let Ok(Ok(res)) = res
+                && !res.is_empty()
+            {
                 let ranking: Leaderboard =
                     facet_json::from_str(&res).expect("failed to parse JSON");
                 ranking
