@@ -1022,11 +1022,7 @@ pub async fn rankings(
     };
     let duration = if fs::try_exists(rankings_file).await? {
         let age = fs::metadata(rankings_file).await?.modified()?.elapsed()?;
-        if age > UPDATE_CYCLE_LEN {
-            UPDATE_CYCLE_LEN
-        } else {
-            UPDATE_CYCLE_LEN - age
-        }
+        UPDATE_CYCLE_LEN.saturating_sub(age)
     } else {
         /* match leaderboard {
             Global => official_update().await?,
