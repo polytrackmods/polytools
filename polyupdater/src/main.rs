@@ -121,7 +121,7 @@ async fn update_resources(http: &Http) -> Result<()> {
     Ok(())
 }
 
-#[derive(Facet)]
+#[derive(Facet, Default)]
 struct Leaderboard {
     entries: Vec<LeaderBoardEntry>,
 }
@@ -165,13 +165,10 @@ async fn prepare_resources_msg(channel: ResourceChannel) -> Result<String> {
             if let Ok(Ok(res)) = res
                 && !res.is_empty()
             {
-                let ranking: Leaderboard =
-                    facet_json::from_str(&res).expect("failed to parse JSON");
+                let ranking: Leaderboard = facet_json::from_str(&res).unwrap_or_default();
                 ranking
             } else {
-                Leaderboard {
-                    entries: Vec::new(),
-                }
+                Leaderboard::default()
             }
         })
         .collect();
