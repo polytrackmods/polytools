@@ -47,9 +47,9 @@ async fn main() {
     let resources_task = task::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(10 * 60)).await;
-            update_resources(&http)
-                .await
-                .expect("Failed to update resources");
+            if let Err(e) = update_resources(&http).await {
+                tracing::error!("Failed to update resources with error: {e}");
+            }
             tokio::time::sleep(Duration::from_secs(50 * 60)).await;
         }
     });
