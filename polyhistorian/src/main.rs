@@ -12,8 +12,8 @@ use tokio::{
 use filenamify::filenamify;
 
 use polycore::{
-    COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, OFFICIAL_TRACK_FILE, VERSION, read_track_file,
-    send_to_networker,
+    API_VERSION, COMMUNITY_TRACK_FILE, HISTORY_FILE_LOCATION, OFFICIAL_TRACK_FILE, VERSION,
+    read_track_file, send_to_networker,
 };
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -119,7 +119,7 @@ impl Record {
         send_to_networker(
             &client,
             &format!(
-                "https://vps.kodub.com/recordings?version={VERSION}&recordingIds={}",
+                "https://vps.kodub.com/{API_VERSION}recordings?version={VERSION}&recordingIds={}",
                 self.id
             ),
         )
@@ -169,7 +169,7 @@ async fn main() -> Result<(), Error> {
         tracing::info!("Checking records!");
         for (id, name) in &tracks {
             let url = format!(
-                "https://vps.kodub.com/leaderboard?version={VERSION}&skip=0&onlyVerified=true&amount=5&trackId={id}"
+                "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&skip=0&onlyVerified=true&amount=5&trackId={id}"
             );
             let mut response_text = String::new();
             while response_text.is_empty() {

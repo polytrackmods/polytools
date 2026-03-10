@@ -15,13 +15,13 @@ use poise::{
     ApplicationContext, ChoiceParameter, CommandParameterChoice, CreateReply, Modal, builtins,
 };
 use polycore::{
-    COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE, ET_CODE_FILE,
-    ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE, HOF_RANKINGS_FILE,
-    HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, OFFICIAL_RANKINGS_FILE, OFFICIAL_TIME_RANKINGS_FILE,
-    OFFICIAL_TRACK_FILE, PolyLeaderBoard, REQUEST_RETRY_COUNT, UPDATE_CYCLE_LEN, VERSION,
-    check_blacklist, community_update, et_rankings_update, get_alt, hof_update, official_update,
-    read_altlist, read_blacklist, read_track_file, send_to_networker, write_altlist,
-    write_blacklist,
+    API_VERSION, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
+    ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE,
+    HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, OFFICIAL_RANKINGS_FILE,
+    OFFICIAL_TIME_RANKINGS_FILE, OFFICIAL_TRACK_FILE, PolyLeaderBoard, REQUEST_RETRY_COUNT,
+    UPDATE_CYCLE_LEN, VERSION, check_blacklist, community_update, et_rankings_update, get_alt,
+    hof_update, official_update, read_altlist, read_blacklist, read_track_file, send_to_networker,
+    write_altlist, write_blacklist,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -189,7 +189,7 @@ pub async fn assign(
     let client = Client::new();
     let response = client
         .get(format!(
-            "https://vps.kodub.com/user?version={VERSION}&userToken={user_id}",
+            "https://vps.kodub.com/{API_VERSION}user?version={VERSION}&userToken={user_id}",
         ))
         .send()
         .await?
@@ -363,12 +363,12 @@ pub async fn request(
                 .get(track.parse::<usize>()? - 1)
                 .expect("Couldn't find track");
             format!(
-                "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",
+                "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",
                 track_id.0
             )
         } else {
             format!(
-                "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}"
+                "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={track}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}"
             )
         };
         let contents: Vec<String>;
@@ -478,7 +478,7 @@ pub async fn list(
         let track_ids = read_track_file(track_file).await;
         let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
             let client = client.clone();
-            let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",
+            let url = format!("https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",
             track_id.0);
             task::spawn(
             async move {
@@ -618,7 +618,7 @@ pub async fn compare(
             let mut display_total = true;
             let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
                 let client = client.clone();
-                let url = format!("https://vps.kodub.com/leaderboard?version={VERSION}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={id}",
+                let url = format!("https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={}&skip=0&amount=1&onlyVerified=false&userTokenHash={id}",
                     track_id.0,
                 );
                 task::spawn(
@@ -1225,7 +1225,7 @@ pub async fn players(
     let client = Client::new();
     for (id, name) in track_ids {
         let url = format!(
-            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=1&onlyVerified=false"
+            "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={id}&skip=0&amount=1&onlyVerified=false"
         );
         let mut att = 0;
         let mut res = String::new();
@@ -1328,7 +1328,7 @@ pub async fn top(
     let client = Client::new();
     for (id, name) in track_ids {
         let url = format!(
-            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip={}&amount=1&onlyVerified=true",
+            "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={id}&skip={}&amount=1&onlyVerified=true",
             position - 1,
         );
         let mut att = 0;

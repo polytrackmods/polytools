@@ -27,7 +27,8 @@ pub const COMMUNITY_TIME_RANKINGS_FILE: &str = "data/community_time_rankings.jso
 pub const ET_CODE_FILE: &str = "data/et_codes.txt";
 pub const ET_TRACK_FILE: &str = "data/et_tracks.txt";
 pub const ET_RANKINGS_FILE: &str = "data/et_rankings.json";
-pub const VERSION: &str = "0.5.2";
+pub const VERSION: &str = "0.6.0";
+pub const API_VERSION: &str = "v6/";
 pub const SIMPLE_POINTS: [u32; 20] = [
     100, 66, 50, 37, 30, 25, 21, 17, 14, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
 ];
@@ -49,13 +50,18 @@ enum PolyError {
 #[derive(Facet)]
 #[facet(rename_all = "camelCase")]
 pub struct LeaderBoardEntry {
-    pub name: String,
+    pub id: u64,
+    pub country_code: String,
+    pub car_style: String,
+    pub verified_state: u8,
+    pub nickname: String,
     pub frames: u32,
     pub user_id: String,
 }
 
 #[derive(Facet)]
 struct LeaderBoard {
+    total: u64,
     entries: Vec<LeaderBoardEntry>,
 }
 
@@ -190,7 +196,7 @@ pub async fn hof_update() -> Result<()> {
         let mut has_ranking: Vec<String> = Vec::new();
         let mut pos = 0;
         for entry in leaderboard {
-            let name = get_alt(&entry.name).await?;
+            let name = get_alt(&entry.nickname).await?;
             if !has_ranking.contains(&name) && check_blacklist(&name).await? {
                 has_ranking.push(name.clone());
                 time_rankings
@@ -321,7 +327,7 @@ pub async fn community_update() -> Result<()> {
         let mut has_ranking: Vec<String> = Vec::new();
         let mut pos = 0;
         for entry in leaderboard {
-            let name = get_alt(&entry.name).await?;
+            let name = get_alt(&entry.nickname).await?;
             if !has_ranking.contains(&name) && check_blacklist(&name).await? {
                 player_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings
@@ -450,7 +456,7 @@ pub async fn official_update() -> Result<()> {
         let mut has_ranking: Vec<String> = Vec::new();
         let mut pos = 0;
         for entry in leaderboard {
-            let name = get_alt(&entry.name).await?;
+            let name = get_alt(&entry.nickname).await?;
             if !has_ranking.contains(&name) && check_blacklist(&name).await? {
                 point_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings
@@ -586,7 +592,7 @@ pub async fn tracks_leaderboards(
         let mut urls = Vec::new();
         for i in 0..lb_size {
             urls.push(format!(
-                "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={track_id}&skip={}&amount=500",
+                "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={track_id}&skip={}&amount=500",
                 i * 500,
             ));
         }
@@ -684,7 +690,7 @@ pub async fn et_rankings_update() -> Result<()> {
             if pos + 1 > SIMPLE_POINTS.len() {
                 break;
             }
-            let name = get_alt(&entry.name).await?;
+            let name = get_alt(&entry.nickname).await?;
             if !has_ranking.contains(&name) && check_blacklist(&name).await? {
                 player_rankings.entry(name.clone()).or_default().push(pos);
                 time_rankings

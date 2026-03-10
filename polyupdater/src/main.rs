@@ -9,9 +9,7 @@ use poise::{
         Http,
     },
 };
-use polycore::{
-    COMMUNITY_TRACK_FILE, LeaderBoardEntry, OFFICIAL_TRACK_FILE, VERSION, send_to_networker,
-};
+use polycore::{COMMUNITY_TRACK_FILE, LeaderBoardEntry, OFFICIAL_TRACK_FILE};
 use tokio::{fs, task, time::sleep};
 
 const GUILD_ID: GuildId = GuildId::new(1_115_776_502_592_708_720);
@@ -147,41 +145,28 @@ async fn prepare_resources_msg(channel: ResourceChannel) -> Result<String> {
         .map(|(_, name)| name.len())
         .max()
         .unwrap_or_default();
-    let client = reqwest::Client::new();
-    let futures = tracks.iter().map(|(track_id, _)| {
-        let client = client.clone();
-        let url = format!(
-            "https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=1&onlyVerified=true",
-            VERSION, track_id
-        );
-        task::spawn(async move {
-            send_to_networker(&client, &url).await
-        })
-    });
-    let results = futures::future::join_all(futures).await;
-    let rankings: Vec<_> = results
-        .into_iter()
-        .map(|res| {
-            if let Ok(Ok(res)) = res
-                && !res.is_empty()
-            {
-                let ranking: Leaderboard = facet_json::from_str(&res).unwrap_or_default();
-                ranking
-            } else {
-                Leaderboard::default()
-            }
-        })
-        .collect();
+    let rankings = polycore::tracks_leaderboards(
+        tracks
+            .iter()
+            .map(|(track_id, _)| track_id.to_string())
+            .collect(),
+        1,
+    )
+    .await?;
     let default_lb_entry = LeaderBoardEntry {
+        id: 0,
+        country_code: String::new(),
+        car_style: String::new(),
+        verified_state: 0,
         frames: 0,
-        name: String::from("Unknown"),
+        nickname: String::from("Unknown"),
         user_id: String::new(),
     };
     let message = rankings
         .into_iter()
         .zip(tracks)
         .map(|(ranking, (_, track_name))| {
-            let record = ranking.entries.first().unwrap_or(&default_lb_entry);
+            let record = ranking.first().unwrap_or(&default_lb_entry);
             format!(
                 "{:>width$}  {}{:0>6.3}\t{}",
                 track_name,
@@ -191,7 +176,7 @@ async fn prepare_resources_msg(channel: ResourceChannel) -> Result<String> {
                     "  ".to_string()
                 },
                 (record.frames % 60000) as f64 / 1000.0,
-                record.name,
+                record.nickname,
                 width = max_name_len
             )
         })

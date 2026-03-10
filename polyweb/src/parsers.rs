@@ -4,8 +4,8 @@ use chrono::DateTime;
 
 use facet::Facet;
 use polycore::{
-    HISTORY_FILE_LOCATION, OFFICIAL_TRACK_FILE, PolyLeaderBoard, PolyLeaderBoardEntry, VERSION,
-    check_blacklist, get_alt, send_to_networker,
+    API_VERSION, HISTORY_FILE_LOCATION, OFFICIAL_TRACK_FILE, PolyLeaderBoard, PolyLeaderBoardEntry,
+    VERSION, check_blacklist, get_alt, send_to_networker,
 };
 use reqwest::Client;
 use rocket::form::validate::Contains;
@@ -66,8 +66,7 @@ pub(crate) async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard 
         })
         .collect();
     let url = format!(
-        "https://vps.kodub.com/leaderboard?version={}&trackId={}&skip=0&amount=500",
-        VERSION,
+        "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={}&skip=0&amount=500",
         track_ids.get(track_id).expect("Couldn't find track id")
     );
     let result = send_to_networker(&client, &url)

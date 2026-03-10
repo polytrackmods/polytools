@@ -31,7 +31,7 @@ use unicode_width::UnicodeWidthStr;
 
 const EMBED_PAGE_LEN: usize = 20;
 const MAX_COL_WIDTH: usize = 25;
-const TRACK_CODE_STARTS: [&str; 2] = ["PolyTrack14p", "v3"];
+const TRACK_CODE_STARTS: [&str; 3] = ["PolyTrack24p", "PolyTrack14p", "v3"];
 
 // structs for deserializing leaderboards
 #[derive(Facet)]
@@ -1033,7 +1033,7 @@ pub(crate) mod totw {
                 .into_iter()
                 .map(|entry| TotwEntry {
                     user_id: entry.user_id.clone(),
-                    name: entry.name.clone(),
+                    name: entry.nickname.clone(),
                 })
                 .collect();
             update_db(pool, leaderboard).await?;
