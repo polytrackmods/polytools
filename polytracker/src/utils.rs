@@ -37,7 +37,7 @@ const TRACK_CODE_STARTS: [&str; 3] = ["PolyTrack24p", "PolyTrack14p", "v3"];
 #[derive(Facet)]
 #[facet(rename_all = "camelCase")]
 pub struct LeaderBoardEntry {
-    pub name: String,
+    pub nickname: String,
     pub frames: f64,
     pub verified_state: u8,
 }
@@ -45,8 +45,8 @@ pub struct LeaderBoardEntry {
 #[derive(Facet)]
 #[facet(rename_all = "camelCase")]
 pub struct LeaderBoard {
-    pub entries: Vec<LeaderBoardEntry>,
     pub total: u32,
+    pub entries: Vec<LeaderBoardEntry>,
     pub user_entry: Option<UserEntry>,
 }
 
@@ -713,18 +713,18 @@ pub(crate) async fn get_records(
         }
         let leaderboard = facet_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {
-            name: "unknown".to_string(),
+            nickname: "unknown".to_string(),
             frames: 69420.0,
             verified_state: 1,
         };
         let mut winner = &default_winner;
         for entry in &leaderboard.entries {
-            if check_blacklist(&get_alt(&entry.name).await?).await? {
+            if check_blacklist(&get_alt(&entry.nickname).await?).await? {
                 winner = entry;
                 break;
             }
         }
-        let winner_name = get_alt(&winner.name).await?;
+        let winner_name = get_alt(&winner.nickname).await?;
         let winner_time = winner.frames / 1000.0;
         *wr_amounts.entry(winner_name.clone()).or_default() += 1;
         records

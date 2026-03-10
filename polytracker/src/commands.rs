@@ -386,8 +386,8 @@ pub async fn request(
                             if i == position {
                                 break;
                             }
-                            if !found.contains(&entry.name) && entry.verified_state == 1 {
-                                found.push(entry.name);
+                            if !found.contains(&entry.nickname) && entry.verified_state == 1 {
+                                found.push(entry.nickname);
                             }
                         }
                         let mut time = (f64::from(frames) / 1000.0).to_string();
@@ -476,10 +476,9 @@ pub async fn list(
         let mut total_time = 0.0;
         let mut display_total = true;
         let track_ids = read_track_file(track_file).await;
-        let futures = track_ids.iter().enumerate().map(|(i, track_id)| {
+        let futures = track_ids.iter().enumerate().map(|(i, (track_id, _))| {
             let client = client.clone();
-            let url = format!("https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}",
-            track_id.0);
+            let url = format!("https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={track_id}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}");
             task::spawn(
             async move {
                 let mut att = 0;
@@ -523,7 +522,7 @@ pub async fn list(
                             if i == position {
                                 break;
                             }
-                            let name = get_alt(&entry.name).await?;
+                            let name = get_alt(&entry.nickname).await?;
                             if entry.verified_state == 1
                                 && !found.contains(&name)
                                 && check_blacklist(&name).await?
@@ -1340,12 +1339,12 @@ pub async fn top(
         }
         let leaderboard = facet_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {
-            name: "unknown".to_string(),
+            nickname: "unknown".to_string(),
             frames: 0.0,
             verified_state: 1,
         };
         let winner = leaderboard.entries.first().unwrap_or(&default_winner);
-        let winner_name = winner.name.clone();
+        let winner_name = winner.nickname.clone();
         let winner_time = format!("{:.3}", winner.frames / 1000.0);
         writeln!(
             contents.get_mut(0).expect("Should have first entry"),
