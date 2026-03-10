@@ -52,7 +52,7 @@ impl FileRecord {
             id: self.id,
             user_id: self.user_id.clone(),
             nickname: self.name.clone(),
-            car_colors: self.car_colors.clone(),
+            car_style: self.car_colors.clone(),
             frames: self.frames,
         }
     }
@@ -73,7 +73,7 @@ struct Record {
     id: u64,
     user_id: String,
     nickname: String,
-    car_colors: String,
+    car_style: String,
     frames: u32,
 }
 
@@ -108,7 +108,7 @@ impl Record {
             id: self.id,
             user_id: self.user_id.clone(),
             name: self.nickname.clone(),
-            car_colors: self.car_colors.clone(),
+            car_colors: self.car_style.clone(),
             frames: self.frames,
             timestamp,
             recording,
