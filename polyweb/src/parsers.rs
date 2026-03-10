@@ -13,7 +13,7 @@ use rocket::tokio::fs;
 
 #[derive(Facet)]
 struct LeaderBoardEntry {
-    name: String,
+    nickname: String,
     frames: u32,
 }
 
@@ -77,7 +77,7 @@ pub(crate) async fn get_standard_leaderboard(track_id: &str) -> PolyLeaderBoard 
     let mut rank = 0;
     let mut has_time: Vec<String> = Vec::new();
     for entry in response.entries {
-        let name = get_alt(&entry.name)
+        let name = get_alt(&entry.nickname)
             .await
             .expect("should be able to get alt");
         if !has_time.contains(&name)
