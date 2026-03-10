@@ -38,15 +38,6 @@ pub const REQUEST_RETRY_COUNT: u32 = 5;
 pub const UPDATE_LB_COUNT: u32 = 4;
 pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT as u64 * 10 * 60);
 
-const UPDATE_LOCK_FILE: &str = "data/update.lock";
-const MAX_LOCK_TIME: Duration = Duration::from_secs(300);
-
-#[derive(thiserror::Error, Debug)]
-enum PolyError {
-    #[error("Currently updating something, please wait a bit")]
-    BusyUpdating,
-}
-
 #[derive(Facet)]
 #[facet(rename_all = "camelCase")]
 pub struct LeaderBoardEntry {
@@ -611,26 +602,12 @@ pub async fn tracks_leaderboards(
             Ok::<Vec<String>, Error>(res)
         })
     });
-    if fs::try_exists(UPDATE_LOCK_FILE).await? {
-        if fs::metadata(UPDATE_LOCK_FILE)
-            .await?
-            .modified()?
-            .elapsed()?
-            > MAX_LOCK_TIME
-        {
-            fs::remove_file(UPDATE_LOCK_FILE).await?;
-        } else {
-            return Err(PolyError::BusyUpdating.into());
-        }
-    }
-    fs::write(UPDATE_LOCK_FILE, "").await?;
     let results: Vec<Vec<String>> = join_all(futures)
         .await
         .into_iter()
         .map(|res| res.expect("JoinError ig"))
         .filter_map(std::result::Result::ok)
         .collect();
-    fs::remove_file(UPDATE_LOCK_FILE).await?;
     let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
     for result in results {
         let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
