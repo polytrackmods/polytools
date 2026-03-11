@@ -1,13 +1,15 @@
+use axum::extract::{Path, Query};
+use facet_json::Json;
 use polycore::{
     ALT_ACCOUNT_FILE, BLACKLIST_FILE, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE,
     HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, OFFICIAL_RANKINGS_FILE, PolyLeaderBoard,
 };
-use rocket::{get, request::FromParam, tokio::fs};
+use serde::Deserialize;
+use tokio::fs;
 
 use crate::parsers;
 
-const HISTORY_START: &str = "history-";
-
+#[derive(Deserialize)]
 pub enum ApiList {
     Global,
     Hof,
@@ -18,35 +20,8 @@ pub enum ApiList {
     AltList,
     BlackList,
 }
-impl<'a> FromParam<'a> for ApiList {
-    type Error = &'a str;
-    fn from_param(param: &'a str) -> Result<Self, Self::Error> {
-        use ApiList::{
-            AltList, BlackList, Community, CommunityTime, Global, History, Hof, HofTime,
-        };
-        if param.starts_with(HISTORY_START) {
-            return Ok(History(
-                param
-                    .get(HISTORY_START.len()..)
-                    .unwrap_or_default()
-                    .to_string(),
-            ));
-        }
-        match param.to_lowercase().as_str() {
-            "global" => Ok(Global),
-            "hof" => Ok(Hof),
-            "hof_time" => Ok(HofTime),
-            "community" => Ok(Community),
-            "community_time" => Ok(CommunityTime),
-            "altlist" => Ok(AltList),
-            "blacklist" => Ok(BlackList),
-            _ => Err("Failed to find enum"),
-        }
-    }
-}
 
-#[get("/api/<list>")]
-pub(crate) async fn get_api(list: ApiList) -> String {
+pub(crate) async fn get_api(Path(list): Path<ApiList>) -> String {
     let file = {
         use ApiList::{
             AltList, BlackList, Community, CommunityTime, Global, History, Hof, HofTime,
@@ -65,8 +40,7 @@ pub(crate) async fn get_api(list: ApiList) -> String {
     fs::read_to_string(file).await.expect("Failed to read file")
 }
 
-#[get("/lbfunc?<query..>")]
-pub(crate) async fn get_lbfunc(query: LbFuncQuery) -> String {
+pub(crate) async fn get_lbfunc(Query(query): Query<LbFuncQuery>) -> Json<PolyLeaderBoard> {
     let file = {
         match query.leaderboard.as_str() {
             "global" => OFFICIAL_RANKINGS_FILE,
@@ -85,10 +59,10 @@ pub(crate) async fn get_lbfunc(query: LbFuncQuery) -> String {
             .take(query.amount)
             .collect::<Vec<_>>(),
     };
-    facet_json::to_string(&leaderboard_out).expect("failed to serialize leaderboard")
+    Json(leaderboard_out)
 }
 
-#[derive(rocket::FromForm)]
+#[derive(Deserialize)]
 pub struct LbFuncQuery {
     leaderboard: String,
     skip: usize,

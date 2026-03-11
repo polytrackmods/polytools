@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 
 use chrono::DateTime;
-
 use facet::Facet;
 use polycore::{
     API_VERSION, HISTORY_FILE_LOCATION, OFFICIAL_TRACK_FILE, PolyLeaderBoard, PolyLeaderBoardEntry,
     VERSION, check_blacklist, get_alt, send_to_networker,
 };
 use reqwest::Client;
-use rocket::form::validate::Contains;
-use rocket::tokio::fs;
+use tokio::fs;
 
 #[derive(Facet)]
 struct LeaderBoardEntry {
