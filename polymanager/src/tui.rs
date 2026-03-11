@@ -208,7 +208,7 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                             ViewMode::Presets => ViewMode::Services,
                         };
                     }
-                    KeyCode::Up => match view_mode {
+                    KeyCode::Up | KeyCode::Char('k') => match view_mode {
                         ViewMode::Services => {
                             if service_index > 0 {
                                 service_index -= 1;
@@ -230,7 +230,7 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                             }
                         }
                     },
-                    KeyCode::Down => match view_mode {
+                    KeyCode::Down | KeyCode::Char('j') => match view_mode {
                         ViewMode::Services => {
                             if service_index < manager.config.services.len().saturating_sub(1) {
                                 service_index += 1;
@@ -285,7 +285,7 @@ pub async fn launch(manager: &mut ServiceManager) -> Result<()> {
                             manager_log_lines.push(format!("Restarted preset: {}", preset.name));
                         }
                     },
-                    KeyCode::Enter => match view_mode {
+                    KeyCode::Char('t') => match view_mode {
                         ViewMode::Services => {
                             let service = &manager.config.services[service_index].name.clone();
                             if manager.is_service_running(service) {
