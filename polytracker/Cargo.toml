@@ -11,7 +11,7 @@ facet = "0.43.2"
 facet-json = "0.43.2"
 poise = "0.6.1"
 polycore = { version = "0.1.0", path = "../polycore" }
-polytrack-codes = "0.2.4"
+polytrack-codes = "0.3.0"
 regex = "1.12.2"
 reqwest = { version = "0.13.1", features = ["json"] }
 sha256 = "1.6.0"

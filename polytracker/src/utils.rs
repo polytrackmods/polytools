@@ -6,11 +6,11 @@ use facet::Facet;
 use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, GetMessages, Http};
 use poise::{CreateReply, Modal};
 use polycore::{
-    COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, OFFICIAL_TRACK_FILE,
-    REQUEST_RETRY_COUNT, VERSION, check_blacklist, get_alt, read_track_file, recent_et_period,
-    send_to_networker,
+    API_VERSION, COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
+    OFFICIAL_TRACK_FILE, REQUEST_RETRY_COUNT, VERSION, check_blacklist, get_alt, read_track_file,
+    recent_et_period, send_to_networker,
 };
-use polytrack_codes::v5;
+use polytrack_codes::v6;
 use regex::Regex;
 use reqwest::Client;
 use serenity::{
@@ -702,7 +702,7 @@ pub(crate) async fn get_records(
     let mut wr_amounts: HashMap<String, u32> = HashMap::new();
     for (id, name) in track_ids {
         let url = format!(
-            "https://vps.kodub.com/leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified={only_verified}"
+            "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified={only_verified}"
         );
         let mut att = 0;
         let mut res = String::new();
@@ -760,7 +760,7 @@ pub(crate) async fn et_tracks_update(http: Arc<Http>) -> Result<()> {
     .await?;
     let ids = codes
         .into_iter()
-        .map(|[code, name]| [v5::export_to_id(&code).unwrap_or_default(), name].join(" "))
+        .map(|[code, name]| [v6::export_to_id(&code).unwrap_or_default(), name].join(" "))
         .collect::<Vec<_>>();
     fs::write(ET_TRACK_FILE, ids.join("\n")).await?;
     tracing::info!("Updated ETs!");
