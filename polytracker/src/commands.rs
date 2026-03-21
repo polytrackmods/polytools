@@ -1403,6 +1403,7 @@ pub async fn add_totw(
     ctx: Context<'_>,
     #[description = "pastes.dev code"] export_code_link: String,
     end_time: Option<String>,
+    season: Option<i64>,
 ) -> Result<()> {
     ctx.defer_ephemeral().await?;
     use crate::utils::totw;
@@ -1423,12 +1424,18 @@ pub async fn add_totw(
         if let Some(Err(e)) = end {
             Err(e.into())
         } else {
+            let season = if season.is_some() {
+                season
+            } else {
+                totw::get_current_season(&ctx.data().pool).await?
+            };
             totw::add_totw(
                 &ctx.data().pool,
                 track.name,
                 track_id,
                 Some(export_code),
                 end.map(|end| end.expect("Checked earlier").to_utc()),
+                season,
             )
             .await?;
             ctx.say("Successfully added TOTW").await?;
@@ -1452,7 +1459,11 @@ pub async fn update_totw(ctx: Context<'_>) -> Result<()> {
 }
 
 #[poise::command(slash_command)]
-pub async fn get_totw_lb(ctx: Context<'_>, current: bool) -> Result<()> {
+pub async fn get_totw_lb(
+    ctx: Context<'_>,
+    current: bool,
+    #[description = "Season (only non-current TOTW)"] season: Option<i64>,
+) -> Result<()> {
     ctx.defer().await?;
     if current {
         if let Some(current_totw) = get_current_totw(&ctx.data().pool).await? {
@@ -1490,7 +1501,16 @@ pub async fn get_totw_lb(ctx: Context<'_>, current: bool) -> Result<()> {
         let mut discords: HashMap<i64, String> = HashMap::new();
         let mut players: HashMap<String, (i64, String)> = HashMap::new();
         let client = Client::new();
-        for totw in totw::get_totws(&ctx.data().pool).await? {
+        let season = if season.is_some() {
+            season
+        } else {
+            totw::get_current_season(&ctx.data().pool).await?
+        };
+        if season.is_none() {
+            ctx.say("Could not find current season").await?;
+            return Ok(());
+        }
+        for totw in totw::get_totws(&ctx.data().pool, season).await? {
             let list = totw::list(&ctx.data().pool, totw.id).await?;
             for entry in list {
                 if let Ok(totw::PolyUserOut::GetDiscord(discord)) = totw::polyusers(
@@ -1536,7 +1556,10 @@ pub async fn get_totw_lb(ctx: Context<'_>, current: bool) -> Result<()> {
             ctx,
             vec![
                 WriteEmbed::new(3)
-                    .title("All TOTWs")
+                    .title(&format!(
+                        "All TOTWs (Season {})",
+                        season.unwrap_or_default().to_string()
+                    ))
                     .headers(&["Rank", "Name", "Points"])
                     .contents(vec![ranks, names, points]),
             ],

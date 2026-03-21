@@ -921,7 +921,7 @@ pub(crate) mod totw {
     use polycore::{SIMPLE_POINTS, tracks_leaderboards};
     use reqwest::{Client, StatusCode};
 
-    const POLYUSERS_URL: &str = "https://polyusers.ireo.xyz/discord/";
+    const POLYUSERS_URL: &str = "https://polyusers.ireo.dev/discord/";
     pub enum PolyUserMode {
         #[allow(dead_code)]
         GetPlayer(String),
@@ -972,6 +972,7 @@ pub(crate) mod totw {
         pub track_id: String,
         pub export_code: Option<String>,
         pub end: Option<i64>,
+        pub season: Option<i64>,
     }
     #[allow(dead_code)]
     pub struct DbTotwPlayer {
@@ -995,11 +996,25 @@ pub(crate) mod totw {
         .await?;
         Ok(totw_result)
     }
-    pub async fn get_totws(pool: &SqlitePool) -> Result<Vec<DbTotw>> {
-        let totw_result = sqlx::query_as!(DbTotw, "SELECT * FROM totws")
-            .fetch_all(pool)
+    pub async fn get_current_season(pool: &SqlitePool) -> Result<Option<i64>> {
+        let season = sqlx::query!("SELECT season FROM totws ORDER BY season DESC LIMIT 1")
+            .fetch_optional(pool)
             .await?;
-        Ok(totw_result)
+        Ok(season.map(|s| s.season).flatten())
+    }
+    pub async fn get_totws(pool: &SqlitePool, season: Option<i64>) -> Result<Vec<DbTotw>> {
+        if let Some(season) = season {
+            let totw_result =
+                sqlx::query_as!(DbTotw, "SELECT * FROM totws WHERE season = $1", season)
+                    .fetch_all(pool)
+                    .await?;
+            Ok(totw_result)
+        } else {
+            let totw_result = sqlx::query_as!(DbTotw, "SELECT * FROM totws")
+                .fetch_all(pool)
+                .await?;
+            Ok(totw_result)
+        }
     }
     pub async fn add_totw(
         pool: &SqlitePool,
@@ -1007,14 +1022,16 @@ pub(crate) mod totw {
         track_id: String,
         export_code: Option<String>,
         end: Option<DateTime<Utc>>,
+        season: Option<i64>,
     ) -> Result<()> {
         let end = end.map(|end| end.timestamp());
         sqlx::query!(
-            "INSERT INTO totws (name, track_id, export_code, end) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO totws (name, track_id, export_code, end, season) VALUES ($1, $2, $3, $4, $5)",
             name,
             track_id,
             export_code,
-            end
+            end,
+            season
         )
         .execute(pool)
         .await?;
