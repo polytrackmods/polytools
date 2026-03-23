@@ -1415,8 +1415,8 @@ pub async fn add_totw(
         .await?
         .text()
         .await?;
-    let track = polytrack_codes::v5::decode_track_code(&export_code);
-    let track_id = polytrack_codes::v5::export_to_id(&export_code);
+    let track = polytrack_codes::v6::decode_track_code(&export_code);
+    let track_id = polytrack_codes::v6::export_to_id(&export_code);
     if let Some(track) = track
         && let Some(track_id) = track_id
     {
