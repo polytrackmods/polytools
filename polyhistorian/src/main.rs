@@ -119,7 +119,7 @@ impl Record {
         send_to_networker(
             &client,
             &format!(
-                "https://vps.kodub.com/{API_VERSION}recordings?version={VERSION}&recordingIds={}",
+                "https://vps.kodub.com/{API_VERSION}recordings?version={VERSION}&ids={}",
                 self.id
             ),
         )
