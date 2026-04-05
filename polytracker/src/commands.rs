@@ -887,6 +887,14 @@ pub async fn roles(
         let ct_record_amount = ct_records.clone().count();
         wr_holders[0].push_str(&ct_records.fold(String::new(), |acc, k| acc + &format!("{k}\n")));
         wr_holders[1].push_str(&"CT WR Holder\n".repeat(ct_record_amount));
+        let poly_records = get_records(LeaderboardChoice::Global, true).await?;
+        let records = poly_records
+            .wr_amounts
+            .keys()
+            .filter(|k| *k != "Anonymous" && *k != "unknown");
+        let record_amount = records.clone().count();
+        wr_holders[0].push_str(&records.fold(String::new(), |acc, k| acc + &format!("{k}\n")));
+        wr_holders[1].push_str(&"WR Holder\n".repeat(record_amount));
         wr_holders
     };
     let wr_holder_embed = WriteEmbed::new(2)
