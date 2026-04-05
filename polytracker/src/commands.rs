@@ -955,7 +955,7 @@ pub async fn roles(
         )?
         .entries
         .iter()
-        .take_while(|entry| entry.rank < 21)
+        .take_while(|entry| entry.rank < 6)
         .map(|e| e.name.clone())
         .collect();
         grandmasters.append(&mut community_leaderboard);
