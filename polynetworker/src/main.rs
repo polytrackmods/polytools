@@ -1,13 +1,14 @@
 use anyhow::Result;
 use axum::{
-    Json, Router,
+    Router,
     extract::State,
     response::IntoResponse,
     routing::{get, post},
 };
+use facet::Facet;
+use facet_json::Json;
 use reqwest::Client;
 use reqwest::StatusCode;
-use serde::Deserialize;
 use std::{
     collections::VecDeque,
     net::SocketAddr,
@@ -20,7 +21,7 @@ use tokio::{net::TcpListener, sync::oneshot::Sender, task, time::sleep};
 const MAX_PER_MINUTE: f64 = 59.0;
 const WINDOW_SECONDS: f64 = 300.0;
 
-#[derive(Deserialize)]
+#[derive(Facet)]
 struct UrlRequest {
     url: String,
 }

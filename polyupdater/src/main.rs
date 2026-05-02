@@ -5,19 +5,27 @@ use facet::Facet;
 use poise::{
     Framework, FrameworkOptions, builtins,
     serenity_prelude::{
-        ChannelId, ClientBuilder, CreateMessage, EditMessage, GatewayIntents, GetMessages, GuildId,
-        Http,
+        ClientBuilder, CreateMessage, EditMessage, GatewayIntents, GetMessages, Http,
     },
 };
 use polycore::{COMMUNITY_TRACK_FILE, LeaderBoardEntry, OFFICIAL_TRACK_FILE};
 use tokio::{fs, task, time::sleep};
 
-const GUILD_ID: GuildId = GuildId::new(1_115_776_502_592_708_720);
-const RESOURCES_ID: ChannelId = ChannelId::new(1_239_092_743_582_646_412);
-const CT_RESOURCES_ID: ChannelId = ChannelId::new(1_384_494_680_439_259_248);
-// const GUILD_ID: GuildId = GuildId::new(1_156_668_508_462_125_106);
-// const RESOURCES_ID: ChannelId = ChannelId::new(1_467_883_158_811_967_620);
-// const CT_RESOURCES_ID: ChannelId = ChannelId::new(1_468_287_913_438_740_675);
+#[cfg(not(debug_assertions))]
+mod consts {
+    use poise::serenity_prelude::{ChannelId, GuildId};
+    pub(super) const GUILD_ID: GuildId = GuildId::new(1_115_776_502_592_708_720);
+    pub(super) const RESOURCES_ID: ChannelId = ChannelId::new(1_239_092_743_582_646_412);
+    pub(super) const CT_RESOURCES_ID: ChannelId = ChannelId::new(1_384_494_680_439_259_248);
+}
+#[cfg(debug_assertions)]
+mod consts {
+    use poise::serenity_prelude::{ChannelId, GuildId};
+    pub(super) const GUILD_ID: GuildId = GuildId::new(1_156_668_508_462_125_106);
+    pub(super) const RESOURCES_ID: ChannelId = ChannelId::new(1_467_883_158_811_967_620);
+    pub(super) const CT_RESOURCES_ID: ChannelId = ChannelId::new(1_468_287_913_438_740_675);
+}
+use consts::*;
 
 #[tokio::main]
 async fn main() {
@@ -102,15 +110,39 @@ async fn update_resources(http: &Http) -> Result<()> {
         (CT_RESOURCES_ID, ResourceChannel::Ct),
     ] {
         if let Some(resources_channel) = server.channels(http).await?.get(&channel_id) {
-            let messages = resources_channel.messages(http, GetMessages::new()).await?;
-            let new_content = prepare_resources_msg(channel_type).await?;
             let user_id = http.get_current_user().await?.id;
-            if let Some(mut old_msg) = messages.into_iter().find(|msg| msg.author.id == user_id) {
-                let new_msg = EditMessage::new().content(new_content);
-                old_msg.edit(http, new_msg).await?;
-            } else {
-                let new_msg = CreateMessage::new().content(new_content);
-                resources_channel.send_message(http, new_msg).await?;
+            let mut messages = resources_channel.messages(http, GetMessages::new()).await?;
+            let mut old_messages = messages.iter_mut().filter(|msg| msg.author.id == user_id);
+            let new_content = prepare_resources_msg(channel_type).await?;
+            let mut new_lines = new_content.lines().peekable();
+            loop {
+                let mut msg_content = String::new();
+                while let Some(next_new) = new_lines.peek()
+                    && msg_content.len() + next_new.len() < 2000
+                {
+                    if !msg_content.is_empty() {
+                        msg_content.push('\n');
+                    }
+                    msg_content.push_str(new_lines.next().expect("Checked earlier"));
+                }
+                if !msg_content.is_empty() {
+                    msg_content = format!("```\n{msg_content}\n```");
+                }
+                if let Some(old_msg) = old_messages.next() {
+                    if msg_content.is_empty() {
+                        old_msg.delete(http).await?;
+                    } else {
+                        let new_msg = EditMessage::new().content(msg_content);
+                        old_msg.edit(http, new_msg).await?;
+                    }
+                } else {
+                    if msg_content.is_empty() {
+                        break;
+                    } else {
+                        let new_msg = CreateMessage::new().content(msg_content);
+                        resources_channel.send_message(http, new_msg).await?;
+                    }
+                }
             }
         } else {
             tracing::error!("Could not find resources channel");
@@ -182,5 +214,5 @@ async fn prepare_resources_msg(channel: ResourceChannel) -> Result<String> {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    Ok(format!("```\n{message}\n```"))
+    Ok(message)
 }
