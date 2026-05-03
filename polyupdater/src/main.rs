@@ -54,11 +54,11 @@ async fn main() {
     let http = client.http.clone();
     let resources_task = task::spawn(async move {
         loop {
-            tokio::time::sleep(Duration::from_secs(10 * 60)).await;
+            sleep(Duration::from_secs(10 * 60)).await;
             if let Err(e) = update_resources(&http).await {
                 tracing::error!("Failed to update resources with error: {e}");
             }
-            tokio::time::sleep(Duration::from_secs(50 * 60)).await;
+            sleep(Duration::from_secs(50 * 60)).await;
         }
     });
     let client_task = task::spawn(async move {
@@ -112,7 +112,10 @@ async fn update_resources(http: &Http) -> Result<()> {
         if let Some(resources_channel) = server.channels(http).await?.get(&channel_id) {
             let user_id = http.get_current_user().await?.id;
             let mut messages = resources_channel.messages(http, GetMessages::new()).await?;
-            let mut old_messages = messages.iter_mut().filter(|msg| msg.author.id == user_id);
+            let mut old_messages = messages
+                .iter_mut()
+                .filter(|msg| msg.author.id == user_id)
+                .rev();
             let new_content = prepare_resources_msg(channel_type).await?;
             let mut new_lines = new_content.lines().peekable();
             loop {
