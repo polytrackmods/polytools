@@ -135,7 +135,11 @@ async fn dispatcher(queue: SharedQueue, mut limiter: RateLimiter, client: Client
         if let Some(entry) = task_opt {
             let client = client.clone();
             task::spawn(async move {
-                let res = client.get(entry.url).send().await;
+                let res = client
+                    .get(entry.url)
+                    .header("Origin", "https://app-polytrack.kodub.com")
+                    .send()
+                    .await;
                 let response = match res {
                     Ok(resp) => {
                         let status = resp.status();
