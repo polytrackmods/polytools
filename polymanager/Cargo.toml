@@ -5,9 +5,9 @@ edition = "2024"
 
 [dependencies]
 ansi-to-tui = "8.0.1"
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 crossterm = "0.29.0"
 facet = "0.43.2"
 facet-toml = "0.43.2"
 ratatui = "0.30.0"
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "fs", "signal", "time", "process", "full"] }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "fs", "signal", "time", "process", "full"] }

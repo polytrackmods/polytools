@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.100"
-axum = { version = "0.8.8", features = ["macros"] }
-facet = "0.46.0"
-facet-json = { version = "0.46.0", features = ["axum"] }
-reqwest = "0.13.1"
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
+anyhow = "1.0.102"
+axum = { version = "0.8.9", features = ["macros"] }
+facet = "0.46.4"
+facet-json = { version = "0.46.1", features = ["axum"] }
+reqwest = "0.13.3"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1.44"
-tracing-subscriber = "0.3.22"
+tracing-subscriber = "0.3.23"
