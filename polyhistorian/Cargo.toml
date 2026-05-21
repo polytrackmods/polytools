@@ -5,8 +5,8 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.44"
-facet = "0.43.2"
-facet-json = "0.43.2"
+facet = "0.46.4"
+facet-json = "0.46.1"
 filenamify = "0.1.2"
 polycore = { version = "0.1.0", path = "../polycore" }
 reqwest = { version = "0.13.3", features = ["json"] }
