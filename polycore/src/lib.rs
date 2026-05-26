@@ -27,7 +27,7 @@ pub const COMMUNITY_TIME_RANKINGS_FILE: &str = "data/community_time_rankings.jso
 pub const ET_CODE_FILE: &str = "data/et_codes.txt";
 pub const ET_TRACK_FILE: &str = "data/et_tracks.txt";
 pub const ET_RANKINGS_FILE: &str = "data/et_rankings.json";
-pub const VERSION: &str = "0.6.0";
+pub const VERSION: &str = "0.6.1";
 pub const API_VERSION: &str = "v6/";
 pub const SIMPLE_POINTS: [u32; 20] = [
     100, 66, 50, 37, 30, 25, 21, 17, 14, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
