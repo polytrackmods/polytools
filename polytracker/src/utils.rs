@@ -548,7 +548,7 @@ pub(crate) async fn write_embed(
             }
             let mut embed = paged_embed.to_create_embed(0, max_page_amt);
             if i == 0 {
-                embed = embed.url("https://polyweb.ireo.xyz");
+                embed = embed.url("https://polyweb.ireo.dev");
             }
             embeds.push((embed, paged_embed));
         }
@@ -595,7 +595,7 @@ pub(crate) async fn write_embed(
                     let mut new_embed =
                         paged_embed.to_create_embed(page_id, paged_embed.pages.len());
                     if i == 0 {
-                        new_embed = new_embed.url("https://polyweb.ireo.xyz");
+                        new_embed = new_embed.url("https://polyweb.ireo.dev");
                     }
                     if paged_embed.pages.len() > 1 {
                         new_embed = new_embed.footer(CreateEmbedFooter::new(format!(
