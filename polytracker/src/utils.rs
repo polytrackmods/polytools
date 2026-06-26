@@ -623,7 +623,7 @@ pub(crate) async fn write_embed(
     Ok(())
 }
 
-// checks whether invoking user is an admin with the required privilege level
+/// checks whether invoking user is an admin with the required privilege level
 pub(crate) async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
     let admin_list = ctx.data().admins.lock().await.clone();
     if let Ok(application_info) = ctx.http().get_current_application_info().await {
@@ -648,7 +648,7 @@ pub(crate) async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
     }
 }
 
-// autocompletion function for registered users
+/// autocompletion function for registered users
 pub(crate) async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
     let user_ids: Vec<String> = ctx.data().user_ids.lock().await.keys().cloned().collect();
     let user_ids = user_ids.into_iter();

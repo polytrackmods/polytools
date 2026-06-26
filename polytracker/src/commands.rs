@@ -1454,9 +1454,14 @@ pub async fn add_totw(
     }
 }
 
-#[poise::command(slash_command, owners_only)]
+#[poise::command(slash_command)]
 pub async fn update_totw(ctx: Context<'_>) -> Result<()> {
     ctx.defer_ephemeral().await?;
+    let (is_admin, is_admin_msg) = is_admin(&ctx, 2).await;
+    if !is_admin {
+        write(&ctx, is_admin_msg).await?;
+        return Ok(());
+    }
     if let Some(_) = get_current_totw(&ctx.data().pool).await? {
         totw::update(&ctx.data().pool).await?;
         ctx.say("Updated TOTW").await?;
