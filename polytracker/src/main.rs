@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
         .await?;
     migrate!("../migrations").run(&pool).await?;
     let token = env::var("DISCORD_TOKEN").expect("Token missing");
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS;
+    let intents = GatewayIntents::non_privileged();
 
     let bot_data = BotData {
         user_ids: Mutex::new(HashMap::new()),
