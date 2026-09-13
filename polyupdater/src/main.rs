@@ -34,7 +34,7 @@ async fn main() {
         .expect("Failed to set up tracing subscriber");
     dotenvy::dotenv().ok();
     let token = std::env::var("UPDATER_DISCORD_TOKEN").expect("Token missing");
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::non_privileged();
     let framework: Framework<(), anyhow::Error> = Framework::builder()
         .options(FrameworkOptions {
             commands: vec![],
