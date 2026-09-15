@@ -1,6 +1,7 @@
 use std::{cmp::Ordering, collections::HashMap, time::Duration};
 
 use chrono::Utc;
+use env_logger::Env;
 use facet::Facet;
 use reqwest::Client;
 use tokio::{
@@ -36,28 +37,8 @@ struct FileRecord {
     recording: String,
 }
 impl FileRecord {
-    const fn new() -> Self {
-        Self {
-            id: 0,
-            user_id: String::new(),
-            name: String::new(),
-            car_colors: String::new(),
-            frames: 0,
-            timestamp: 0,
-            recording: String::new(),
-        }
-    }
-    fn to_record(&self) -> Record {
-        Record {
-            id: self.id,
-            user_id: self.user_id.clone(),
-            nickname: self.name.clone(),
-            car_style: self.car_colors.clone(),
-            frames: self.frames,
-        }
-    }
     fn print(&self, track: &str, prior_frames: u32) {
-        tracing::info!(
+        log::info!(
             "New {} Record\n {:>2.3} ({:0>1.3}) | {}",
             track,
             f64::from(self.frames) / 1000.0,
@@ -75,6 +56,7 @@ struct Record {
     nickname: String,
     car_style: String,
     frames: u32,
+    verified_state: u8,
 }
 
 impl PartialEq for Record {
@@ -141,12 +123,13 @@ struct Recording {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber)?;
+    env_logger::builder()
+        .parse_env(Env::default().default_filter_or("info"))
+        .init();
     let client = Client::new();
     let mut tracks = read_track_file(OFFICIAL_TRACK_FILE).await;
-    tracks.append(&mut read_track_file(COMMUNITY_TRACK_FILE).await);
-    let mut prior_records: HashMap<&str, FileRecord> = HashMap::new();
+    tracks.extend(read_track_file(COMMUNITY_TRACK_FILE).await);
+    let mut prior_records: HashMap<&str, Vec<FileRecord>> = HashMap::new();
     if !fs::try_exists(HISTORY_FILE_LOCATION).await.unwrap_or(false) {
         fs::create_dir(HISTORY_FILE_LOCATION)
             .await
@@ -156,58 +139,67 @@ async fn main() -> Result<(), Error> {
         let path = format!("{HISTORY_FILE_LOCATION}HISTORY_{}.txt", filenamify(name));
         if fs::try_exists(path.clone()).await.unwrap_or(false) {
             let text = fs::read_to_string(path).await.expect("Couldn't read file");
-            let record: FileRecord = text.lines().last().map_or(FileRecord::new(), |line_last| {
-                facet_json::from_str(line_last).expect("Error deserializing line")
-            });
-            prior_records.insert(name, record);
+            let records: Vec<FileRecord> = text
+                .lines()
+                .map(|line| facet_json::from_str(line).expect("Error deserializing line"))
+                .collect();
+            prior_records.insert(name, records);
         } else {
             fs::write(path, "").await.expect("Couldn't create file");
-            prior_records.insert(name, FileRecord::new());
+            prior_records.insert(name, Vec::new());
         }
     }
     loop {
-        tracing::info!("Checking records!");
+        log::info!("Checking records!");
         for (id, name) in &tracks {
             let url = format!(
-                "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&skip=0&onlyVerified=true&amount=5&trackId={id}"
+                "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&skip=0&onlyVerified=true&amount=500&trackId={id}"
             );
             let mut response_text = String::new();
             while response_text.is_empty() {
                 response_text = if let Ok(text) = send_to_networker(&client, &url).await {
                     text
                 } else {
-                    sleep(Duration::from_secs(60 * 5)).await;
+                    sleep(Duration::from_secs(3)).await;
                     continue;
                 }
             }
-            if let Ok(new_lb) = facet_json::from_str::<LeaderBoard>(&response_text)
-                && let Some(new_record) = new_lb.entries.first()
-                && *new_record
-                    < prior_records
-                        .get(name.as_str())
-                        .expect("Inserted earlier")
-                        .clone()
-                        .to_record()
-            {
-                let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
-                let mut file = OpenOptions::new()
-                    .write(true)
-                    .append(true)
-                    .open(path)
-                    .await
-                    .expect("Failed to open file");
-                let new_record = new_record.clone().to_file().await;
-                file.write_all(format!("{}\n", facet_json::to_string(&new_record)?).as_bytes())
-                    .await
-                    .expect("Failed writing to file");
-                new_record.print(
-                    name,
-                    prior_records
-                        .get(name.as_str())
-                        .expect("Inserted earlier")
-                        .frames,
-                );
-                prior_records.entry(name).and_modify(|r| *r = new_record);
+            let prior_records = prior_records
+                .get_mut(name.as_str())
+                .expect("Inserted earlier");
+            if let Ok(new_lb) = facet_json::from_str::<LeaderBoard>(&response_text) {
+                prior_records.retain(|prior| {
+                    new_lb
+                        .entries
+                        .iter()
+                        .any(|new| new.user_id == prior.user_id)
+                });
+                if let Some(new_record) = new_lb.entries.into_iter().find(|new_record| {
+                    new_record.verified_state == 1
+                        && prior_records
+                            .iter()
+                            .all(|prior| prior.frames > new_record.frames)
+                }) {
+                    let path = format!("{}HISTORY_{}.txt", HISTORY_FILE_LOCATION, filenamify(name));
+                    let mut file = OpenOptions::new()
+                        .write(true)
+                        .append(true)
+                        .open(path)
+                        .await
+                        .expect("Failed to open file");
+                    let new_record = new_record.to_file().await;
+                    file.write_all(format!("{}\n", facet_json::to_string(&new_record)?).as_bytes())
+                        .await
+                        .expect("Failed writing to file");
+                    new_record.print(
+                        name,
+                        prior_records
+                            .last()
+                            .map(|prior| prior.frames)
+                            .unwrap_or_default(),
+                    );
+                    prior_records.push(new_record.clone());
+                }
             }
         }
         sleep(Duration::from_secs(60 * 5)).await;

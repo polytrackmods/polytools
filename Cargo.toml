@@ -1,10 +1,11 @@
 [workspace]
 members = [
-    "polycore",
-    "polytracker",
-    "polyweb",
-    "polyhistorian",
-    "polynetworker",
-    "polymanager", "polyupdater",
+  "polycore",
+  "polytracker",
+  "polyweb",
+  "polyhistorian",
+  "polynetworker",
+  "polymanager",
+  "polyupdater",
 ]
 resolver = "3"

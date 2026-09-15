@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
+use env_logger::Env;
 use facet::Facet;
 use poise::{
     Framework, FrameworkOptions, builtins,
@@ -29,9 +30,9 @@ use consts::*;
 
 #[tokio::main]
 async fn main() {
-    let subscriber = tracing_subscriber::fmt().compact().finish();
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("Failed to set up tracing subscriber");
+    env_logger::builder()
+        .parse_env(Env::default().default_filter_or("info"))
+        .init();
     dotenvy::dotenv().ok();
     let token = std::env::var("UPDATER_DISCORD_TOKEN").expect("Token missing");
     let intents = GatewayIntents::non_privileged();
@@ -56,7 +57,7 @@ async fn main() {
         loop {
             sleep(Duration::from_secs(10 * 60)).await;
             if let Err(e) = update_resources(&http).await {
-                tracing::error!("Failed to update resources with error: {e}");
+                log::error!("Failed to update resources with error: {e}");
             }
             sleep(Duration::from_secs(50 * 60)).await;
         }
@@ -71,35 +72,35 @@ async fn main() {
                 sleep(polycore::UPDATE_CYCLE_LEN / polycore::UPDATE_LB_COUNT)
             )
             .0
-            .unwrap_or_else(|_| tracing::error!("Failed HOF update"));
-            tracing::info!("HOF update done");
+            .unwrap_or_else(|_| log::error!("Failed HOF update"));
+            log::info!("HOF update done");
             tokio::join!(
                 polycore::community_update(),
                 sleep(polycore::UPDATE_CYCLE_LEN / polycore::UPDATE_LB_COUNT)
             )
             .0
-            .unwrap_or_else(|_| tracing::error!("Failed CT update"));
-            tracing::info!("CT update done");
+            .unwrap_or_else(|_| log::error!("Failed CT update"));
+            log::info!("CT update done");
             tokio::join!(
                 polycore::et_rankings_update(),
                 sleep(polycore::UPDATE_CYCLE_LEN / polycore::UPDATE_LB_COUNT)
             )
             .0
-            .unwrap_or_else(|_| tracing::error!("Failed ET update"));
-            tracing::info!("ET update done");
+            .unwrap_or_else(|_| log::error!("Failed ET update"));
+            log::info!("ET update done");
             tokio::join!(
                 polycore::official_update(),
                 sleep(polycore::UPDATE_CYCLE_LEN / polycore::UPDATE_LB_COUNT)
             )
             .0
-            .unwrap_or_else(|_| tracing::error!("Failed Global update"));
-            tracing::info!("Global update done");
+            .unwrap_or_else(|_| log::error!("Failed Global update"));
+            log::info!("Global update done");
         }
     });
     tokio::select! {
-        _ = client_task => tracing::error!("Client stopped."),
-        _ = resources_task => tracing::error!("Resource updater stopped."),
-        _ = leaderboard_update_task => tracing::error!("Leaderboard updater stopped."),
+        _ = client_task => log::error!("Client stopped."),
+        _ = resources_task => log::error!("Resource updater stopped."),
+        _ = leaderboard_update_task => log::error!("Leaderboard updater stopped."),
     }
 }
 
@@ -148,7 +149,7 @@ async fn update_resources(http: &Http) -> Result<()> {
                 }
             }
         } else {
-            tracing::error!("Could not find resources channel");
+            log::error!("Could not find resources channel");
         }
     }
     Ok(())

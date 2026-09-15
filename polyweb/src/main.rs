@@ -8,6 +8,7 @@ use askama::Template;
 use axum::response::Html;
 use axum::routing::get;
 use axum::{Router, extract::Path};
+use env_logger::Env;
 use filenamify::filenamify;
 use parsers::{
     get_standard_leaderboard, parse_history, parse_leaderboard, parse_leaderboard_with_records,
@@ -169,8 +170,9 @@ async fn history(Path(track_id): Path<String>) -> Html<String> {
 
 #[tokio::main]
 async fn main() {
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber).expect("Failed to set subscriber");
+    env_logger::builder()
+        .parse_env(Env::default().default_filter_or("info"))
+        .init();
     let app = Router::new()
         .route("/", get(index))
         .route("/global", get(global))
@@ -189,7 +191,7 @@ async fn main() {
     let listener = TcpListener::bind(addr)
         .await
         .expect("failed to bind listener");
-    tracing::info!("Listening on {addr}");
+    log::info!("Listening on {addr}");
     axum::serve(listener, app)
         .await
         .expect("failed to serve app");

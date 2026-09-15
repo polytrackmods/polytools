@@ -9,6 +9,7 @@ use commands::{
     top, update_rankings, users,
 };
 use dotenvy::dotenv;
+use env_logger::Env;
 use poise::builtins;
 use poise::serenity_prelude as serenity;
 use poise::{EditTracker, Framework, FrameworkOptions, Prefix, PrefixFrameworkOptions};
@@ -35,8 +36,9 @@ type Context<'a> = poise::Context<'a, BotData, Error>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let subscriber = tracing_subscriber::fmt().compact().finish();
-    tracing::subscriber::set_global_default(subscriber)?;
+    env_logger::builder()
+        .parse_env(Env::default().default_filter_or("info"))
+        .init();
     dotenv().ok();
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://poly.db".to_string());
     let pool = SqlitePoolOptions::new()
@@ -87,7 +89,7 @@ async fn main() -> Result<()> {
             },
             pre_command: |ctx| {
                 Box::pin(async move {
-                    tracing::info!(
+                    log::info!(
                         "Executing command {} issued by {}",
                         ctx.command().qualified_name,
                         ctx.author().display_name(),
@@ -96,7 +98,7 @@ async fn main() -> Result<()> {
             },
             post_command: |ctx| {
                 Box::pin(async move {
-                    tracing::info!(
+                    log::info!(
                         "Executed command {} issued by {}!",
                         ctx.command().qualified_name,
                         ctx.author().display_name(),
@@ -122,7 +124,7 @@ async fn main() -> Result<()> {
         loop {
             et_tracks_update(http.clone())
                 .await
-                .unwrap_or_else(|_| tracing::error!("Failed to update ET tracks"));
+                .unwrap_or_else(|_| log::error!("Failed to update ET tracks"));
             let next_run = recent_et_period(Utc::now()) + ET_PERIOD_DURATION;
             let duration_until = next_run.timestamp_millis() - Utc::now().timestamp_millis();
             let sleep_duration =
@@ -137,7 +139,7 @@ async fn main() -> Result<()> {
             sleep(Duration::from_secs(1800)).await;
             totw::update(&pool2)
                 .await
-                .unwrap_or_else(|_| tracing::error!("Failed to update TOTW"));
+                .unwrap_or_else(|_| log::error!("Failed to update TOTW"));
             sleep(Duration::from_secs(1800)).await;
         }
     });
@@ -151,12 +153,12 @@ async fn main() -> Result<()> {
                         sleep(dur).await;
                         totw::update(&pool)
                             .await
-                            .unwrap_or_else(|_| tracing::error!("failed to update TOTW"));
+                            .unwrap_or_else(|_| log::error!("failed to update TOTW"));
                         continue;
                     }
                 }
             } else {
-                tracing::warn!("Unable to get current TOTW");
+                log::warn!("Unable to get current TOTW");
             }
             sleep(Duration::from_secs(3600)).await;
         }
@@ -165,10 +167,10 @@ async fn main() -> Result<()> {
         client.start().await.expect("Failed to start client");
     });
     tokio::select! {
-        _ = et_updater => tracing::error!("ET updater task finished unexpectedly."),
-        _ = client_task => tracing::error!("Client stopped."),
-        _ = totw_updater => tracing::error!("TOTW updater task finished unexpectedly."),
-        _ = final_totw_updater => tracing::error!("Final TOTW updater task finished unexpectedly."),
+        _ = et_updater => log::error!("ET updater task finished unexpectedly."),
+        _ = client_task => log::error!("Client stopped."),
+        _ = totw_updater => log::error!("TOTW updater task finished unexpectedly."),
+        _ = final_totw_updater => log::error!("Final TOTW updater task finished unexpectedly."),
     }
     Ok(())
 }

@@ -10,11 +10,11 @@ chrono = "0.4.44"
 filenamify = "0.1.2"
 facet = "0.46.4"
 facet-json = { version = "0.46.1", features = ["axum"] }
-tracing = "0.1.44"
-tracing-subscriber = "0.3.23"
 axum = { version = "0.8.9", features = ["macros"] }
 askama = "0.16.0"
 tower = "0.5.3"
 tower-http = { version = "0.6.11", features = ["fs"] }
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "net", "fs"] }
 serde = { version = "1.0.228", features = ["derive"] }
+log = "0.4.34"
+env_logger = "0.11.11"

@@ -763,7 +763,7 @@ pub(crate) async fn et_tracks_update(http: Arc<Http>) -> Result<()> {
         .map(|[code, name]| [v6::export_to_id(&code).unwrap_or_default(), name].join(" "))
         .collect::<Vec<_>>();
     fs::write(ET_TRACK_FILE, ids.join("\n")).await?;
-    tracing::info!("Updated ETs!");
+    log::info!("Updated ETs!");
     Ok(())
 }
 
@@ -1055,7 +1055,7 @@ pub(crate) mod totw {
                 .collect();
             update_db(pool, leaderboard).await?;
         }
-        tracing::info!("Updated TOTW");
+        log::info!("Updated TOTW");
         Ok(())
     }
     async fn update_db(pool: &SqlitePool, entries: Vec<TotwEntry>) -> Result<()> {

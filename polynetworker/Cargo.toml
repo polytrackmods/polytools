@@ -6,9 +6,9 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.102"
 axum = { version = "0.8.9", features = ["macros"] }
+env_logger = "0.11.11"
 facet = "0.46.4"
 facet-json = { version = "0.46.1", features = ["axum"] }
+log = "0.4.34"
 reqwest = "0.13.3"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros"] }
-tracing = "0.1.44"
-tracing-subscriber = "0.3.23"

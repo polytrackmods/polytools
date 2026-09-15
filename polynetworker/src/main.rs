@@ -5,6 +5,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use env_logger::Env;
 use facet::Facet;
 use facet_json::Json;
 use reqwest::Client;
@@ -42,8 +43,9 @@ type SharedQueue = Arc<Mutex<VecDeque<QueueEntry>>>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let subscriber = tracing_subscriber::fmt().compact().finish();
-    tracing::subscriber::set_global_default(subscriber)?;
+    env_logger::builder()
+        .parse_env(Env::default().default_filter_or("info"))
+        .init();
     let queue: SharedQueue = Arc::new(Mutex::new(VecDeque::new()));
     let count = Arc::new(AtomicU32::new(0));
     let state = AppState {
@@ -69,7 +71,7 @@ async fn main() -> Result<()> {
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = TcpListener::bind(addr).await?;
-    tracing::info!("Listening on http://{addr}");
+    log::info!("Listening on http://{addr}");
 
     axum::serve(listener, app).await?;
     Ok(())
@@ -89,7 +91,7 @@ async fn get_count(State(state): State<AppState>) -> String {
 
 async fn reset_count(State(state): State<AppState>) -> String {
     let count = state.count.load(std::sync::atomic::Ordering::Relaxed);
-    tracing::info!("Resetting! Current request count: {count}");
+    log::info!("Resetting! Current request count: {count}");
     state.count.store(0, std::sync::atomic::Ordering::Relaxed);
     count.to_string()
 }
@@ -154,7 +156,7 @@ async fn dispatcher(queue: SharedQueue, mut limiter: RateLimiter, client: Client
                 entry
                     .responder
                     .send(response)
-                    .unwrap_or_else(|_| tracing::error!("Receiver dropped"));
+                    .unwrap_or_else(|_| log::error!("Receiver dropped"));
             });
         } else {
             sleep(Duration::from_millis(100)).await;
