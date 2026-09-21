@@ -44,7 +44,7 @@ type SharedQueue = Arc<Mutex<VecDeque<QueueEntry>>>;
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::builder()
-        .parse_env(Env::default().default_filter_or("info"))
+        .parse_env(Env::default().default_filter_or("warn"))
         .init();
     let queue: SharedQueue = Arc::new(Mutex::new(VecDeque::new()));
     let count = Arc::new(AtomicU32::new(0));

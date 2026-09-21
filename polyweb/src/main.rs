@@ -171,7 +171,7 @@ async fn history(Path(track_id): Path<String>) -> Html<String> {
 #[tokio::main]
 async fn main() {
     env_logger::builder()
-        .parse_env(Env::default().default_filter_or("info"))
+        .parse_env(Env::default().default_filter_or("warn"))
         .init();
     let app = Router::new()
         .route("/", get(index))

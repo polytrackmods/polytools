@@ -124,7 +124,7 @@ struct Recording {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::builder()
-        .parse_env(Env::default().default_filter_or("info"))
+        .parse_env(Env::default().default_filter_or("warn"))
         .init();
     let client = Client::new();
     let mut tracks = read_track_file(OFFICIAL_TRACK_FILE).await;

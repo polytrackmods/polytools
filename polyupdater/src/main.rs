@@ -31,7 +31,7 @@ use consts::*;
 #[tokio::main]
 async fn main() {
     env_logger::builder()
-        .parse_env(Env::default().default_filter_or("info"))
+        .parse_env(Env::default().default_filter_or("warn"))
         .init();
     dotenvy::dotenv().ok();
     let token = std::env::var("UPDATER_DISCORD_TOKEN").expect("Token missing");

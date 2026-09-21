@@ -37,7 +37,7 @@ type Context<'a> = poise::Context<'a, BotData, Error>;
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::builder()
-        .parse_env(Env::default().default_filter_or("info"))
+        .parse_env(Env::default().default_filter_or("warn"))
         .init();
     dotenv().ok();
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://poly.db".to_string());
