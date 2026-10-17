@@ -650,7 +650,8 @@ pub(crate) async fn is_admin(ctx: &Context<'_>, level: u32) -> (bool, String) {
 
 /// autocompletion function for registered users
 pub(crate) async fn autocomplete_users(ctx: Context<'_>, partial: &str) -> Vec<String> {
-    let user_ids: Vec<String> = ctx.data().user_ids.lock().await.keys().cloned().collect();
+    let mut user_ids: Vec<String> = ctx.data().user_ids.lock().await.keys().cloned().collect();
+    user_ids.sort();
     let user_ids = user_ids.into_iter();
     if user_ids.clone().filter(|k| k.starts_with(partial)).count() > 0 {
         user_ids.filter(|k| k.starts_with(partial)).collect()

@@ -1188,6 +1188,12 @@ pub async fn edit_lists(
 pub async fn users(ctx: Context<'_>) -> Result<()> {
     let bot_data = ctx.data();
     let mut users = String::new();
+    let user_ids = {
+        let lock = bot_data.user_ids.lock().await;
+        lock.clone()
+    };
+    let mut user_ids: Vec<_> = user_ids.iter().collect();
+    user_ids.sort_by(|(a, _), (b, _)| a.cmp(&b));
     for (user, id) in bot_data.user_ids.lock().await.iter() {
         writeln!(users, "{user}: {id}")?;
     }
