@@ -5,7 +5,7 @@ use anyhow::{Error, Result};
 use chrono::Utc;
 use commands::{admins, roles, tracks, update_admins};
 use commands::{
-    assign, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
+    register, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
     top, update_rankings, users,
 };
 use dotenvy::dotenv;
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     let framework = Framework::builder()
         .options(FrameworkOptions {
             commands: vec![
-                assign(),
+                register(),
                 delete(),
                 update_admins(),
                 request(),

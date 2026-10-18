@@ -176,7 +176,7 @@ impl ChoiceParameter for UpdateAdminsChoice {
 /// The ID can be found by going from the main menu to "Profile", clicking on the profile \
 /// and copying the "User ID" in the bottom left.
 #[poise::command(slash_command, prefix_command, category = "Setup")]
-pub async fn assign(
+pub async fn register(
     ctx: Context<'_>,
     #[description = "Username"] user: String,
     #[description = "Player ID"] id: String,
