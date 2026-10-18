@@ -1194,7 +1194,7 @@ pub async fn users(ctx: Context<'_>) -> Result<()> {
     };
     let mut user_ids: Vec<_> = user_ids.iter().collect();
     user_ids.sort_by(|(a, _), (b, _)| a.cmp(&b));
-    for (user, id) in bot_data.user_ids.lock().await.iter() {
+    for (user, id) in user_ids.iter() {
         writeln!(users, "{user}: {id}")?;
     }
     write(&ctx, format!("```{users}```")).await?;
