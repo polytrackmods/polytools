@@ -72,28 +72,28 @@ async fn main() {
                 sleep(polycore::UPDATE_CYCLE_LEN / polycore::UPDATE_LB_COUNT)
             )
             .0
-            .unwrap_or_else(|_| log::error!("Failed HOF update"));
+            .unwrap_or_else(|e| log::error!("Failed HOF update: {e}"));
             log::info!("HOF update done");
             tokio::join!(
                 polycore::community_update(),
                 sleep(polycore::UPDATE_CYCLE_LEN / polycore::UPDATE_LB_COUNT)
             )
             .0
-            .unwrap_or_else(|_| log::error!("Failed CT update"));
+            .unwrap_or_else(|e| log::error!("Failed CT update: {e}"));
             log::info!("CT update done");
             tokio::join!(
                 polycore::et_rankings_update(),
                 sleep(polycore::UPDATE_CYCLE_LEN / polycore::UPDATE_LB_COUNT)
             )
             .0
-            .unwrap_or_else(|_| log::error!("Failed ET update"));
+            .unwrap_or_else(|e| log::error!("Failed ET update: {e}"));
             log::info!("ET update done");
             tokio::join!(
                 polycore::official_update(),
                 sleep(polycore::UPDATE_CYCLE_LEN / polycore::UPDATE_LB_COUNT)
             )
             .0
-            .unwrap_or_else(|_| log::error!("Failed Global update"));
+            .unwrap_or_else(|e| log::error!("Failed Global update: {e}"));
             log::info!("Global update done");
         }
     });
