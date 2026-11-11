@@ -612,8 +612,11 @@ pub async fn tracks_leaderboards(
     for result in results {
         let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
         for res in result {
-            leaderboard.append(
-                &mut facet_json::from_str::<LeaderBoard>(&res)
+            leaderboard.extend(
+                facet_json::from_str::<LeaderBoard>(&res)
+                    .inspect_err(|e| {
+                        log::error!("Failed to deserialize response with error: {e}\n{res}")
+                    })
                     .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
                     .entries,
             );
