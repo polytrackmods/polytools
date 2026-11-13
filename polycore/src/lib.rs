@@ -553,6 +553,9 @@ pub async fn send_to_networker(client: &Client, url: &str) -> Result<String> {
         sleep(Duration::from_secs(1)).await;
         res = get_res().await?;
     }
+    if res.status() != StatusCode::OK {
+        log::info!("Encountered non-200 status code: {}", res.status());
+    }
     Ok(res.text().await?)
 }
 
