@@ -7,8 +7,8 @@ use poise::serenity_prelude::{self as serenity, CacheHttp, CreateEmbedFooter, Ge
 use poise::{CreateReply, Modal};
 use polycore::{
     API_VERSION, COMMUNITY_TRACK_FILE, ET_CODE_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE,
-    OFFICIAL_TRACK_FILE, REQUEST_RETRY_COUNT, VERSION, check_blacklist, get_alt, read_track_file,
-    recent_et_period, send_to_networker,
+    OFFICIAL_TRACK_FILE, VERSION, check_blacklist, get_alt, read_track_file, recent_et_period,
+    send_to_networker,
 };
 use polytrack_codes::v6;
 use regex::Regex;
@@ -23,10 +23,8 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::fs;
 use tokio::sync::Mutex;
-use tokio::time::sleep;
 use unicode_width::UnicodeWidthStr;
 
 const EMBED_PAGE_LEN: usize = 20;
@@ -705,13 +703,7 @@ pub(crate) async fn get_records(
         let url = format!(
             "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={id}&skip=0&amount=500&onlyVerified={only_verified}"
         );
-        let mut att = 0;
-        let mut res = String::new();
-        while res.is_empty() && att <= REQUEST_RETRY_COUNT {
-            res = send_to_networker(&client, &url).await?;
-            sleep(Duration::from_millis(1000)).await;
-            att += 1;
-        }
+        let res = send_to_networker(&client, &url).await?;
         let leaderboard = facet_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {
             nickname: "unknown".to_string(),

@@ -5,7 +5,7 @@ use chrono::{DateTime, Datelike as _, Utc};
 use facet::Facet;
 use futures::future::join_all;
 use regex::Regex;
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, task, time::sleep};
 
@@ -33,7 +33,6 @@ pub const SIMPLE_POINTS: [u32; 20] = [
     100, 66, 50, 37, 30, 25, 21, 17, 14, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
 ];
 pub const HISTORY_FILE_LOCATION: &str = "histories/";
-pub const REQUEST_RETRY_COUNT: u32 = 5;
 
 pub const UPDATE_LB_COUNT: u32 = 4;
 pub const UPDATE_CYCLE_LEN: Duration = Duration::from_secs(UPDATE_LB_COUNT as u64 * 10 * 60);
@@ -98,7 +97,6 @@ struct AltListEntry {
     alts: Vec<Regex>,
 }
 
-#[allow(clippy::missing_errors_doc)]
 pub async fn check_blacklist(name: &str) -> Result<bool> {
     let content = fs::read_to_string(BLACKLIST_FILE).await?;
     let blacklist_file: BlackListFile = serde_json::from_str(&content)?;
@@ -109,7 +107,6 @@ pub async fn check_blacklist(name: &str) -> Result<bool> {
     }
     Ok(true)
 }
-#[allow(clippy::missing_errors_doc)]
 pub async fn get_alt(name: &str) -> Result<String> {
     let content = fs::read_to_string(ALT_ACCOUNT_FILE).await?;
     let altlist_file: AltListFile = serde_json::from_str(&content)?;
@@ -125,7 +122,6 @@ pub async fn get_alt(name: &str) -> Result<String> {
     }
     Ok(name.to_string())
 }
-#[allow(clippy::missing_errors_doc)]
 pub async fn read_blacklist() -> Result<String> {
     let content = fs::read_to_string(BLACKLIST_FILE).await?;
     let blacklist_file: BlackListFile = serde_json::from_str(&content).unwrap_or_default();
@@ -136,8 +132,6 @@ pub async fn read_blacklist() -> Result<String> {
         .collect::<Vec<_>>()
         .join("\n"))
 }
-#[allow(clippy::missing_errors_doc)]
-#[allow(clippy::missing_panics_doc)]
 pub async fn write_blacklist(regexes: String) -> Result<()> {
     let blacklist_file: BlackListFile = BlackListFile {
         regexes: regexes
@@ -149,24 +143,18 @@ pub async fn write_blacklist(regexes: String) -> Result<()> {
     fs::write(BLACKLIST_FILE, content).await?;
     Ok(())
 }
-#[allow(clippy::missing_errors_doc)]
 pub async fn read_altlist() -> Result<String> {
     let content = fs::read_to_string(ALT_ACCOUNT_FILE).await?;
     Ok(serde_json::to_string_pretty(
         &serde_json::from_str::<AltListFile>(&content).unwrap_or_default(),
     )?)
 }
-#[allow(clippy::missing_errors_doc)]
 pub async fn write_altlist(content: String) -> Result<()> {
     let content = serde_json::to_string(&serde_json::from_str::<AltListFile>(&content)?)?;
     fs::write(ALT_ACCOUNT_FILE, content).await?;
     Ok(())
 }
 
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::cognitive_complexity)]
 pub async fn hof_update() -> Result<()> {
     let track_ids: Vec<String> = fs::read_to_string(HOF_TRACK_FILE)
         .await?
@@ -291,13 +279,6 @@ pub async fn hof_update() -> Result<()> {
     Ok(())
 }
 
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::cognitive_complexity)]
-#[allow(clippy::cast_precision_loss)]
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_sign_loss)]
 pub async fn community_update() -> Result<()> {
     let track_ids: Vec<String> = fs::read_to_string(COMMUNITY_TRACK_FILE)
         .await?
@@ -420,13 +401,6 @@ pub async fn community_update() -> Result<()> {
     Ok(())
 }
 
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::cognitive_complexity)]
-#[allow(clippy::cast_precision_loss)]
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_sign_loss)]
 pub async fn official_update() -> Result<()> {
     let track_ids: Vec<String> = fs::read_to_string(OFFICIAL_TRACK_FILE)
         .await?
@@ -562,15 +536,24 @@ impl UrlRequest {
 }
 const POLYNETWORKER_URL: &str = "http://127.0.0.1:3000/submit";
 
-#[allow(clippy::missing_errors_doc)]
 pub async fn send_to_networker(client: &Client, url: &str) -> Result<String> {
-    Ok(client
-        .post(POLYNETWORKER_URL)
-        .json(&UrlRequest::new(url))
-        .send()
-        .await?
-        .text()
-        .await?)
+    let get_res = async || -> Result<_> {
+        let res = client
+            .post(POLYNETWORKER_URL)
+            .json(&UrlRequest::new(url))
+            .send()
+            .await?;
+        Ok(res)
+    };
+    let mut res = get_res().await?;
+    let mut tries = 0;
+    while res.status() == StatusCode::TOO_MANY_REQUESTS {
+        tries += 1;
+        log::warn!("Got 429, retrying (#{tries})");
+        sleep(Duration::from_secs(1)).await;
+        res = get_res().await?;
+    }
+    Ok(res.text().await?)
 }
 
 pub async fn tracks_leaderboards(
@@ -580,23 +563,16 @@ pub async fn tracks_leaderboards(
     let client = Client::new();
     let futures = track_ids.iter().map(|track_id| {
         let client = client.clone();
-        let mut urls = Vec::new();
-        for i in 0..lb_size {
-            urls.push(format!(
+        let urls: Vec<_> = (0..lb_size).map(|i| {
+            format!(
                 "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={track_id}&skip={}&amount=500",
                 i * 500,
-            ));
-        }
+            )
+        }).collect();
         task::spawn(async move {
-            let mut res = Vec::new();
+            let mut res = Vec::with_capacity(urls.len());
             for url in &urls {
-                let mut att = 0;
-                let mut response = String::new();
-                while response.is_empty() && att <= REQUEST_RETRY_COUNT {
-                    response = send_to_networker(&client, url).await?;
-                    sleep(Duration::from_millis(500)).await;
-                    att += 1;
-                }
+                let response = send_to_networker(&client, url).await?;
                 res.push(response);
             }
             Ok::<Vec<String>, Error>(res)
@@ -606,18 +582,18 @@ pub async fn tracks_leaderboards(
         .await
         .into_iter()
         .map(|res| res.expect("JoinError ig"))
-        .filter_map(std::result::Result::ok)
+        .filter_map(Result::ok)
         .collect();
-    let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::new();
+    let mut leaderboards: Vec<Vec<LeaderBoardEntry>> = Vec::with_capacity(results.len());
     for result in results {
-        let mut leaderboard: Vec<LeaderBoardEntry> = Vec::new();
+        let mut leaderboard: Vec<LeaderBoardEntry> = Vec::with_capacity(result.len() * 500);
         for res in result {
             leaderboard.extend(
                 facet_json::from_str::<LeaderBoard>(&res)
                     .inspect_err(|e| {
                         log::error!("Failed to deserialize response with error: {e}\n{res}")
                     })
-                    .map_err(|_| anyhow!("Probably got rate limited, please try again later"))?
+                    .map_err(|_| anyhow!("Failed to process response"))?
                     .entries,
             );
         }
@@ -627,7 +603,6 @@ pub async fn tracks_leaderboards(
 }
 
 #[must_use]
-#[allow(clippy::missing_panics_doc)]
 pub fn recent_et_period(current_time: DateTime<Utc>) -> DateTime<Utc> {
     let candidate = current_time
         .date_naive()
@@ -643,10 +618,6 @@ pub fn recent_et_period(current_time: DateTime<Utc>) -> DateTime<Utc> {
     candidate
 }
 
-#[allow(clippy::missing_panics_doc)]
-#[allow(clippy::missing_errors_doc)]
-#[allow(clippy::too_many_lines)]
-#[allow(clippy::cognitive_complexity)]
 pub async fn et_rankings_update() -> Result<()> {
     let track_ids: Vec<String> = fs::read_to_string(ET_TRACK_FILE)
         .await?
@@ -744,7 +715,6 @@ pub async fn et_rankings_update() -> Result<()> {
     Ok(())
 }
 
-#[allow(clippy::missing_panics_doc)]
 pub async fn read_track_file(file: &str) -> Vec<(String, String)> {
     fs::read_to_string(file)
         .await

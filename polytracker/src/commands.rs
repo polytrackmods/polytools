@@ -18,10 +18,10 @@ use polycore::{
     API_VERSION, COMMUNITY_RANKINGS_FILE, COMMUNITY_TIME_RANKINGS_FILE, COMMUNITY_TRACK_FILE,
     ET_CODE_FILE, ET_RANKINGS_FILE, ET_TRACK_FILE, HOF_ALL_TRACK_FILE, HOF_CODE_FILE,
     HOF_RANKINGS_FILE, HOF_TIME_RANKINGS_FILE, HOF_TRACK_FILE, OFFICIAL_RANKINGS_FILE,
-    OFFICIAL_TIME_RANKINGS_FILE, OFFICIAL_TRACK_FILE, PolyLeaderBoard, REQUEST_RETRY_COUNT,
-    UPDATE_CYCLE_LEN, VERSION, check_blacklist, community_update, et_rankings_update, get_alt,
-    hof_update, official_update, read_altlist, read_blacklist, read_track_file, send_to_networker,
-    write_altlist, write_blacklist,
+    OFFICIAL_TIME_RANKINGS_FILE, OFFICIAL_TRACK_FILE, PolyLeaderBoard, UPDATE_CYCLE_LEN, VERSION,
+    check_blacklist, community_update, et_rankings_update, get_alt, hof_update, official_update,
+    read_altlist, read_blacklist, read_track_file, send_to_networker, write_altlist,
+    write_blacklist,
 };
 use reqwest::Client;
 use serenity::futures::future::join_all;
@@ -29,7 +29,6 @@ use sha256::digest;
 use std::fmt::Write as _;
 use std::time::Duration;
 use std::{collections::HashMap, env};
-use tokio::time::sleep;
 use tokio::{fs, task};
 
 // argument enum for leaderboard related commands
@@ -481,13 +480,7 @@ pub async fn list(
             let url = format!("https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={track_id}&skip=0&amount=500&onlyVerified=false&userTokenHash={id}");
             task::spawn(
             async move {
-                let mut att = 0;
-                let mut res = String::new();
-                while res.is_empty() && att <= REQUEST_RETRY_COUNT {
-                    res = send_to_networker(&client, &url).await?;
-                    sleep(Duration::from_millis(500)).await;
-                    att += 1;
-                }
+                let res = send_to_networker(&client, &url).await?;
                 Ok::<(usize, String), Error>((i, res))
             })
         });
@@ -622,13 +615,7 @@ pub async fn compare(
                 );
                 task::spawn(
                     async move {
-                        let mut att = 0;
-                        let mut res = String::new();
-                        while res.is_empty() && att <= REQUEST_RETRY_COUNT {
-                            res = send_to_networker(&client, &url).await?;
-                            sleep(Duration::from_millis(500)).await;
-                            att += 1;
-                        }
+                        let res = send_to_networker(&client, &url).await?;
                         Ok::<(usize, String), Error>((i, res))
                     }
                 )
@@ -1240,13 +1227,7 @@ pub async fn players(
         let url = format!(
             "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={id}&skip=0&amount=1&onlyVerified=false"
         );
-        let mut att = 0;
-        let mut res = String::new();
-        while res.is_empty() && att <= REQUEST_RETRY_COUNT {
-            res = send_to_networker(&client, &url).await?;
-            sleep(Duration::from_millis(500)).await;
-            att += 1;
-        }
+        let res = send_to_networker(&client, &url).await?;
         let number = facet_json::from_str::<LeaderBoard>(&res)?.total;
         writeln!(
             contents.get_mut(0).expect("Should have first entry"),
@@ -1344,13 +1325,7 @@ pub async fn top(
             "https://vps.kodub.com/{API_VERSION}leaderboard?version={VERSION}&trackId={id}&skip={}&amount=1&onlyVerified=true",
             position - 1,
         );
-        let mut att = 0;
-        let mut res = String::new();
-        while res.is_empty() && att <= REQUEST_RETRY_COUNT {
-            res = send_to_networker(&client, &url).await?;
-            sleep(Duration::from_millis(1000)).await;
-            att += 1;
-        }
+        let res = send_to_networker(&client, &url).await?;
         let leaderboard = facet_json::from_str::<LeaderBoard>(&res)?;
         let default_winner = LeaderBoardEntry {
             nickname: "unknown".to_string(),

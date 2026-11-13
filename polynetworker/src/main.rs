@@ -19,7 +19,7 @@ use std::{
 use tokio::{net::TcpListener, sync::oneshot::Sender, task, time::sleep};
 
 // current Kodub rate limit value, slightly adapted to be safe
-const MAX_PER_MINUTE: f64 = 59.0;
+const MAX_PER_MINUTE: f64 = 55.0;
 const WINDOW_SECONDS: f64 = 300.0;
 
 #[derive(Facet)]
@@ -145,8 +145,14 @@ async fn dispatcher(queue: SharedQueue, mut limiter: RateLimiter, client: Client
                 let response = match res {
                     Ok(resp) => {
                         let status = resp.status();
-                        let text = resp.text().await.unwrap_or_default();
-                        (status, text)
+                        let text = resp.text().await;
+                        match text {
+                            Ok(text) => (status, text),
+                            Err(e) => (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Request error: {e}"),
+                            ),
+                        }
                     }
                     Err(e) => (
                         StatusCode::INTERNAL_SERVER_ERROR,

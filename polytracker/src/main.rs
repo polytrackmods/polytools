@@ -5,7 +5,7 @@ use anyhow::{Error, Result};
 use chrono::Utc;
 use commands::{admins, roles, tracks, update_admins};
 use commands::{
-    register, compare, delete, edit_lists, help, list, players, policy, rankings, records, request,
+    compare, delete, edit_lists, help, list, players, policy, rankings, records, register, request,
     top, update_rankings, users,
 };
 use dotenvy::dotenv;
